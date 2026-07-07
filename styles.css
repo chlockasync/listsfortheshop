@@ -2074,3 +2074,30 @@ main,
 #bottom-context-action:not(:disabled) {
   font-weight: 600;
 }
+
+
+/* ===== Functional repair pass: 202607071504 ===== */
+.increase-needed-button,
+.decrease-needed-button {
+  font-size: 1rem !important;
+}
+
+.increase-needed-button::before,
+.decrease-needed-button::before {
+  content: none !important;
+  display: none !important;
+}
+
+.collect-checkbox-button,
+.bottom-context-action {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.collect-checkbox-button.is-long-pressing,
+.bottom-context-action.is-long-pressing {
+  filter: brightness(0.9);
+  transform: translateY(1px);
+}

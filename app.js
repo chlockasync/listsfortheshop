@@ -523,7 +523,7 @@ function createIconButton({
   return button;
 }
 
-function addLongPressHandler(element, handler, { duration = 550 } = {}) {
+function addLongPressHandler(element, handler, { duration = 350 } = {}) {
   let pressTimer = null;
   let startX = 0;
   let startY = 0;
@@ -543,6 +543,7 @@ function addLongPressHandler(element, handler, { duration = 550 } = {}) {
       return;
     }
 
+    event.preventDefault();
     clearPress();
     hasFired = false;
     startX = event.clientX;
@@ -571,13 +572,17 @@ function addLongPressHandler(element, handler, { duration = 550 } = {}) {
       event.clientY - startY
     );
 
-    if (movedDistance > 16) {
+    if (movedDistance > 28) {
       clearPress();
     }
   });
 
   ["pointerup", "pointercancel"].forEach((eventName) => {
     element.addEventListener(eventName, clearPress);
+  });
+
+  element.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
   });
 
   element.addEventListener("click", (event) => {
@@ -2717,7 +2722,7 @@ function renderRoomItems() {
 
     const increaseButton = createIconButton({
       className: "room-icon-button increase-needed-button",
-      icon: "",
+      icon: "+",
       label: `Increase ${item.name}`,
       onClick: async () => {
         disableButtons(controlButtons);
@@ -2727,7 +2732,7 @@ function renderRoomItems() {
 
     const decreaseButton = createIconButton({
       className: "room-icon-button decrease-needed-button",
-      icon: "",
+      icon: "−",
       label: `Decrease ${item.name}`,
       onClick: async () => {
         disableButtons(controlButtons);
@@ -3730,9 +3735,6 @@ function wireNavigation() {
         return;
       }
 
-      if (!views.getting.hidden && !bottomContextAction.disabled) {
-        alert("Press and hold Finish shop to remove collected items.");
-      }
     });
 
     addLongPressHandler(bottomContextAction, async () => {
@@ -3747,7 +3749,7 @@ function wireNavigation() {
       if (confirmed) {
         await finishCurrentShop();
       }
-    }, { duration: 900 });
+    }, { duration: 450 });
   }
 
   settingsCategoryOptions.forEach((button) => {

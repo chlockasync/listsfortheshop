@@ -2222,3 +2222,65 @@ main,
 .settings-add-form {
   background: var(--space-panel) !important;
 }
+
+/* ===== Specific products and item-entry polish: 202607071651 ===== */
+.room-item-row.is-needed .item-name,
+.full-needed-item-row.is-needed .item-name {
+  font-weight: 700 !important;
+}
+
+.room-item-row.is-long-pressing,
+.full-needed-item-row.is-long-pressing {
+  filter: brightness(0.94);
+}
+
+#new-item-panel,
+#specific-product-panel {
+  position: fixed;
+  left: 50%;
+  bottom: var(--bottom-bar-height);
+  z-index: 28;
+  width: min(430px, 100%);
+  max-height: min(72dvh, 560px);
+  margin: 0;
+  overflow: auto;
+  transform: translateX(-50%);
+  border-top: 1px solid #cfcfcf;
+  border-radius: 0;
+  background: var(--space-panel) !important;
+  box-shadow: 0 -8px 22px rgb(0 0 0 / 14%);
+}
+
+#new-item-panel[hidden],
+#specific-product-panel[hidden] {
+  display: none !important;
+}
+
+#new-item-panel h3,
+#specific-product-panel h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+#specific-product-panel .settings-checkbox-list,
+#settings-specific-product-stores.settings-checkbox-list {
+  max-height: 34dvh;
+  overflow: auto;
+}
+
+.settings-specific-product-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.settings-specific-products-group .settings-group-heading {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.settings-specific-products-list {
+  background: var(--space-tint) !important;
+}

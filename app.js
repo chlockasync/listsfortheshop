@@ -47,6 +47,7 @@ const settingsPanels = {
   "store-types": document.querySelector("#settings-store-types-panel"),
   "product-types": document.querySelector("#settings-product-types-panel"),
   items: document.querySelector("#settings-items-panel"),
+  "specific-products": document.querySelector("#settings-specific-products-panel"),
   rooms: document.querySelector("#settings-rooms-panel"),
   units: document.querySelector("#settings-units-panel")
 };
@@ -55,6 +56,7 @@ const settingsCategoryNames = {
   "store-types": "Store types",
   "product-types": "Product types",
   items: "Items",
+  "specific-products": "Specific products",
   rooms: "Rooms",
   units: "Units"
 };
@@ -79,6 +81,7 @@ function getSettingsAddForm(categoryName) {
     "store-types": addStoreTypeForm,
     "product-types": addProductTypeForm,
     items: addSettingsItemForm,
+    "specific-products": addSettingsSpecificProductForm,
     rooms: addRoomForm,
     units: addUnitForm
   }[categoryName] ?? null;
@@ -90,6 +93,7 @@ function closeSettingsAddForms({ except = null } = {}) {
     addStoreTypeForm,
     addProductTypeForm,
     addSettingsItemForm,
+    addSettingsSpecificProductForm,
     addRoomForm,
     addUnitForm
   ].forEach((form) => {
@@ -111,6 +115,10 @@ function toggleCurrentSettingsAddForm() {
 
   if (categoryName === "items") {
     prepareSettingsItemAddForm();
+  }
+
+  if (categoryName === "specific-products") {
+    prepareSettingsSpecificProductAddForm();
   }
 
   const willOpen = form.hidden;
@@ -158,6 +166,16 @@ const settingsItemDefaultAmountInput = document.querySelector("#settings-item-de
 const settingsItemUnitSelect = document.querySelector("#settings-item-unit");
 const settingsItemIncrementInput = document.querySelector("#settings-item-increment");
 
+/* Specific products */
+const settingsSpecificProductsList = document.querySelector("#settings-specific-products-list");
+const settingsSpecificProductsSearch = document.querySelector("#settings-specific-products-search");
+const addSettingsSpecificProductForm = document.querySelector("#add-settings-specific-product-form");
+const settingsSpecificProductItemSelect = document.querySelector("#settings-specific-product-item");
+const settingsSpecificProductNameInput = document.querySelector("#settings-specific-product-name");
+const settingsSpecificProductSizeInput = document.querySelector("#settings-specific-product-size");
+const settingsSpecificProductColourInput = document.querySelector("#settings-specific-product-colour");
+const settingsSpecificProductStoresContainer = document.querySelector("#settings-specific-product-stores");
+
 /* Needing room view */
 const roomSelectorButton = document.querySelector("#room-selector-button");
 const needingHome = document.querySelector("#needing-home");
@@ -175,6 +193,14 @@ const itemNameInput = document.querySelector("#item-name");
 const itemDefaultAmountInput = document.querySelector("#item-default-amount");
 const roomItemsList = document.querySelector("#room-items-list");
 const roomItemsSearch = document.querySelector("#room-items-search");
+const specificProductPanel = document.querySelector("#specific-product-panel");
+const specificProductPanelTitle = document.querySelector("#specific-product-panel-title");
+const addSpecificProductForm = document.querySelector("#add-specific-product-form");
+const specificProductNameInput = document.querySelector("#specific-product-name");
+const specificProductSizeInput = document.querySelector("#specific-product-size");
+const specificProductColourInput = document.querySelector("#specific-product-colour");
+const specificProductStoresContainer = document.querySelector("#specific-product-stores");
+const cancelSpecificProductButton = document.querySelector("#cancel-specific-product");
 const viewNeededListButton = document.querySelector("#view-needed-list");
 const fullNeededView = document.querySelector("#full-needed-view");
 const backFromNeededListButton = document.querySelector("#back-from-needed-list");
@@ -206,6 +232,7 @@ let storesListenerStarted = false;
 let productTypesListenerStarted = false;
 let itemsListenerStarted = false;
 let neededEntriesListenerStarted = false;
+let specificProductsListenerStarted = false;
 
 let currentRooms = [];
 let currentUnits = [];
@@ -213,7 +240,9 @@ let currentStoreTypes = [];
 let currentStores = [];
 let currentProductTypes = [];
 let currentItems = [];
+let currentSpecificProducts = [];
 let currentNeededEntries = new Map();
+let quickSpecificProductItemId = null;
 
 function showSettingsHome() {
   selectedSettingsCategory = null;
@@ -556,11 +585,25 @@ function createIconButton({
   return button;
 }
 
-function addLongPressHandler(element, handler, { duration = 350 } = {}) {
+function addLongPressHandler(
+  element,
+  handler,
+  {
+    duration = 350,
+    ignoreSelector = null
+  } = {}
+) {
   let pressTimer = null;
   let startX = 0;
   let startY = 0;
   let hasFired = false;
+
+  function shouldIgnore(event) {
+    return Boolean(
+      ignoreSelector &&
+      event.target?.closest?.(ignoreSelector)
+    );
+  }
 
   function clearPress() {
     if (pressTimer) {
@@ -572,7 +615,7 @@ function addLongPressHandler(element, handler, { duration = 350 } = {}) {
   }
 
   element.addEventListener("pointerdown", (event) => {
-    if (element.disabled) {
+    if (element.disabled || shouldIgnore(event)) {
       return;
     }
 
@@ -600,6 +643,10 @@ function addLongPressHandler(element, handler, { duration = 350 } = {}) {
   });
 
   element.addEventListener("pointermove", (event) => {
+    if (!pressTimer) {
+      return;
+    }
+
     const movedDistance = Math.hypot(
       event.clientX - startX,
       event.clientY - startY
@@ -612,10 +659,6 @@ function addLongPressHandler(element, handler, { duration = 350 } = {}) {
 
   ["pointerup", "pointercancel"].forEach((eventName) => {
     element.addEventListener(eventName, clearPress);
-  });
-
-  element.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
   });
 
   element.addEventListener("click", (event) => {
@@ -1229,6 +1272,90 @@ function storeTypeOptions() {
   }));
 }
 
+function storeOptions() {
+  return currentStores.map((store) => ({
+    value: store.id,
+    text: store.name
+  }));
+}
+
+function roomOptions() {
+  return currentRooms.map((room) => ({
+    value: room.id,
+    text: room.name
+  }));
+}
+
+function activeCatalogueItems() {
+  return currentItems.filter((item) => item.active !== false);
+}
+
+function itemOptions() {
+  const groups = [];
+
+  orderedProductTypesForDefaultRoomView().forEach((productType) => {
+    const options = activeCatalogueItems()
+      .filter((item) => String(item.productTypeId) === String(productType.id))
+      .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")))
+      .map((item) => ({
+        value: item.id,
+        text: item.name
+      }));
+
+    if (options.length > 0) {
+      groups.push({
+        label: productType.name,
+        options
+      });
+    }
+  });
+
+  const groupedIds = new Set(
+    groups.flatMap((group) => group.options.map((option) => String(option.value)))
+  );
+
+  const remainingOptions = activeCatalogueItems()
+    .filter((item) => !groupedIds.has(String(item.id)))
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")))
+    .map((item) => ({
+      value: item.id,
+      text: item.name
+    }));
+
+  if (remainingOptions.length > 0) {
+    groups.push({
+      label: "Product type not set",
+      options: remainingOptions
+    });
+  }
+
+  return groups;
+}
+
+function getItemName(itemId) {
+  const item = currentItems.find(
+    (candidate) => String(candidate.id) === String(itemId)
+  );
+
+  return item?.name ?? "Item not set";
+}
+
+function getStoreName(storeId) {
+  const store = currentStores.find(
+    (candidate) => String(candidate.id) === String(storeId)
+  );
+
+  return store?.name ?? "Store not set";
+}
+
+function getStoreNames(storeIds = []) {
+  const names = storeIds
+    .map((storeId) => getStoreName(storeId))
+    .filter((name) => name !== "Store not set");
+
+  return names.length > 0 ? names.join(", ") : "Stores not set";
+}
+
 function productTypeOptions() {
   const groups = [];
 
@@ -1816,6 +1943,7 @@ function renderSettingsLists() {
   renderStores(currentStores);
   renderProductTypes(currentProductTypes);
   renderSettingsItems();
+  renderSettingsSpecificProducts();
 }
 
 function renderRooms(rooms) {
@@ -2239,6 +2367,20 @@ async function deactivateSettingsItem(item) {
     return;
   }
 
+  const linkedSpecificProducts = currentSpecificProducts.filter(
+    (product) => String(product.itemId) === String(item.id)
+  );
+
+  if (linkedSpecificProducts.length > 0) {
+    showDependencyBlock(item.name, [
+      dependencyListLine(
+        "Specific products linked to this item",
+        dependencyNames(linkedSpecificProducts, (product) => product.name)
+      )
+    ]);
+    return;
+  }
+
   if (
     !window.confirm(
       `Remove ${item.name}?
@@ -2322,6 +2464,14 @@ function itemEditFields(items) {
       value: () => items.find((item) => item.id === editingSettingsId)?.name ?? ""
     },
     {
+      key: "locationId",
+      label: "Room",
+      type: "select",
+      emptyText: "Choose a room",
+      options: roomOptions,
+      value: () => items.find((item) => item.id === editingSettingsId)?.locationId ?? ""
+    },
+    {
       key: "productTypeId",
       label: "Product type",
       type: "select",
@@ -2370,6 +2520,7 @@ async function saveSettingsItem(values, item) {
 
   if (
     !values.name ||
+    !values.locationId ||
     !values.productTypeId ||
     !values.unitId ||
     !Number.isFinite(values.defaultAmount) ||
@@ -2385,6 +2536,7 @@ async function saveSettingsItem(values, item) {
 
   await updateDoc(householdDocument("items", item.id), {
     name: values.name,
+    locationId: values.locationId,
     productTypeId: values.productTypeId,
     defaultAmount: values.defaultAmount,
     unitId: values.unitId,
@@ -2436,6 +2588,259 @@ function appendSettingsItemsForProductType({
 
   group.append(groupList);
   container.append(group);
+}
+
+function specificProductSublabel(product) {
+  const parts = [
+    getItemName(product.itemId),
+    product.size,
+    product.colour,
+    getStoreNames(product.storeIds ?? [])
+  ]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean);
+
+  return parts.join(" · ");
+}
+
+function specificProductMatchesSearch(product, searchText) {
+  if (!searchText) {
+    return true;
+  }
+
+  return [
+    product.name,
+    getItemName(product.itemId),
+    product.size,
+    product.colour,
+    getStoreNames(product.storeIds ?? [])
+  ]
+    .filter(Boolean)
+    .some((value) =>
+      String(value).toLowerCase().includes(searchText)
+    );
+}
+
+function createSettingsSpecificProductRow(product) {
+  const row = document.createElement("div");
+  row.className = "settings-list-item settings-specific-product-row";
+
+  const text = document.createElement("span");
+  text.className = "settings-order-text";
+
+  const name = document.createElement("span");
+  name.className = "settings-order-name";
+  name.textContent = product.name;
+  text.append(name);
+
+  const detail = document.createElement("span");
+  detail.className = "settings-order-sublabel";
+  detail.textContent = specificProductSublabel(product);
+  text.append(detail);
+
+  const actions = document.createElement("span");
+  actions.className = "settings-row-actions";
+
+  const editButton = createIconButton({
+    className: "settings-row-icon-button settings-row-edit-button",
+    icon: "✏️",
+    label: `Edit ${product.name}`,
+    onClick: () => {
+      setEditingSettings("specific-products", product.id);
+    }
+  });
+
+  const deleteButton = createIconButton({
+    className: "settings-row-icon-button settings-row-delete-button",
+    icon: "🗑️",
+    label: `Delete ${product.name}`,
+    onClick: async () => {
+      if (!confirmSettingsDelete(product.name)) {
+        return;
+      }
+
+      await deleteSettingsDocument("specificProducts", product.id);
+    }
+  });
+
+  actions.append(editButton, deleteButton);
+  row.append(text, actions);
+
+  return row;
+}
+
+function specificProductEditFields(products) {
+  return [
+    {
+      key: "itemId",
+      label: "Item",
+      type: "select",
+      emptyText: "Choose an item",
+      options: itemOptions,
+      value: () => products.find((product) => product.id === editingSettingsId)?.itemId ?? ""
+    },
+    {
+      key: "name",
+      label: "Product name",
+      maxLength: 100,
+      value: () => products.find((product) => product.id === editingSettingsId)?.name ?? ""
+    },
+    {
+      key: "size",
+      label: "Size",
+      required: false,
+      maxLength: 40,
+      value: () => products.find((product) => product.id === editingSettingsId)?.size ?? ""
+    },
+    {
+      key: "colour",
+      label: "Colour",
+      required: false,
+      maxLength: 40,
+      value: () => products.find((product) => product.id === editingSettingsId)?.colour ?? ""
+    },
+    {
+      key: "storeIds",
+      label: "Stores",
+      type: "checkboxes",
+      options: storeOptions,
+      required: false,
+      value: () => products.find((product) => product.id === editingSettingsId)?.storeIds ?? []
+    }
+  ];
+}
+
+async function saveSettingsSpecificProduct(values, product) {
+  if (!values.itemId || !values.name) {
+    throw new Error("Please choose an item and enter a product name.");
+  }
+
+  await updateDoc(householdDocument("specificProducts", product.id), {
+    itemId: values.itemId,
+    name: values.name,
+    size: values.size ?? "",
+    colour: values.colour ?? "",
+    storeIds: values.storeIds ?? [],
+    updatedAt: serverTimestamp()
+  });
+}
+
+function appendSettingsSpecificProductEditPanel(product, listElement) {
+  appendSettingsEditPanel({
+    listElement,
+    settingsKey: "specific-products",
+    item: product,
+    fields: specificProductEditFields(currentSpecificProducts),
+    onSave: saveSettingsSpecificProduct
+  });
+}
+
+function renderSpecificProductsForProductType({
+  container,
+  productType,
+  products,
+  renderedProductIds
+}) {
+  const productTypeItemIds = new Set(
+    activeCatalogueItems()
+      .filter((item) => String(item.productTypeId) === String(productType.id))
+      .map((item) => String(item.id))
+  );
+
+  const groupProducts = products
+    .filter((product) => productTypeItemIds.has(String(product.itemId)))
+    .sort((a, b) => {
+      const itemDifference = getItemName(a.itemId).localeCompare(getItemName(b.itemId));
+
+      if (itemDifference !== 0) {
+        return itemDifference;
+      }
+
+      return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+    });
+
+  if (groupProducts.length === 0) {
+    return;
+  }
+
+  const group = document.createElement("section");
+  group.className = "settings-group settings-specific-products-group";
+
+  const heading = document.createElement("div");
+  heading.className = "settings-group-heading";
+  heading.textContent = productType.name;
+  group.append(heading);
+
+  const groupList = document.createElement("div");
+  groupList.className = "settings-group-list";
+
+  groupProducts.forEach((product) => {
+    groupList.append(createSettingsSpecificProductRow(product));
+    appendSettingsSpecificProductEditPanel(product, groupList);
+    renderedProductIds.add(product.id);
+  });
+
+  group.append(groupList);
+  container.append(group);
+}
+
+function renderSettingsSpecificProducts() {
+  if (!settingsSpecificProductsList) {
+    return;
+  }
+
+  const searchText = (settingsSpecificProductsSearch?.value ?? "")
+    .trim()
+    .toLowerCase();
+
+  const products = currentSpecificProducts
+    .filter((product) => product.active !== false)
+    .filter((product) => specificProductMatchesSearch(product, searchText));
+
+  settingsSpecificProductsList.innerHTML = "";
+
+  if (products.length === 0) {
+    settingsSpecificProductsList.innerHTML = searchText
+      ? "<p>No matching specific products.</p>"
+      : "<p>No specific products have been created yet.</p>";
+    return;
+  }
+
+  const renderedProductIds = new Set();
+
+  orderedProductTypesForDefaultRoomView().forEach((productType) => {
+    renderSpecificProductsForProductType({
+      container: settingsSpecificProductsList,
+      productType,
+      products,
+      renderedProductIds
+    });
+  });
+
+  const remainingProducts = products
+    .filter((product) => !renderedProductIds.has(product.id))
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+
+  if (remainingProducts.length > 0) {
+    const group = document.createElement("section");
+    group.className = "settings-group settings-specific-products-group";
+
+    const heading = document.createElement("div");
+    heading.className = "settings-group-heading";
+    heading.textContent = "Product type not set";
+    group.append(heading);
+
+    const groupList = document.createElement("div");
+    groupList.className = "settings-group-list";
+
+    remainingProducts.forEach((product) => {
+      groupList.append(createSettingsSpecificProductRow(product));
+      appendSettingsSpecificProductEditPanel(product, groupList);
+    });
+
+    group.append(groupList);
+    settingsSpecificProductsList.append(group);
+  }
 }
 
 function renderSettingsItems() {
@@ -2589,6 +2994,145 @@ function resetSettingsItemAddForm() {
   addSettingsItemForm.reset();
   settingsItemDefaultAmountInput.value = 1;
   populateSettingsItemUnitSelect();
+}
+
+function createStoreCheckboxList(container, selectedStoreIds = []) {
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = "";
+  container.className = "settings-checkbox-list";
+
+  const selectedValues = new Set(
+    selectedStoreIds.map((id) => String(id))
+  );
+
+  if (currentStores.length === 0) {
+    container.innerHTML = "<p>No stores are available.</p>";
+    return;
+  }
+
+  currentStores.forEach((store) => {
+    const { optionLabel } = createSettingsCheckboxOption({
+      value: store.id,
+      text: store.name,
+      checked: selectedValues.has(String(store.id))
+    });
+
+    container.append(optionLabel);
+  });
+}
+
+function getCheckedValues(container) {
+  if (!container) {
+    return [];
+  }
+
+  return Array.from(
+    container.querySelectorAll("input[type='checkbox']:checked")
+  ).map((checkbox) => checkbox.value);
+}
+
+function populateSpecificProductItemSelect(
+  selectElement,
+  selectedItemId = selectElement?.value ?? ""
+) {
+  if (!selectElement) {
+    return;
+  }
+
+  selectElement.innerHTML = '<option value="">Choose an item</option>';
+
+  const selectedState = {
+    hasSelected: false
+  };
+
+  function appendOption(optionData, parentElement) {
+    const option = document.createElement("option");
+    option.value = optionData.value;
+    option.textContent = optionData.text;
+
+    if (
+      String(optionData.value) === String(selectedItemId) &&
+      !selectedState.hasSelected
+    ) {
+      option.selected = true;
+      selectedState.hasSelected = true;
+    }
+
+    parentElement.append(option);
+  }
+
+  itemOptions().forEach((optionData) => {
+    if (Array.isArray(optionData.options)) {
+      const group = document.createElement("optgroup");
+      group.label = optionData.label;
+
+      optionData.options.forEach((groupedOption) => {
+        appendOption(groupedOption, group);
+      });
+
+      selectElement.append(group);
+      return;
+    }
+
+    appendOption(optionData, selectElement);
+  });
+}
+
+function resetSettingsSpecificProductAddForm() {
+  if (!addSettingsSpecificProductForm) {
+    return;
+  }
+
+  addSettingsSpecificProductForm.reset();
+  populateSpecificProductItemSelect(settingsSpecificProductItemSelect);
+  createStoreCheckboxList(settingsSpecificProductStoresContainer);
+}
+
+function prepareSettingsSpecificProductAddForm() {
+  populateSpecificProductItemSelect(
+    settingsSpecificProductItemSelect,
+    settingsSpecificProductItemSelect?.value ?? ""
+  );
+  createStoreCheckboxList(settingsSpecificProductStoresContainer);
+}
+
+function prepareQuickSpecificProductForm(item) {
+  quickSpecificProductItemId = item.id;
+  specificProductPanelTitle.textContent =
+    `Add specific product to ${item.name}`;
+  addSpecificProductForm.reset();
+  createStoreCheckboxList(specificProductStoresContainer);
+}
+
+function openSpecificProductQuickAdd(item) {
+  if (!specificProductPanel || !addSpecificProductForm) {
+    return;
+  }
+
+  if (newItemPanel) {
+    newItemPanel.hidden = true;
+  }
+
+  prepareQuickSpecificProductForm(item);
+  specificProductPanel.hidden = false;
+
+  requestAnimationFrame(() => {
+    specificProductPanel.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth"
+    });
+  });
+}
+
+function closeSpecificProductQuickAdd() {
+  quickSpecificProductItemId = null;
+
+  if (specificProductPanel) {
+    specificProductPanel.hidden = true;
+  }
 }
 
 
@@ -2809,6 +3353,17 @@ function renderRoomItems() {
     } else {
       row.classList.add("is-available");
     }
+
+    addLongPressHandler(
+      row,
+      () => {
+        openSpecificProductQuickAdd(item);
+      },
+      {
+        duration: 320,
+        ignoreSelector: "button, input, select, textarea"
+      }
+    );
 
     const details = document.createElement("div");
     details.className = "item-row-details";
@@ -3118,6 +3673,17 @@ function appendFullNeededItemRow(item) {
 
   const row = document.createElement("div");
   row.className = "item-row full-needed-item-row is-needed";
+
+  addLongPressHandler(
+    row,
+    () => {
+      openSpecificProductQuickAdd(item);
+    },
+    {
+      duration: 320,
+      ignoreSelector: "button, input, select, textarea"
+    }
+  );
 
   const details = document.createElement("div");
   details.className = "item-row-details";
@@ -3480,10 +4046,37 @@ function startItemsListener() {
       renderRoomItems();
       renderFullNeededList();
       renderSettingsItems();
+      renderSettingsSpecificProducts();
       renderGettingItems();
     },
     (error) => {
       console.error("Could not load items:", error);
+    }
+  );
+}
+
+function startSpecificProductsListener() {
+  if (specificProductsListenerStarted) {
+    return;
+  }
+
+  specificProductsListenerStarted = true;
+
+  onSnapshot(
+    householdCollection("specificProducts"),
+    (snapshot) => {
+      currentSpecificProducts = snapshot.docs
+        .map((documentSnapshot) => ({
+          id: documentSnapshot.id,
+          ...documentSnapshot.data()
+        }))
+        .filter((product) => product.active !== false)
+        .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+
+      renderSettingsSpecificProducts();
+    },
+    (error) => {
+      console.error("Could not load specific products:", error);
     }
   );
 }
@@ -3507,6 +4100,7 @@ function startStoresListener() {
         .sort(sortBySavedOrderThenName);
 
       renderStores(currentStores);
+      renderSettingsSpecificProducts();
     },
     (error) => {
       console.error("Could not load stores:", error);
@@ -3559,6 +4153,7 @@ function startProductTypesListener() {
         .sort(sortBySavedOrderThenName);
 
       renderProductTypes(currentProductTypes);
+      renderSettingsSpecificProducts();
     },
     (error) => {
       console.error("Could not load product types:", error);
@@ -3589,6 +4184,7 @@ function startRoomsListener() {
         .sort(sortBySavedOrderThenName);
 
       renderRooms(currentRooms);
+      renderSettingsSpecificProducts();
     },
     (error) => {
       console.error("Could not load rooms:", error);
@@ -3889,6 +4485,12 @@ function wireNavigation() {
     });
   }
 
+  if (settingsSpecificProductsSearch) {
+    settingsSpecificProductsSearch.addEventListener("input", () => {
+      renderSettingsSpecificProducts();
+    });
+  }
+
   settingsCategoryButton.addEventListener("click", () => {
     editingSettingsKey = null;
     editingSettingsId = null;
@@ -3905,15 +4507,34 @@ function wireNavigation() {
   });
 
   newItemButton.addEventListener("click", () => {
+    closeSpecificProductQuickAdd();
+    populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
+
+    if (!itemUnitSelect.value) {
+      applyDefaultItemUnit();
+    }
+
     newItemPanel.hidden = false;
     newItemButton.hidden = true;
+
+    requestAnimationFrame(() => {
+      newItemPanel.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth"
+      });
+    });
   });
 
   cancelNewItemButton.addEventListener("click", () => {
-    resetNewItemForm();
     newItemPanel.hidden = true;
     newItemButton.hidden = false;
   });
+
+  if (cancelSpecificProductButton) {
+    cancelSpecificProductButton.addEventListener("click", () => {
+      closeSpecificProductQuickAdd();
+    });
+  }
 
   shoppingAtButton.addEventListener("click", () => {
     const willOpen = shoppingAtPanel.hidden;
@@ -4214,6 +4835,86 @@ function wireForms() {
     });
   }
 
+  if (addSettingsSpecificProductForm) {
+    addSettingsSpecificProductForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const itemId = settingsSpecificProductItemSelect.value;
+      const productName = settingsSpecificProductNameInput.value.trim();
+      const size = settingsSpecificProductSizeInput.value.trim();
+      const colour = settingsSpecificProductColourInput.value.trim();
+      const storeIds = getCheckedValues(settingsSpecificProductStoresContainer);
+
+      if (!itemId || !productName) {
+        alert("Please choose an item and enter a product name.");
+        return;
+      }
+
+      const submitButton = addSettingsSpecificProductForm.querySelector("button[type='submit']");
+      submitButton.disabled = true;
+
+      try {
+        await addDoc(householdCollection("specificProducts"), {
+          itemId,
+          name: productName,
+          size,
+          colour,
+          storeIds,
+          active: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        resetSettingsSpecificProductAddForm();
+        addSettingsSpecificProductForm.hidden = true;
+      } catch (error) {
+        console.error("Could not add specific product:", error);
+        alert("The specific product could not be saved.");
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  }
+
+  if (addSpecificProductForm) {
+    addSpecificProductForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const productName = specificProductNameInput.value.trim();
+      const size = specificProductSizeInput.value.trim();
+      const colour = specificProductColourInput.value.trim();
+      const storeIds = getCheckedValues(specificProductStoresContainer);
+
+      if (!quickSpecificProductItemId || !productName) {
+        alert("Please enter a product name.");
+        return;
+      }
+
+      const submitButton = addSpecificProductForm.querySelector("button[type='submit']");
+      submitButton.disabled = true;
+
+      try {
+        await addDoc(householdCollection("specificProducts"), {
+          itemId: quickSpecificProductItemId,
+          name: productName,
+          size,
+          colour,
+          storeIds,
+          active: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        closeSpecificProductQuickAdd();
+      } catch (error) {
+        console.error("Could not add specific product:", error);
+        alert("The specific product could not be saved.");
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  }
+
   addItemForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -4267,7 +4968,7 @@ function wireForms() {
         updatedAt: serverTimestamp()
       });
 
-      resetNewItemForm();
+      itemNameInput.value = "";
       newItemPanel.hidden = true;
       newItemButton.hidden = false;
     } catch (error) {
@@ -4286,6 +4987,7 @@ function startListeners() {
   startStoresListener();
   startProductTypesListener();
   startItemsListener();
+  startSpecificProductsListener();
   startNeededEntriesListener();
 }
 

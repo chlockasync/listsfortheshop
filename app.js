@@ -154,6 +154,7 @@ const addSettingsItemForm = document.querySelector("#add-settings-item-form");
 const settingsItemNameInput = document.querySelector("#settings-item-name");
 const settingsItemRoomSelect = document.querySelector("#settings-item-room");
 const settingsItemProductTypeSelect = document.querySelector("#settings-item-product-type");
+const settingsItemStoreSelect = document.querySelector("#settings-item-store");
 const settingsItemDefaultAmountInput = document.querySelector("#settings-item-default-amount");
 const settingsItemUnitSelect = document.querySelector("#settings-item-unit");
 const settingsItemIncrementInput = document.querySelector("#settings-item-increment");
@@ -168,6 +169,7 @@ const newItemButton = document.querySelector("#new-item-button");
 const newItemPanel = document.querySelector("#new-item-panel");
 const cancelNewItemButton = document.querySelector("#cancel-new-item");
 const itemProductTypeSelect = document.querySelector("#item-product-type");
+const itemStoreSelect = document.querySelector("#item-store");
 const itemUnitSelect = document.querySelector("#item-unit");
 const itemIncrementInput = document.querySelector("#item-increment");
 const addItemForm = document.querySelector("#add-item-form");
@@ -1448,6 +1450,44 @@ async function deactivateStoreType(storeType) {
 }
 
 async function deactivateStore(store) {
+  const matchingItems = activeItems().filter(
+    (item) => String(item.storeId ?? "") === String(store.id)
+  );
+
+  const matchingSpecificProducts = currentSpecificProducts.filter(
+    (product) =>
+      product.active !== false &&
+      Array.isArray(product.storeIds) &&
+      product.storeIds.some(
+        (storeId) => String(storeId) === String(store.id)
+      )
+  );
+
+  if (matchingItems.length > 0 || matchingSpecificProducts.length > 0) {
+    showDependencyBlock(store.name, [
+      dependencyListLine(
+        "Items assigned to this store",
+        dependencyNames(matchingItems, (item) => item.name)
+      ),
+      dependencyListLine(
+        "Specific products recorded for this store",
+        dependencyNames(
+          matchingSpecificProducts,
+          (product) => {
+            const item = currentItems.find(
+              (candidate) => String(candidate.id) === String(product.itemId)
+            );
+
+            return item
+              ? `${item.name} ${product.name}`
+              : product.name;
+          }
+        )
+      )
+    ]);
+    return;
+  }
+
   if (
     !confirmSettingsDelete(
       store.name,
@@ -1516,6 +1556,87 @@ function storeOptions() {
     value: store.id,
     text: store.name
   }));
+}
+
+function storesForProductType(productTypeId) {
+  const productType = currentProductTypes.find(
+    (candidate) => String(candidate.id) === String(productTypeId)
+  );
+
+  if (!productType) {
+    return [];
+  }
+
+  const allowedStoreTypeIds = new Set(
+    productTypeStoreTypeIds(productType).map((id) => String(id))
+  );
+
+  return currentStores
+    .filter((store) =>
+      allowedStoreTypeIds.has(String(store.storeTypeId))
+    )
+    .sort(sortBySavedOrderThenName);
+}
+
+function itemStoreOptions(productTypeId) {
+  return storesForProductType(productTypeId).map((store) => ({
+    value: store.id,
+    text: store.name
+  }));
+}
+
+function itemStoreIsAllowed(productTypeId, storeId) {
+  if (!storeId) {
+    return true;
+  }
+
+  return storesForProductType(productTypeId).some(
+    (store) => String(store.id) === String(storeId)
+  );
+}
+
+function populateItemStoreSelect(
+  selectElement,
+  productTypeId,
+  selectedStoreId = ""
+) {
+  if (!selectElement) {
+    return;
+  }
+
+  const stores = storesForProductType(productTypeId);
+  selectElement.innerHTML = "";
+
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = stores.length > 0
+    ? "Any matching store"
+    : "No matching stores";
+  selectElement.append(emptyOption);
+
+  stores.forEach((store) => {
+    const option = document.createElement("option");
+    option.value = store.id;
+    option.textContent = store.name;
+    selectElement.append(option);
+  });
+
+  const hasSelectedStore = stores.some(
+    (store) => String(store.id) === String(selectedStoreId)
+  );
+
+  selectElement.value = hasSelectedStore ? selectedStoreId : "";
+  selectElement.disabled = stores.length === 0;
+}
+
+function getItemStoreName(item) {
+  if (!item?.storeId) {
+    return "";
+  }
+
+  return currentStores.find(
+    (store) => String(store.id) === String(item.storeId)
+  )?.name ?? "";
 }
 
 function roomOptions() {
@@ -2371,6 +2492,16 @@ function renderStores(stores) {
   });
 
   renderShoppingLocations();
+  populateItemStoreSelect(
+    itemStoreSelect,
+    itemProductTypeSelect?.value,
+    itemStoreSelect?.value
+  );
+  populateItemStoreSelect(
+    settingsItemStoreSelect,
+    settingsItemProductTypeSelect?.value,
+    settingsItemStoreSelect?.value
+  );
 }
 
 function productTypeEditFields(productTypes) {
@@ -2580,8 +2711,9 @@ function itemSettingsSublabel(item) {
   const parts = [
     productType?.name ?? "Product type not set",
     getRoomName(item.locationId),
-    getUnitDisplay(item.unitId)
-  ];
+    getUnitDisplay(item.unitId),
+    getItemStoreName(item)
+  ].filter(Boolean);
 
   return parts.join(" · ");
 }
@@ -2594,12 +2726,14 @@ function itemMatchesSettingsSearch(item, searchText) {
   const productType = productTypeForItem(item);
   const roomName = getRoomName(item.locationId);
   const unitName = getUnitDisplay(item.unitId);
+  const storeName = getItemStoreName(item);
 
   return [
     item.name,
     productType?.name,
     roomName,
-    unitName
+    unitName,
+    storeName
   ]
     .filter(Boolean)
     .some((value) =>
@@ -2798,6 +2932,21 @@ function itemEditFields(items) {
       value: () => items.find((item) => item.id === editingSettingsId)?.productTypeId ?? ""
     },
     {
+      key: "storeId",
+      label: "Store (optional)",
+      type: "select",
+      required: false,
+      emptyText: "Any matching store",
+      options: () => {
+        const item = items.find(
+          (candidate) => candidate.id === editingSettingsId
+        );
+
+        return itemStoreOptions(item?.productTypeId ?? "");
+      },
+      value: () => items.find((item) => item.id === editingSettingsId)?.storeId ?? ""
+    },
+    {
       key: "defaultAmount",
       label: "Amount",
       type: "number",
@@ -2852,10 +3001,15 @@ async function saveSettingsItem(values, item) {
     throw new Error("Please choose a product type that has at least one store type set.");
   }
 
+  if (!itemStoreIsAllowed(values.productTypeId, values.storeId)) {
+    throw new Error("Please choose a store that matches the selected product type.");
+  }
+
   await updateDoc(householdDocument("items", item.id), {
     name: values.name,
     locationId: values.locationId,
     productTypeId: values.productTypeId,
+    storeId: values.storeId || null,
     defaultAmount: values.defaultAmount,
     unitId: values.unitId,
     increment: values.increment,
@@ -2869,7 +3023,27 @@ function appendSettingsItemEditPanel(item, listElement) {
     settingsKey: "items",
     item,
     fields: itemEditFields(currentItems),
-    onSave: saveSettingsItem
+    onSave: saveSettingsItem,
+    extraContent: (_item, inputMap) => {
+      const productTypeSelect = inputMap.get("productTypeId")?.input;
+      const storeSelect = inputMap.get("storeId")?.input;
+
+      populateItemStoreSelect(
+        storeSelect,
+        productTypeSelect?.value ?? "",
+        storeSelect?.value ?? ""
+      );
+
+      productTypeSelect?.addEventListener("change", () => {
+        populateItemStoreSelect(
+          storeSelect,
+          productTypeSelect.value,
+          storeSelect?.value ?? ""
+        );
+      });
+
+      return null;
+    }
   });
 }
 
@@ -3334,6 +3508,7 @@ function updateSettingsItemIncrementFromUnit() {
 function prepareSettingsItemAddForm() {
   const previousRoomId = settingsItemRoomSelect?.value ?? "";
   const previousProductTypeId = settingsItemProductTypeSelect?.value ?? "";
+  const previousStoreId = settingsItemStoreSelect?.value ?? "";
   const previousUnitId = settingsItemUnitSelect?.value ?? "";
   const previousAmount = settingsItemDefaultAmountInput?.value ?? "1";
   const previousIncrement = settingsItemIncrementInput?.value ?? "1";
@@ -3344,6 +3519,11 @@ function prepareSettingsItemAddForm() {
     previousProductTypeId
   );
   populateSettingsItemUnitSelect(previousUnitId);
+  populateItemStoreSelect(
+    settingsItemStoreSelect,
+    settingsItemProductTypeSelect?.value,
+    previousStoreId
+  );
 
   if (settingsItemDefaultAmountInput) {
     settingsItemDefaultAmountInput.value = previousAmount || "1";
@@ -3563,6 +3743,17 @@ function populateProductTypeDropdown() {
       settingsItemProductTypeSelect.value
     );
   }
+
+  populateItemStoreSelect(
+    itemStoreSelect,
+    itemProductTypeSelect?.value,
+    itemStoreSelect?.value
+  );
+  populateItemStoreSelect(
+    settingsItemStoreSelect,
+    settingsItemProductTypeSelect?.value,
+    settingsItemStoreSelect?.value
+  );
 }
 
 function selectedItemUnitIncrement() {
@@ -3780,6 +3971,27 @@ function specificProductIsAvailableAtStore(specificProduct, storeId) {
   return (
     storeIds.length === 0 ||
     storeIds.some((candidateId) => String(candidateId) === String(storeId))
+  );
+}
+
+function neededRecordIsAvailableAtStore(record, storeId) {
+  if (!storeId) {
+    return true;
+  }
+
+  const specificStoreIds = Array.isArray(record.specificProduct?.storeIds)
+    ? record.specificProduct.storeIds
+    : [];
+
+  if (specificStoreIds.length > 0) {
+    return specificStoreIds.some(
+      (candidateId) => String(candidateId) === String(storeId)
+    );
+  }
+
+  return (
+    !record.item.storeId ||
+    String(record.item.storeId) === String(storeId)
   );
 }
 
@@ -4554,8 +4766,8 @@ function renderGettingItems() {
 
     if (
       selectedStore &&
-      !specificProductIsAvailableAtStore(
-        record.specificProduct,
+      !neededRecordIsAvailableAtStore(
+        record,
         selectedStore.id
       )
     ) {
@@ -5197,8 +5409,8 @@ async function finishCurrentShop() {
       return false;
     }
 
-    return specificProductIsAvailableAtStore(
-      record.specificProduct,
+    return neededRecordIsAvailableAtStore(
+      record,
       selectedStore?.id
     );
   });
@@ -5334,6 +5546,11 @@ function wireNavigation() {
 
     closeSpecificProductQuickAdd();
     populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
+    populateItemStoreSelect(
+      itemStoreSelect,
+      itemProductTypeSelect.value,
+      itemStoreSelect?.value ?? ""
+    );
 
     if (!itemUnitSelect.value) {
       applyDefaultItemUnit();
@@ -5437,6 +5654,14 @@ function wireForms() {
     } finally {
       submitButton.disabled = false;
     }
+  });
+
+  itemProductTypeSelect.addEventListener("change", () => {
+    populateItemStoreSelect(
+      itemStoreSelect,
+      itemProductTypeSelect.value,
+      itemStoreSelect?.value ?? ""
+    );
   });
 
   itemUnitSelect.addEventListener("change", () => {
@@ -5579,6 +5804,16 @@ function wireForms() {
     }
   });
 
+  if (settingsItemProductTypeSelect) {
+    settingsItemProductTypeSelect.addEventListener("change", () => {
+      populateItemStoreSelect(
+        settingsItemStoreSelect,
+        settingsItemProductTypeSelect.value,
+        settingsItemStoreSelect?.value ?? ""
+      );
+    });
+  }
+
   if (settingsItemUnitSelect) {
     settingsItemUnitSelect.addEventListener("change", () => {
       updateSettingsItemIncrementFromUnit();
@@ -5592,6 +5827,7 @@ function wireForms() {
       const itemName = settingsItemNameInput.value.trim();
       const locationId = settingsItemRoomSelect.value;
       const productTypeId = settingsItemProductTypeSelect.value;
+      const storeId = settingsItemStoreSelect?.value ?? "";
       const unitId = settingsItemUnitSelect.value;
       const defaultAmount = Number(settingsItemDefaultAmountInput.value);
       const increment = Number(settingsItemIncrementInput.value);
@@ -5621,6 +5857,11 @@ function wireForms() {
         return;
       }
 
+      if (!itemStoreIsAllowed(productTypeId, storeId)) {
+        alert("Please choose a store that matches the selected product type.");
+        return;
+      }
+
       const submitButton = addSettingsItemForm.querySelector("button[type='submit']");
       submitButton.disabled = true;
 
@@ -5630,6 +5871,7 @@ function wireForms() {
           active: true,
           locationId,
           productTypeId,
+          storeId: storeId || null,
           defaultAmount,
           unitId,
           increment,
@@ -5696,6 +5938,7 @@ function wireForms() {
 
     const itemName = itemNameInput.value.trim();
     const productTypeId = itemProductTypeSelect.value;
+    const storeId = itemStoreSelect?.value ?? "";
     const unitId = itemUnitSelect.value;
     const defaultAmount = Number(itemDefaultAmountInput.value);
     const increment = Number(itemIncrementInput.value);
@@ -5725,6 +5968,11 @@ function wireForms() {
       return;
     }
 
+    if (!itemStoreIsAllowed(productTypeId, storeId)) {
+      alert("Please choose a store that matches the selected product type.");
+      return;
+    }
+
     const submitButton = addItemForm.querySelector("button[type='submit']");
     submitButton.disabled = true;
 
@@ -5734,6 +5982,7 @@ function wireForms() {
         active: true,
         locationId: selectedRoomId,
         productTypeId,
+        storeId: storeId || null,
         defaultAmount,
         unitId,
         increment,

@@ -243,7 +243,10 @@ function openSettingsCategory(categoryName) {
 
   selectedSettingsCategory = categoryName;
   settingsHome.hidden = true;
-  settingsCategoryButton.textContent = settingsCategoryNames[categoryName];
+  setContextButtonLabel(
+    settingsCategoryButton,
+    settingsCategoryNames[categoryName]
+  );
   settingsCategoryButton.hidden = false;
 
   settingsCategoryPanels.forEach((categoryPanel) => {
@@ -321,7 +324,7 @@ function resetNeedingToRoomList() {
 
 function resetGettingToShoppingList() {
   selectedShoppingTarget = null;
-  shoppingAtButton.textContent = "Shopping at";
+  setContextButtonLabel(shoppingAtButton, "Shopping at");
   shoppingAtPanel.hidden = false;
   shoppingAtButton.setAttribute("aria-expanded", "true");
   renderGettingItems();
@@ -350,19 +353,23 @@ function openRoom(room) {
   renderRoomItems();
 }
 
-function setRoomSelectorLabel(roomName) {
-  roomSelectorButton.innerHTML = "";
+function setContextButtonLabel(button, label) {
+  button.innerHTML = "";
 
   const name = document.createElement("span");
-  name.className = "room-selector-name";
-  name.textContent = roomName;
+  name.className = "context-button-name";
+  name.textContent = label;
 
   const exitIcon = document.createElement("span");
-  exitIcon.className = "room-selector-exit";
-  exitIcon.textContent = "×";
+  exitIcon.className = "context-exit-icon";
+  exitIcon.textContent = "↩";
   exitIcon.setAttribute("aria-hidden", "true");
 
-  roomSelectorButton.append(name, exitIcon);
+  button.append(name, exitIcon);
+}
+
+function setRoomSelectorLabel(roomName) {
+  setContextButtonLabel(roomSelectorButton, roomName);
 }
 
 function updateSelectedRoomLabel() {
@@ -2601,8 +2608,9 @@ function renderRoomItems() {
       decreaseButton
     ];
 
+    details.append(amountDisplay);
+
     controls.append(
-      amountDisplay,
       increaseButton,
       decreaseButton
     );
@@ -2892,8 +2900,9 @@ function appendFullNeededItemRow(item) {
     decreaseButton
   ];
 
+  details.append(amountDisplay);
+
   controls.append(
-    amountDisplay,
     increaseButton,
     decreaseButton
   );
@@ -3004,7 +3013,10 @@ function renderShoppingLocations() {
         name: storeType.name.trim()
       };
 
-      shoppingAtButton.textContent = `Shopping at a ${storeType.name.trim()}`;
+      setContextButtonLabel(
+        shoppingAtButton,
+        `Shopping at a ${storeType.name.trim()}`
+      );
       shoppingAtPanel.hidden = true;
       shoppingAtButton.setAttribute("aria-expanded", "false");
       renderGettingItems();
@@ -3035,7 +3047,10 @@ function renderShoppingLocations() {
           name: store.name.trim()
         };
 
-        shoppingAtButton.textContent = `Shopping at ${store.name.trim()}`;
+        setContextButtonLabel(
+          shoppingAtButton,
+          `Shopping at ${store.name.trim()}`
+        );
         shoppingAtPanel.hidden = true;
         shoppingAtButton.setAttribute("aria-expanded", "false");
         renderGettingItems();

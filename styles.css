@@ -1726,3 +1726,114 @@ body:has(
 ) .bottom-action-bar {
   bottom: 0;
 }
+
+/* ===== Mobile correction pass: 202607071501 ===== */
+.bottom-action-bar {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.bottom-action-bar .settings-shortcut {
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: var(--bottom-bar-height);
+  padding: 0;
+  border-radius: 0;
+  opacity: 1;
+  font-size: 1.15rem;
+  pointer-events: auto;
+}
+
+.bottom-bar-status {
+  flex-direction: row;
+  gap: 0.32rem;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.bottom-bar-status #app-build,
+.bottom-bar-status #connection-status {
+  margin: 0;
+  font-size: inherit;
+  line-height: 1;
+  opacity: 0.62;
+}
+
+.bottom-bar-status #connection-status {
+  opacity: 0.72;
+}
+
+#room-selector-button,
+#shopping-at-button,
+#settings-category-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem;
+  text-align: left;
+}
+
+.context-button-name,
+.room-selector-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-exit-icon,
+.room-selector-exit {
+  flex: 0 0 auto;
+  opacity: 0.62;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.room-item-row .item-row-details,
+.full-needed-item-row .item-row-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.room-item-row .room-current-quantity,
+.full-needed-item-row .room-current-quantity {
+  min-width: 3.2rem;
+  margin-right: 0;
+  text-align: right;
+}
+
+.getting-item-row .item-row-details {
+  padding-right: 0.8rem;
+}
+
+.increase-needed-button,
+.decrease-needed-button {
+  font-size: 0 !important;
+}
+
+.increase-needed-button::before,
+.decrease-needed-button::before {
+  display: block;
+  font-family: Arial, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.increase-needed-button::before {
+  content: "+";
+}
+
+.decrease-needed-button::before {
+  content: "−";
+}
+
+.main-tabs button,
+.main-tabs button[aria-pressed="true"] {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}

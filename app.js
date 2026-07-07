@@ -59,11 +59,26 @@ const settingsCategoryNames = {
   units: "Units"
 };
 
+function getVisibleSettingsCategory() {
+  if (selectedSettingsCategory) {
+    return selectedSettingsCategory;
+  }
+
+  const visiblePanel = Array.from(settingsCategoryPanels).find(
+    (panel) => !panel.hidden
+  );
+
+  return Object.entries(settingsPanels).find(
+    ([, panel]) => panel === visiblePanel
+  )?.[0] ?? null;
+}
+
 function getSettingsAddForm(categoryName) {
   return {
     stores: addStoreForm,
     "store-types": addStoreTypeForm,
     "product-types": addProductTypeForm,
+    items: addSettingsItemForm,
     rooms: addRoomForm,
     units: addUnitForm
   }[categoryName] ?? null;
@@ -74,6 +89,7 @@ function closeSettingsAddForms({ except = null } = {}) {
     addStoreForm,
     addStoreTypeForm,
     addProductTypeForm,
+    addSettingsItemForm,
     addRoomForm,
     addUnitForm
   ].forEach((form) => {
@@ -86,10 +102,15 @@ function closeSettingsAddForms({ except = null } = {}) {
 }
 
 function toggleCurrentSettingsAddForm() {
-  const form = getSettingsAddForm(selectedSettingsCategory);
+  const categoryName = getVisibleSettingsCategory();
+  const form = getSettingsAddForm(categoryName);
 
   if (!form) {
     return;
+  }
+
+  if (categoryName === "items") {
+    prepareSettingsItemAddForm();
   }
 
   const willOpen = form.hidden;
@@ -129,6 +150,13 @@ const settingsProductTypesList = document.querySelector("#settings-product-types
 /* Items */
 const settingsItemsList = document.querySelector("#settings-items-list");
 const settingsItemsSearch = document.querySelector("#settings-items-search");
+const addSettingsItemForm = document.querySelector("#add-settings-item-form");
+const settingsItemNameInput = document.querySelector("#settings-item-name");
+const settingsItemRoomSelect = document.querySelector("#settings-item-room");
+const settingsItemProductTypeSelect = document.querySelector("#settings-item-product-type");
+const settingsItemDefaultAmountInput = document.querySelector("#settings-item-default-amount");
+const settingsItemUnitSelect = document.querySelector("#settings-item-unit");
+const settingsItemIncrementInput = document.querySelector("#settings-item-increment");
 
 /* Needing room view */
 const roomSelectorButton = document.querySelector("#room-selector-button");
@@ -269,14 +297,18 @@ function updateBottomContextAction() {
   }
 
   if (!views.settings.hidden) {
-    const form = getSettingsAddForm(selectedSettingsCategory);
+    const categoryName = getVisibleSettingsCategory();
+    const form = getSettingsAddForm(categoryName);
 
     bottomContextAction.textContent = form ? "New" : "";
     bottomContextAction.disabled = !form;
     bottomContextAction.hidden = false;
 
     if (form) {
-      bottomContextAction.setAttribute("aria-label", `New ${settingsCategoryNames[selectedSettingsCategory]}`);
+      bottomContextAction.setAttribute(
+        "aria-label",
+        `New ${settingsCategoryNames[categoryName]}`
+      );
     } else {
       bottomContextAction.removeAttribute("aria-label");
     }
@@ -310,6 +342,7 @@ function openSettingsCategory(categoryName) {
   });
 
   closeSettingsAddForms({ except: getSettingsAddForm(categoryName) });
+  updateBottomContextAction();
 }
 
 function showView(viewName) {
@@ -1787,6 +1820,7 @@ function renderSettingsLists() {
 
 function renderRooms(rooms) {
   currentRooms = rooms;
+  populateSettingsItemRoomSelect();
 
   renderSettingsRows({
     settingsKey: "rooms",
@@ -2475,6 +2509,88 @@ function populateStoreTypeDropdowns() {
 
   createStoreTypeCheckboxList(productTypeStoreTypesContainer);
 }
+function populateSettingsItemRoomSelect(selectedRoomId = settingsItemRoomSelect?.value ?? "") {
+  if (!settingsItemRoomSelect) {
+    return;
+  }
+
+  settingsItemRoomSelect.innerHTML = '<option value="">Choose a room</option>';
+
+  currentRooms.forEach((room) => {
+    const option = document.createElement("option");
+    option.value = room.id;
+    option.textContent = room.name;
+    settingsItemRoomSelect.append(option);
+  });
+
+  if (currentRooms.some((room) => String(room.id) === String(selectedRoomId))) {
+    settingsItemRoomSelect.value = selectedRoomId;
+  }
+}
+
+function populateSettingsItemUnitSelect(selectedUnitId = settingsItemUnitSelect?.value ?? "") {
+  if (!settingsItemUnitSelect) {
+    return;
+  }
+
+  settingsItemUnitSelect.innerHTML = "";
+
+  currentUnits.forEach((unit) => {
+    const option = document.createElement("option");
+    option.value = unit.id;
+    option.textContent = unit.symbol;
+    option.dataset.increment = unit.defaultIncrement ?? 1;
+    settingsItemUnitSelect.append(option);
+  });
+
+  if (currentUnits.some((unit) => String(unit.id) === String(selectedUnitId))) {
+    settingsItemUnitSelect.value = selectedUnitId;
+  } else if (currentUnits.length > 0) {
+    settingsItemUnitSelect.value = currentUnits[0].id;
+  }
+
+  updateSettingsItemIncrementFromUnit();
+}
+
+function updateSettingsItemIncrementFromUnit() {
+  if (!settingsItemUnitSelect || !settingsItemIncrementInput) {
+    return;
+  }
+
+  const selectedOption =
+    settingsItemUnitSelect.options[settingsItemUnitSelect.selectedIndex];
+
+  const suggestedIncrement = Number(selectedOption?.dataset.increment);
+
+  if (Number.isFinite(suggestedIncrement)) {
+    settingsItemIncrementInput.value = suggestedIncrement;
+  }
+}
+
+function prepareSettingsItemAddForm() {
+  populateSettingsItemRoomSelect();
+  populateProductTypeSelect(settingsItemProductTypeSelect, settingsItemProductTypeSelect?.value ?? "");
+  populateSettingsItemUnitSelect();
+
+  if (settingsItemDefaultAmountInput && !settingsItemDefaultAmountInput.value) {
+    settingsItemDefaultAmountInput.value = 1;
+  }
+
+  if (settingsItemIncrementInput && !settingsItemIncrementInput.value) {
+    settingsItemIncrementInput.value = 1;
+  }
+}
+
+function resetSettingsItemAddForm() {
+  if (!addSettingsItemForm) {
+    return;
+  }
+
+  addSettingsItemForm.reset();
+  settingsItemDefaultAmountInput.value = 1;
+  populateSettingsItemUnitSelect();
+}
+
 
 function appendProductTypeOptionsForStoreType({
   selectElement,
@@ -2560,6 +2676,13 @@ function populateProductTypeSelect(selectElement, selectedProductTypeId = "") {
 
 function populateProductTypeDropdown() {
   populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
+
+  if (settingsItemProductTypeSelect) {
+    populateProductTypeSelect(
+      settingsItemProductTypeSelect,
+      settingsItemProductTypeSelect.value
+    );
+  }
 }
 
 function selectedItemUnitIncrement() {
@@ -2601,6 +2724,8 @@ function populateUnitDropdown(selectedUnitId = itemUnitSelect.value) {
   } else if (currentUnits.length > 0) {
     applyDefaultItemUnit();
   }
+
+  populateSettingsItemUnitSelect();
 }
 
 function resetNewItemForm() {
@@ -3014,7 +3139,7 @@ function appendFullNeededItemRow(item) {
 
   const increaseButton = createIconButton({
     className: "room-icon-button increase-needed-button",
-    icon: "",
+    icon: "+",
     label: `Increase ${item.name}`,
     onClick: async () => {
       disableButtons(buttons);
@@ -3024,7 +3149,7 @@ function appendFullNeededItemRow(item) {
 
   const decreaseButton = createIconButton({
     className: "room-icon-button decrease-needed-button",
-    icon: "",
+    icon: "−",
     label: `Decrease ${item.name}`,
     onClick: async () => {
       disableButtons(buttons);
@@ -4016,6 +4141,78 @@ function wireForms() {
       submitButton.disabled = false;
     }
   });
+
+  if (settingsItemUnitSelect) {
+    settingsItemUnitSelect.addEventListener("change", () => {
+      updateSettingsItemIncrementFromUnit();
+    });
+  }
+
+  if (addSettingsItemForm) {
+    addSettingsItemForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const itemName = settingsItemNameInput.value.trim();
+      const locationId = settingsItemRoomSelect.value;
+      const productTypeId = settingsItemProductTypeSelect.value;
+      const unitId = settingsItemUnitSelect.value;
+      const defaultAmount = Number(settingsItemDefaultAmountInput.value);
+      const increment = Number(settingsItemIncrementInput.value);
+
+      const selectedProductType = currentProductTypes.find(
+        (productType) => productType.id === productTypeId
+      );
+
+      const inheritedStoreTypeIds = selectedProductType
+        ? productTypeStoreTypeIds(selectedProductType)
+        : [];
+
+      if (
+        !itemName ||
+        !locationId ||
+        !productTypeId ||
+        !unitId ||
+        !Number.isFinite(defaultAmount) ||
+        !Number.isFinite(increment)
+      ) {
+        alert("Please complete all required fields.");
+        return;
+      }
+
+      if (inheritedStoreTypeIds.length === 0) {
+        alert("Please choose a product type that has at least one store type set.");
+        return;
+      }
+
+      const submitButton = addSettingsItemForm.querySelector("button[type='submit']");
+      submitButton.disabled = true;
+
+      try {
+        await addDoc(householdCollection("items"), {
+          name: itemName,
+          active: true,
+          locationId,
+          productTypeId,
+          defaultAmount,
+          unitId,
+          increment,
+          addCount: 0,
+          lastAddedAt: null,
+          lastAdjustedAt: null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        resetSettingsItemAddForm();
+        addSettingsItemForm.hidden = true;
+      } catch (error) {
+        console.error("Could not add item:", error);
+        alert("The item could not be saved.");
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  }
 
   addItemForm.addEventListener("submit", async (event) => {
     event.preventDefault();

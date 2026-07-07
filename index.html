@@ -9,12 +9,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="mobile-web-app-capable" content="yes">
 
-  <link rel="manifest" href="manifest.webmanifest?v=1503">
-  <link rel="icon" href="favicon.svg?v=1503" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon-192.png?v=1503">
+  <link rel="manifest" href="manifest.webmanifest?v=1505">
+  <link rel="icon" href="favicon.svg?v=1505" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png?v=1505">
 
-  <link rel="stylesheet" href="styles.css?v=1504">
-  <script type="module" src="app.js?v=1504"></script>
+  <link rel="stylesheet" href="styles.css?v=1505">
+  <script type="module" src="app.js?v=1505"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -431,6 +431,84 @@
           >
             <p>No items have been created yet.</p>
           </div>
+
+          <form
+            id="add-settings-item-form"
+            class="settings-form settings-add-form"
+            hidden
+          >
+            <div class="settings-form-fields">
+              <label for="settings-item-name">
+                Item name
+              </label>
+
+              <input
+                type="text"
+                id="settings-item-name"
+                required
+                maxlength="80"
+                autocomplete="off"
+              >
+
+              <label for="settings-item-room">
+                Room
+              </label>
+
+              <select id="settings-item-room" required>
+                <option value="">
+                  Choose a room
+                </option>
+              </select>
+
+              <label for="settings-item-product-type">
+                Product type
+              </label>
+
+              <select id="settings-item-product-type" required>
+                <option value="">
+                  Choose a product type
+                </option>
+              </select>
+
+              <div class="amount-unit-step-row">
+                <label for="settings-item-default-amount">
+                  Amount
+                  <input
+                    type="number"
+                    id="settings-item-default-amount"
+                    required
+                    min="0"
+                    step="any"
+                    value="1"
+                  >
+                </label>
+
+                <label for="settings-item-unit">
+                  Unit
+                  <select id="settings-item-unit" required></select>
+                </label>
+
+                <label for="settings-item-increment">
+                  Step
+                  <input
+                    type="number"
+                    id="settings-item-increment"
+                    required
+                    min="0.01"
+                    step="any"
+                    value="1"
+                  >
+                </label>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              class="settings-add-button"
+            >
+              Add item
+            </button>
+          </form>
         </section>
 
         <section
@@ -530,7 +608,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607071503">V15.04</span>
+      <span id="app-build" title="Build 202607071505">V15.05</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

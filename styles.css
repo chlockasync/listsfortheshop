@@ -2101,3 +2101,124 @@ main,
   filter: brightness(0.9);
   transform: translateY(1px);
 }
+
+
+/* ===== UI consistency repair pass: 202607071505 ===== */
+:root {
+  --row-bg: var(--space-panel);
+  --nav-border: rgb(0 0 0 / 16%);
+}
+
+/* Navigation and secondary context bars: always show fine, light borders. */
+.main-tabs button,
+#room-selector-button,
+#shopping-at-button,
+#settings-category-button,
+.full-needed-header-actions button,
+.bottom-bar-button,
+.bottom-bar-status,
+.bottom-context-action,
+.settings-category-option,
+.shopping-location-option {
+  border-color: var(--nav-border) !important;
+}
+
+.main-tabs button {
+  border-right: 1px solid var(--nav-border) !important;
+  border-bottom: 1px solid var(--nav-border) !important;
+}
+
+.main-tabs button:last-child {
+  border-right: 0 !important;
+}
+
+#room-selector-button,
+#shopping-at-button,
+#settings-category-button {
+  border-bottom: 1px solid var(--nav-border) !important;
+}
+
+.bottom-bar-button,
+.bottom-bar-status,
+.bottom-context-action {
+  border-right: 1px solid var(--nav-border) !important;
+}
+
+.bottom-action-bar > :last-child {
+  border-right: 0 !important;
+}
+
+/* List rows should belong to the current Needing / Getting / Settings theme. */
+.shopping-location-option,
+.room-button,
+.item-row,
+#room-items-list .item-row,
+#full-needed-items .item-row,
+#getting-items-list .item-row,
+.settings-orderable-list > .settings-list-item,
+.settings-group-list > .settings-list-item,
+.store-product-type-order-list > .settings-list-item {
+  background: var(--row-bg) !important;
+  border-bottom: 1px solid var(--space-edge) !important;
+}
+
+.shopping-location-option:hover,
+.room-button:hover,
+.item-row:hover,
+.settings-orderable-list > .settings-list-item:hover,
+.settings-group-list > .settings-list-item:hover {
+  background: color-mix(in srgb, var(--row-bg) 84%, white 16%) !important;
+}
+
+/* Keep checkbox boxes white even when rows are theme tinted. */
+.collect-checkbox-button {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.collect-checkbox-graphic {
+  background: #fff !important;
+}
+
+/* Room and full needed lists use the same row rhythm. */
+#room-items-list .item-row,
+#full-needed-items .item-row {
+  min-height: 48px !important;
+  padding: 0.5rem 0.85rem !important;
+}
+
+.room-item-row .item-row-details,
+.full-needed-item-row .item-row-details {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 4.4rem !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+}
+
+.room-current-quantity {
+  min-width: 4.4rem !important;
+  padding-right: 0.35rem !important;
+  text-align: right !important;
+}
+
+.room-icon-button.increase-needed-button,
+.room-icon-button.decrease-needed-button {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+/* Settings New button should remain visible and useful in every category. */
+#bottom-context-action:not(:disabled) {
+  color: #222 !important;
+  opacity: 1 !important;
+  font-weight: 600 !important;
+}
+
+.settings-add-form[hidden] {
+  display: none !important;
+}
+
+.settings-add-form {
+  background: var(--space-panel) !important;
+}

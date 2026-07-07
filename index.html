@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Lists">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+
+  <title>Lists for the Shop</title>
+</head>
+
+<body>
+  <header class="app-header">
+    <nav class="main-tabs" aria-label="Main navigation">
+      <button type="button" data-view="needing">
+        Needing
+      </button>
+
+      <button type="button" data-view="getting">
+        Getting
+      </button>
+    </nav>
+  </header>
+
+  <main id="app">
+    <section id="needing-view">
+      <button
+        type="button"
+        id="room-selector-button"
+        aria-expanded="true"
+      >
+        Choose a room
+      </button>
+
+      <div id="needing-home">
+        <div id="rooms-list">
+          <p>No rooms have been created yet.</p>
+        </div>
+
+        <button type="button" id="view-needed-list">
+          View full needed list
+        </button>
+      </div>
+
+      <div id="full-needed-view" hidden>
+        <button type="button" id="back-from-needed-list">
+          ← Back to rooms
+        </button>
+
+        <h2>Full needed list</h2>
+
+        <input
+          type="search"
+          id="needed-list-search"
+          placeholder="Search needed items"
+          autocomplete="off"
+        >
+
+        <div id="full-needed-items">
+          <p>No items are currently needed.</p>
+        </div>
+      </div>
+
+      <div id="room-view" hidden>
+        <button
+          type="button"
+          id="back-to-rooms"
+          hidden
+        >
+          ← Back to rooms
+        </button>
+
+        <h2 id="room-view-title" hidden>Room</h2>
+
+        <div id="room-items-list"></div>
+
+        <button type="button" id="new-item-button">
+          New item
+        </button>
+
+        <section
+          id="new-item-panel"
+          class="new-item-panel settings-form"
+          hidden
+        >
+          <h3>New item</h3>
+
+          <form id="add-item-form">
+            <div class="settings-form-fields">
+              <label for="item-name">
+                Item name
+              </label>
+
+              <input
+                type="text"
+                id="item-name"
+                required
+                maxlength="80"
+                autocomplete="off"
+              >
+
+              <label for="item-product-type">
+                Product type
+              </label>
+
+              <select id="item-product-type" required>
+                <option value="">
+                  Choose a product type
+                </option>
+              </select>
+
+              <div class="amount-unit-step-row">
+                <label for="item-default-amount">
+                  Amount
+                  <input
+                    type="number"
+                    id="item-default-amount"
+                    required
+                    min="0"
+                    step="any"
+                    value="1"
+                  >
+                </label>
+
+                <label for="item-unit">
+                  Unit
+                  <select id="item-unit" required></select>
+                </label>
+
+                <label for="item-increment">
+                  Step
+                  <input
+                    type="number"
+                    id="item-increment"
+                    required
+                    min="0.01"
+                    step="any"
+                    value="1"
+                  >
+                </label>
+              </div>
+            </div>
+
+            <div class="split-actions">
+              <button
+                type="button"
+                id="cancel-new-item"
+              >
+                Cancel
+              </button>
+
+              <button type="submit">
+                Save item
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </section>
+
+    <section id="getting-view" hidden>
+      <button
+        type="button"
+        id="shopping-at-button"
+        aria-expanded="true"
+      >
+        Shopping at
+      </button>
+
+      <div id="shopping-at-panel">
+        <div id="shopping-location-options"></div>
+      </div>
+
+      <div id="getting-items-list"></div>
+
+      <button
+        type="button"
+        id="finish-shop-button"
+        hidden
+      >
+        Finish shop
+      </button>
+    </section>
+
+    <section id="settings-view" hidden>
+      <button
+        type="button"
+        id="settings-category-button"
+        hidden
+      ></button>
+
+      <div id="settings-home">
+        <button
+          type="button"
+          class="settings-category-option shopping-location-option"
+          data-settings-category="stores"
+        >
+          Stores
+        </button>
+
+        <button
+          type="button"
+          class="settings-category-option shopping-location-option"
+          data-settings-category="store-types"
+        >
+          Store types
+        </button>
+
+        <button
+          type="button"
+          class="settings-category-option shopping-location-option"
+          data-settings-category="product-types"
+        >
+          Product types
+        </button>
+
+        <button
+          type="button"
+          class="settings-category-option shopping-location-option"
+          data-settings-category="items"
+        >
+          Items
+        </button>
+
+        <button
+          type="button"
+          class="settings-category-option shopping-location-option"
+          data-settings-category="rooms"
+        >
+          Rooms
+        </button>
+
+        <button
+          type="button"
+          class="settings-category-option shopping-location-option"
+          data-settings-category="units"
+        >
+          Units
+        </button>
+      </div>
+
+      <div id="settings-category-panels">
+        <section
+          id="settings-stores-panel"
+          class="settings-category-panel"
+          hidden
+        >
+          <div
+            id="settings-stores-list"
+            class="settings-orderable-list"
+          >
+            <p>No stores have been created yet.</p>
+          </div>
+
+          <form
+            id="add-store-form"
+            class="settings-form"
+          >
+            <div class="settings-form-fields">
+              <label for="store-name">
+                Store name
+              </label>
+
+              <input
+                type="text"
+                id="store-name"
+                required
+                maxlength="80"
+                placeholder="New World Miramar"
+                autocomplete="off"
+              >
+
+              <label for="store-type-select">
+                Store type
+              </label>
+
+              <select
+                id="store-type-select"
+                required
+              >
+                <option value="">
+                  Choose a store type
+                </option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              class="settings-add-button"
+            >
+              Add store
+            </button>
+          </form>
+        </section>
+
+        <section
+          id="settings-store-types-panel"
+          class="settings-category-panel"
+          hidden
+        >
+          <div
+            id="settings-store-types-list"
+            class="settings-orderable-list"
+          >
+            <p>No store types have been created yet.</p>
+          </div>
+
+          <form
+            id="add-store-type-form"
+            class="settings-form"
+          >
+            <div class="settings-form-fields">
+              <label for="store-type-name">
+                New store type
+              </label>
+
+              <input
+                type="text"
+                id="store-type-name"
+                required
+                maxlength="50"
+                placeholder="Supermarket"
+                autocomplete="off"
+              >
+            </div>
+
+            <button
+              type="submit"
+              class="settings-add-button"
+            >
+              Add store type
+            </button>
+          </form>
+        </section>
+
+        <section
+          id="settings-product-types-panel"
+          class="settings-category-panel"
+          hidden
+        >
+          <div
+            id="settings-product-types-list"
+            class="settings-orderable-list"
+          >
+            <p>No product types have been created yet.</p>
+          </div>
+
+          <form
+            id="add-product-type-form"
+            class="settings-form"
+          >
+            <div class="settings-form-fields">
+              <label for="product-type-name">
+                New product type
+              </label>
+
+              <input
+                type="text"
+                id="product-type-name"
+                required
+                maxlength="50"
+                placeholder="Dairy"
+                autocomplete="off"
+              >
+
+              <div class="settings-field-label">
+                Store types
+              </div>
+
+              <div
+                id="product-type-store-types"
+                class="settings-checkbox-list"
+              >
+                <p>No store types are available.</p>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              class="settings-add-button"
+            >
+              Add product type
+            </button>
+          </form>
+        </section>
+
+        <section
+          id="settings-items-panel"
+          class="settings-category-panel"
+          hidden
+        >
+          <div class="settings-search-block">
+            <input
+              type="search"
+              id="settings-items-search"
+              placeholder="Search items"
+              autocomplete="off"
+            >
+          </div>
+
+          <div
+            id="settings-items-list"
+            class="settings-orderable-list settings-items-list"
+          >
+            <p>No items have been created yet.</p>
+          </div>
+        </section>
+
+        <section
+          id="settings-rooms-panel"
+          class="settings-category-panel"
+          hidden
+        >
+          <div
+            id="settings-rooms-list"
+            class="settings-orderable-list"
+          >
+            <p>No rooms have been created yet.</p>
+          </div>
+
+          <form
+            id="add-room-form"
+            class="settings-form"
+          >
+            <div class="settings-form-fields">
+              <label for="room-name">
+                New room name
+              </label>
+
+              <input
+                type="text"
+                id="room-name"
+                name="roomName"
+                required
+                maxlength="50"
+                autocomplete="off"
+              >
+            </div>
+
+            <button
+              type="submit"
+              class="settings-add-button"
+            >
+              Add room
+            </button>
+          </form>
+        </section>
+
+        <section
+          id="settings-units-panel"
+          class="settings-category-panel"
+          hidden
+        >
+          <div
+            id="settings-units-list"
+            class="settings-orderable-list"
+          >
+            <p>No units have been created yet.</p>
+          </div>
+
+          <form
+            id="add-unit-form"
+            class="settings-form"
+          >
+            <div class="settings-form-fields">
+              <label for="unit-name">
+                Unit name
+              </label>
+
+              <input
+                type="text"
+                id="unit-name"
+                required
+                maxlength="30"
+                placeholder="Litres"
+                autocomplete="off"
+              >
+
+              <label for="unit-symbol">
+                Symbol
+              </label>
+
+              <input
+                type="text"
+                id="unit-symbol"
+                required
+                maxlength="10"
+                placeholder="L"
+                autocomplete="off"
+              >
+            </div>
+
+            <button
+              type="submit"
+              class="settings-add-button"
+            >
+              Add unit
+            </button>
+          </form>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="utility-controls">
+    <button
+      type="button"
+      class="settings-shortcut"
+      data-view="settings"
+      aria-label="Open settings"
+      title="Settings"
+    >
+      ⚙
+    </button>
+
+    <span id="connection-status">Connecting…</span>
+    <span id="app-build" title="Build 202607071335">v13:35</span>
+  </div>
+</body>
+</html>

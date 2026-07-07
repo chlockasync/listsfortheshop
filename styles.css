@@ -2502,3 +2502,31 @@ body:has(#specific-product-panel:not([hidden])) {
 .specific-product-needed-row .room-current-quantity {
   flex: 0 0 auto;
 }
+
+
+/* ===== Combined Items and Specific Products settings list: 202607072006 ===== */
+.settings-item-specific-products {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.settings-item-specific-product-row {
+  min-height: 46px !important;
+  padding-left: 2.2rem !important;
+  border-left: 3px solid rgb(0 0 0 / 8%);
+  background: rgb(255 255 255 / 52%) !important;
+}
+
+.settings-item-specific-product-row .settings-order-name {
+  font-size: 0.94rem;
+}
+
+.settings-item-specific-product-row .settings-order-sublabel:empty {
+  display: none;
+}
+
+.settings-item-specific-products .settings-inline-edit-panel {
+  margin-left: 1rem;
+  border-left: 3px solid rgb(0 0 0 / 8%);
+}

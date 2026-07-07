@@ -47,7 +47,6 @@ const settingsPanels = {
   "store-types": document.querySelector("#settings-store-types-panel"),
   "product-types": document.querySelector("#settings-product-types-panel"),
   items: document.querySelector("#settings-items-panel"),
-  "specific-products": document.querySelector("#settings-specific-products-panel"),
   rooms: document.querySelector("#settings-rooms-panel"),
   units: document.querySelector("#settings-units-panel")
 };
@@ -55,8 +54,7 @@ const settingsCategoryNames = {
   stores: "Stores",
   "store-types": "Store types",
   "product-types": "Product types",
-  items: "Items",
-  "specific-products": "Specific products",
+  items: "Items and Specific Products",
   rooms: "Rooms",
   units: "Units"
 };
@@ -81,7 +79,6 @@ function getSettingsAddForm(categoryName) {
     "store-types": addStoreTypeForm,
     "product-types": addProductTypeForm,
     items: addSettingsItemForm,
-    "specific-products": addSettingsSpecificProductForm,
     rooms: addRoomForm,
     units: addUnitForm
   }[categoryName] ?? null;
@@ -93,7 +90,6 @@ function closeSettingsAddForms({ except = null } = {}) {
     addStoreTypeForm,
     addProductTypeForm,
     addSettingsItemForm,
-    addSettingsSpecificProductForm,
     addRoomForm,
     addUnitForm
   ].forEach((form) => {
@@ -115,10 +111,6 @@ function toggleCurrentSettingsAddForm() {
 
   if (categoryName === "items") {
     prepareSettingsItemAddForm();
-  }
-
-  if (categoryName === "specific-products") {
-    prepareSettingsSpecificProductAddForm();
   }
 
   const willOpen = form.hidden;
@@ -165,16 +157,6 @@ const settingsItemProductTypeSelect = document.querySelector("#settings-item-pro
 const settingsItemDefaultAmountInput = document.querySelector("#settings-item-default-amount");
 const settingsItemUnitSelect = document.querySelector("#settings-item-unit");
 const settingsItemIncrementInput = document.querySelector("#settings-item-increment");
-
-/* Specific products */
-const settingsSpecificProductsList = document.querySelector("#settings-specific-products-list");
-const settingsSpecificProductsSearch = document.querySelector("#settings-specific-products-search");
-const addSettingsSpecificProductForm = document.querySelector("#add-settings-specific-product-form");
-const settingsSpecificProductItemSelect = document.querySelector("#settings-specific-product-item");
-const settingsSpecificProductNameInput = document.querySelector("#settings-specific-product-name");
-const settingsSpecificProductSizeInput = document.querySelector("#settings-specific-product-size");
-const settingsSpecificProductColourInput = document.querySelector("#settings-specific-product-colour");
-const settingsSpecificProductStoresContainer = document.querySelector("#settings-specific-product-stores");
 
 /* Needing room view */
 const roomSelectorButton = document.querySelector("#room-selector-button");
@@ -301,7 +283,6 @@ function getOpenSettingsAddForm() {
     addStoreTypeForm,
     addProductTypeForm,
     addSettingsItemForm,
-    addSettingsSpecificProductForm,
     addRoomForm,
     addUnitForm
   ].find((form) => form && !form.hidden) ?? null;
@@ -320,8 +301,6 @@ function closeOpenSettingsEditPanel() {
 
   if (categoryName === "items") {
     renderSettingsItems();
-  } else if (categoryName === "specific-products") {
-    renderSettingsSpecificProducts();
   } else if (categoryName === "stores") {
     renderStores(currentStores);
   } else if (categoryName === "store-types") {
@@ -562,7 +541,9 @@ function updateBottomContextAction() {
     if (form) {
       bottomContextAction.setAttribute(
         "aria-label",
-        `New ${settingsCategoryNames[categoryName]}`
+        categoryName === "items"
+          ? "New item"
+          : `New ${settingsCategoryNames[categoryName]}`
       );
     } else {
       bottomContextAction.removeAttribute("aria-label");
@@ -2201,7 +2182,6 @@ function renderSettingsLists() {
   renderStores(currentStores);
   renderProductTypes(currentProductTypes);
   renderSettingsItems();
-  renderSettingsSpecificProducts();
 }
 
 function renderRooms(rooms) {
@@ -2893,15 +2873,95 @@ function appendSettingsItemEditPanel(item, listElement) {
   });
 }
 
+function activeSpecificProductsForSettingsItem(itemId) {
+  return currentSpecificProducts
+    .filter(
+      (product) =>
+        product.active !== false &&
+        String(product.itemId) === String(itemId)
+    )
+    .sort((a, b) =>
+      String(a.name ?? "").localeCompare(String(b.name ?? ""))
+    );
+}
+
+function settingsItemRecord(item, searchText) {
+  const products = activeSpecificProductsForSettingsItem(item.id);
+
+  if (!searchText) {
+    return {
+      item,
+      products
+    };
+  }
+
+  const itemMatches = itemMatchesSettingsSearch(item, searchText);
+  const matchingProducts = products.filter((product) =>
+    specificProductMatchesSearch(product, searchText)
+  );
+
+  if (!itemMatches && matchingProducts.length === 0) {
+    return null;
+  }
+
+  return {
+    item,
+    products: itemMatches ? products : matchingProducts
+  };
+}
+
+function appendSettingsSpecificProductsUnderItem({
+  itemRecord,
+  listElement
+}) {
+  if (itemRecord.products.length === 0) {
+    return;
+  }
+
+  const productList = document.createElement("div");
+  productList.className = "settings-item-specific-products";
+
+  itemRecord.products.forEach((product) => {
+    productList.append(
+      createSettingsSpecificProductRow(product, {
+        nested: true
+      })
+    );
+
+    appendSettingsSpecificProductEditPanel(
+      product,
+      productList
+    );
+  });
+
+  listElement.append(productList);
+}
+
+function appendSettingsItemRecord(itemRecord, listElement) {
+  listElement.append(createSettingsItemRow(itemRecord.item));
+  appendSettingsItemEditPanel(itemRecord.item, listElement);
+  appendSettingsSpecificProductsUnderItem({
+    itemRecord,
+    listElement
+  });
+}
+
 function appendSettingsItemsForProductType({
   container,
   productType,
-  items,
+  itemRecords,
   renderedItemIds
 }) {
-  const productTypeItems = items
-    .filter((item) => String(item.productTypeId) === String(productType.id))
-    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+  const productTypeItems = itemRecords
+    .filter(
+      ({ item }) =>
+        String(item.productTypeId) === String(productType.id)
+    )
+    .sort((a, b) =>
+      String(a.item.name ?? "").localeCompare(
+        String(b.item.name ?? "")
+      )
+    );
 
   if (productTypeItems.length === 0) {
     return;
@@ -2918,267 +2978,13 @@ function appendSettingsItemsForProductType({
   const groupList = document.createElement("div");
   groupList.className = "settings-group-list";
 
-  productTypeItems.forEach((item) => {
-    groupList.append(createSettingsItemRow(item));
-    appendSettingsItemEditPanel(item, groupList);
-    renderedItemIds.add(item.id);
+  productTypeItems.forEach((itemRecord) => {
+    appendSettingsItemRecord(itemRecord, groupList);
+    renderedItemIds.add(itemRecord.item.id);
   });
 
   group.append(groupList);
   container.append(group);
-}
-
-function specificProductSublabel(product) {
-  const parts = [
-    getItemName(product.itemId),
-    product.size,
-    product.colour,
-    getStoreNames(product.storeIds ?? [])
-  ]
-    .map((part) => String(part ?? "").trim())
-    .filter(Boolean);
-
-  return parts.join(" · ");
-}
-
-function specificProductMatchesSearch(product, searchText) {
-  if (!searchText) {
-    return true;
-  }
-
-  return [
-    product.name,
-    getItemName(product.itemId),
-    product.size,
-    product.colour,
-    getStoreNames(product.storeIds ?? [])
-  ]
-    .filter(Boolean)
-    .some((value) =>
-      String(value).toLowerCase().includes(searchText)
-    );
-}
-
-function createSettingsSpecificProductRow(product) {
-  const row = document.createElement("div");
-  row.className = "settings-list-item settings-specific-product-row";
-
-  const text = document.createElement("span");
-  text.className = "settings-order-text";
-
-  const name = document.createElement("span");
-  name.className = "settings-order-name";
-  name.textContent = product.name;
-  text.append(name);
-
-  const detail = document.createElement("span");
-  detail.className = "settings-order-sublabel";
-  detail.textContent = specificProductSublabel(product);
-  text.append(detail);
-
-  const actions = document.createElement("span");
-  actions.className = "settings-row-actions";
-
-  const editButton = createIconButton({
-    className: "settings-row-icon-button settings-row-edit-button",
-    icon: "✏️",
-    label: `Edit ${product.name}`,
-    onClick: () => {
-      setEditingSettings("specific-products", product.id);
-    }
-  });
-
-  const deleteButton = createIconButton({
-    className: "settings-row-icon-button settings-row-delete-button",
-    icon: "🗑️",
-    label: `Delete ${product.name}`,
-    onClick: async () => {
-      if (!confirmSettingsDelete(product.name)) {
-        return;
-      }
-
-      await deleteSettingsDocument("specificProducts", product.id);
-    }
-  });
-
-  actions.append(editButton, deleteButton);
-  row.append(text, actions);
-
-  return row;
-}
-
-function specificProductEditFields(products) {
-  return [
-    {
-      key: "itemId",
-      label: "Item",
-      type: "select",
-      emptyText: "Choose an item",
-      options: itemOptions,
-      value: () => products.find((product) => product.id === editingSettingsId)?.itemId ?? ""
-    },
-    {
-      key: "name",
-      label: "Product name",
-      maxLength: 100,
-      value: () => products.find((product) => product.id === editingSettingsId)?.name ?? ""
-    },
-    {
-      key: "size",
-      label: "Size",
-      required: false,
-      maxLength: 40,
-      value: () => products.find((product) => product.id === editingSettingsId)?.size ?? ""
-    },
-    {
-      key: "colour",
-      label: "Colour",
-      required: false,
-      maxLength: 40,
-      value: () => products.find((product) => product.id === editingSettingsId)?.colour ?? ""
-    },
-    {
-      key: "storeIds",
-      label: "Stores",
-      type: "checkboxes",
-      options: storeOptions,
-      required: false,
-      value: () => products.find((product) => product.id === editingSettingsId)?.storeIds ?? []
-    }
-  ];
-}
-
-async function saveSettingsSpecificProduct(values, product) {
-  if (!values.itemId || !values.name) {
-    throw new Error("Please choose an item and enter a product name.");
-  }
-
-  await updateDoc(householdDocument("specificProducts", product.id), {
-    itemId: values.itemId,
-    name: values.name,
-    size: values.size ?? "",
-    colour: values.colour ?? "",
-    storeIds: values.storeIds ?? [],
-    updatedAt: serverTimestamp()
-  });
-}
-
-function appendSettingsSpecificProductEditPanel(product, listElement) {
-  appendSettingsEditPanel({
-    listElement,
-    settingsKey: "specific-products",
-    item: product,
-    fields: specificProductEditFields(currentSpecificProducts),
-    onSave: saveSettingsSpecificProduct
-  });
-}
-
-function renderSpecificProductsForProductType({
-  container,
-  productType,
-  products,
-  renderedProductIds
-}) {
-  const productTypeItemIds = new Set(
-    activeCatalogueItems()
-      .filter((item) => String(item.productTypeId) === String(productType.id))
-      .map((item) => String(item.id))
-  );
-
-  const groupProducts = products
-    .filter((product) => productTypeItemIds.has(String(product.itemId)))
-    .sort((a, b) => {
-      const itemDifference = getItemName(a.itemId).localeCompare(getItemName(b.itemId));
-
-      if (itemDifference !== 0) {
-        return itemDifference;
-      }
-
-      return String(a.name ?? "").localeCompare(String(b.name ?? ""));
-    });
-
-  if (groupProducts.length === 0) {
-    return;
-  }
-
-  const group = document.createElement("section");
-  group.className = "settings-group settings-specific-products-group";
-
-  const heading = document.createElement("div");
-  heading.className = "settings-group-heading";
-  heading.textContent = productType.name;
-  group.append(heading);
-
-  const groupList = document.createElement("div");
-  groupList.className = "settings-group-list";
-
-  groupProducts.forEach((product) => {
-    groupList.append(createSettingsSpecificProductRow(product));
-    appendSettingsSpecificProductEditPanel(product, groupList);
-    renderedProductIds.add(product.id);
-  });
-
-  group.append(groupList);
-  container.append(group);
-}
-
-function renderSettingsSpecificProducts() {
-  if (!settingsSpecificProductsList) {
-    return;
-  }
-
-  const searchText = (settingsSpecificProductsSearch?.value ?? "")
-    .trim()
-    .toLowerCase();
-
-  const products = currentSpecificProducts
-    .filter((product) => product.active !== false)
-    .filter((product) => specificProductMatchesSearch(product, searchText));
-
-  settingsSpecificProductsList.innerHTML = "";
-
-  if (products.length === 0) {
-    settingsSpecificProductsList.innerHTML = searchText
-      ? "<p>No matching specific products.</p>"
-      : "<p>No specific products have been created yet.</p>";
-    return;
-  }
-
-  const renderedProductIds = new Set();
-
-  orderedProductTypesForDefaultRoomView().forEach((productType) => {
-    renderSpecificProductsForProductType({
-      container: settingsSpecificProductsList,
-      productType,
-      products,
-      renderedProductIds
-    });
-  });
-
-  const remainingProducts = products
-    .filter((product) => !renderedProductIds.has(product.id))
-    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
-
-  if (remainingProducts.length > 0) {
-    const group = document.createElement("section");
-    group.className = "settings-group settings-specific-products-group";
-
-    const heading = document.createElement("div");
-    heading.className = "settings-group-heading";
-    heading.textContent = "Product type not set";
-    group.append(heading);
-
-    const groupList = document.createElement("div");
-    groupList.className = "settings-group-list";
-
-    remainingProducts.forEach((product) => {
-      groupList.append(createSettingsSpecificProductRow(product));
-      appendSettingsSpecificProductEditPanel(product, groupList);
-    });
-
-    group.append(groupList);
-    settingsSpecificProductsList.append(group);
-  }
 }
 
 function renderSettingsItems() {
@@ -3190,15 +2996,16 @@ function renderSettingsItems() {
     .trim()
     .toLowerCase();
 
-  const activeItems = currentItems
+  const itemRecords = currentItems
     .filter((item) => item.active !== false)
-    .filter((item) => itemMatchesSettingsSearch(item, searchText));
+    .map((item) => settingsItemRecord(item, searchText))
+    .filter(Boolean);
 
   settingsItemsList.innerHTML = "";
 
-  if (activeItems.length === 0) {
+  if (itemRecords.length === 0) {
     settingsItemsList.innerHTML = searchText
-      ? "<p>No matching items.</p>"
+      ? "<p>No matching items or specific products.</p>"
       : "<p>No items have been created yet.</p>";
     return;
   }
@@ -3209,14 +3016,18 @@ function renderSettingsItems() {
     appendSettingsItemsForProductType({
       container: settingsItemsList,
       productType,
-      items: activeItems,
+      itemRecords,
       renderedItemIds
     });
   });
 
-  const ungroupedItems = activeItems
-    .filter((item) => !renderedItemIds.has(item.id))
-    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+  const ungroupedItems = itemRecords
+    .filter(({ item }) => !renderedItemIds.has(item.id))
+    .sort((a, b) =>
+      String(a.item.name ?? "").localeCompare(
+        String(b.item.name ?? "")
+      )
+    );
 
   if (ungroupedItems.length > 0) {
     const group = document.createElement("section");
@@ -3230,9 +3041,8 @@ function renderSettingsItems() {
     const groupList = document.createElement("div");
     groupList.className = "settings-group-list";
 
-    ungroupedItems.forEach((item) => {
-      groupList.append(createSettingsItemRow(item));
-      appendSettingsItemEditPanel(item, groupList);
+    ungroupedItems.forEach((itemRecord) => {
+      appendSettingsItemRecord(itemRecord, groupList);
     });
 
     group.append(groupList);
@@ -3311,27 +3121,32 @@ function updateSettingsItemIncrementFromUnit() {
 }
 
 function prepareSettingsItemAddForm() {
-  populateSettingsItemRoomSelect();
-  populateProductTypeSelect(settingsItemProductTypeSelect, settingsItemProductTypeSelect?.value ?? "");
-  populateSettingsItemUnitSelect();
+  const previousRoomId = settingsItemRoomSelect?.value ?? "";
+  const previousProductTypeId = settingsItemProductTypeSelect?.value ?? "";
+  const previousUnitId = settingsItemUnitSelect?.value ?? "";
+  const previousAmount = settingsItemDefaultAmountInput?.value ?? "1";
+  const previousIncrement = settingsItemIncrementInput?.value ?? "1";
 
-  if (settingsItemDefaultAmountInput && !settingsItemDefaultAmountInput.value) {
-    settingsItemDefaultAmountInput.value = 1;
+  populateSettingsItemRoomSelect(previousRoomId);
+  populateProductTypeSelect(
+    settingsItemProductTypeSelect,
+    previousProductTypeId
+  );
+  populateSettingsItemUnitSelect(previousUnitId);
+
+  if (settingsItemDefaultAmountInput) {
+    settingsItemDefaultAmountInput.value = previousAmount || "1";
   }
 
-  if (settingsItemIncrementInput && !settingsItemIncrementInput.value) {
-    settingsItemIncrementInput.value = 1;
+  if (settingsItemIncrementInput) {
+    settingsItemIncrementInput.value = previousIncrement || "1";
   }
 }
 
 function resetSettingsItemAddForm() {
-  if (!addSettingsItemForm) {
-    return;
+  if (settingsItemNameInput) {
+    settingsItemNameInput.value = "";
   }
-
-  addSettingsItemForm.reset();
-  settingsItemDefaultAmountInput.value = 1;
-  populateSettingsItemUnitSelect();
 }
 
 function createStoreCheckboxList(
@@ -3395,70 +3210,6 @@ function getCheckedValues(container) {
   ).map((checkbox) => checkbox.value);
 }
 
-function populateSpecificProductItemSelect(
-  selectElement,
-  selectedItemId = selectElement?.value ?? ""
-) {
-  if (!selectElement) {
-    return;
-  }
-
-  selectElement.innerHTML = '<option value="">Choose an item</option>';
-
-  const selectedState = {
-    hasSelected: false
-  };
-
-  function appendOption(optionData, parentElement) {
-    const option = document.createElement("option");
-    option.value = optionData.value;
-    option.textContent = optionData.text;
-
-    if (
-      String(optionData.value) === String(selectedItemId) &&
-      !selectedState.hasSelected
-    ) {
-      option.selected = true;
-      selectedState.hasSelected = true;
-    }
-
-    parentElement.append(option);
-  }
-
-  itemOptions().forEach((optionData) => {
-    if (Array.isArray(optionData.options)) {
-      const group = document.createElement("optgroup");
-      group.label = optionData.label;
-
-      optionData.options.forEach((groupedOption) => {
-        appendOption(groupedOption, group);
-      });
-
-      selectElement.append(group);
-      return;
-    }
-
-    appendOption(optionData, selectElement);
-  });
-}
-
-function resetSettingsSpecificProductAddForm() {
-  if (!addSettingsSpecificProductForm) {
-    return;
-  }
-
-  addSettingsSpecificProductForm.reset();
-  populateSpecificProductItemSelect(settingsSpecificProductItemSelect);
-  createStoreCheckboxList(settingsSpecificProductStoresContainer);
-}
-
-function prepareSettingsSpecificProductAddForm() {
-  populateSpecificProductItemSelect(
-    settingsSpecificProductItemSelect,
-    settingsSpecificProductItemSelect?.value ?? ""
-  );
-  createStoreCheckboxList(settingsSpecificProductStoresContainer);
-}
 
 function prepareQuickSpecificProductForm(item) {
   quickSpecificProductItemId = item.id;
@@ -5333,11 +5084,6 @@ function wireNavigation() {
     });
   }
 
-  if (settingsSpecificProductsSearch) {
-    settingsSpecificProductsSearch.addEventListener("input", () => {
-      renderSettingsSpecificProducts();
-    });
-  }
 
   settingsCategoryButton.addEventListener("click", () => {
     recordAppNavigation();
@@ -5684,46 +5430,6 @@ function wireForms() {
     });
   }
 
-  if (addSettingsSpecificProductForm) {
-    addSettingsSpecificProductForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      const itemId = settingsSpecificProductItemSelect.value;
-      const productName = settingsSpecificProductNameInput.value.trim();
-      const size = settingsSpecificProductSizeInput.value.trim();
-      const colour = settingsSpecificProductColourInput.value.trim();
-      const storeIds = getCheckedValues(settingsSpecificProductStoresContainer);
-
-      if (!itemId || !productName) {
-        alert("Please choose an item and enter a product name.");
-        return;
-      }
-
-      const submitButton = addSettingsSpecificProductForm.querySelector("button[type='submit']");
-      submitButton.disabled = true;
-
-      try {
-        await addDoc(householdCollection("specificProducts"), {
-          itemId,
-          name: productName,
-          size,
-          colour,
-          storeIds,
-          active: true,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-
-        resetSettingsSpecificProductAddForm();
-        addSettingsSpecificProductForm.hidden = true;
-      } catch (error) {
-        console.error("Could not add specific product:", error);
-        alert("The specific product could not be saved.");
-      } finally {
-        submitButton.disabled = false;
-      }
-    });
-  }
 
   if (addSpecificProductForm) {
     addSpecificProductForm.addEventListener("submit", async (event) => {

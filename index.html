@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1956">
-  <script type="module" src="app.js?v=1956"></script>
+  <link rel="stylesheet" href="styles.css?v=2006">
+  <script type="module" src="app.js?v=2006"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -317,15 +317,7 @@
           class="settings-category-option shopping-location-option"
           data-settings-category="items"
         >
-          Items
-        </button>
-
-        <button
-          type="button"
-          class="settings-category-option shopping-location-option"
-          data-settings-category="specific-products"
-        >
-          Specific products
+          Items and Specific Products
         </button>
 
         <button
@@ -502,7 +494,7 @@
             <input
               type="search"
               id="settings-items-search"
-              placeholder="Search items"
+              placeholder="Search items and specific products"
               autocomplete="off"
             >
           </div>
@@ -589,98 +581,6 @@
               class="settings-add-button"
             >
               Add item
-            </button>
-          </form>
-        </section>
-
-        <section
-          id="settings-specific-products-panel"
-          class="settings-category-panel"
-          hidden
-        >
-          <div class="settings-search-block">
-            <input
-              type="search"
-              id="settings-specific-products-search"
-              placeholder="Search specific products"
-              autocomplete="off"
-            >
-          </div>
-
-          <div
-            id="settings-specific-products-list"
-            class="settings-orderable-list settings-specific-products-list"
-          >
-            <p>No specific products have been created yet.</p>
-          </div>
-
-          <form
-            id="add-settings-specific-product-form"
-            class="settings-form settings-add-form"
-            hidden
-          >
-            <div class="settings-form-fields">
-              <label for="settings-specific-product-item">
-                Item
-              </label>
-
-              <select id="settings-specific-product-item" required>
-                <option value="">
-                  Choose an item
-                </option>
-              </select>
-
-              <label for="settings-specific-product-name">
-                Product name
-              </label>
-
-              <input
-                type="text"
-                id="settings-specific-product-name"
-                required
-                maxlength="100"
-                autocomplete="off"
-              >
-
-              <label for="settings-specific-product-size">
-                Size
-              </label>
-
-              <input
-                type="text"
-                id="settings-specific-product-size"
-                maxlength="40"
-                autocomplete="off"
-              >
-
-              <label for="settings-specific-product-colour">
-                Colour
-              </label>
-
-              <input
-                type="text"
-                id="settings-specific-product-colour"
-                maxlength="40"
-                autocomplete="off"
-              >
-
-              <div class="settings-field-label">
-                Stores
-              </div>
-
-              <div
-                id="settings-specific-product-stores"
-                class="settings-checkbox-list"
-              >
-                <p>No stores are available.</p>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              class="settings-add-button"
-            >
-              Add specific product
             </button>
           </form>
         </section>
@@ -782,7 +682,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607071956">V19.56</span>
+      <span id="app-build" title="Build 202607072006">V20.06</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

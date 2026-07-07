@@ -247,6 +247,26 @@ let lastNonSettingsView = "needing";
 let appHistoryDepth = 0;
 let suppressAppHistory = false;
 
+const REGULAR_ROOM_ID = "__regular_stuff__";
+
+function isRegularRoomSelected() {
+  return selectedRoomId === REGULAR_ROOM_ID;
+}
+
+function itemIsRegular(item) {
+  return item.regularList === true;
+}
+
+function getSelectedRoomName() {
+  if (isRegularRoomSelected()) {
+    return "Regular stuff";
+  }
+
+  return currentRooms.find(
+    (room) => room.id === selectedRoomId
+  )?.name ?? "Room";
+}
+
 
 function recordAppNavigation() {
   if (suppressAppHistory || !window.history?.pushState) {
@@ -612,6 +632,10 @@ function showNeedingHome() {
   needingHome.hidden = false;
   fullNeededView.hidden = true;
   roomView.hidden = true;
+
+  if (newItemButton) {
+    newItemButton.textContent = "New item";
+  }
 }
 
 function resetNeedingToRoomList() {
@@ -655,6 +679,30 @@ function openRoom(room) {
 
   if (newItemButton) {
     newItemButton.hidden = false;
+    newItemButton.textContent = "New item";
+  }
+
+  renderRoomItems();
+}
+
+function openRegularRoom() {
+  selectedRoomId = REGULAR_ROOM_ID;
+  roomSelectorButton.hidden = false;
+  setRoomSelectorLabel("Regular stuff");
+  roomSelectorButton.setAttribute("aria-expanded", "false");
+  needingHome.hidden = true;
+  fullNeededView.hidden = true;
+  roomView.hidden = false;
+  roomViewTitle.textContent = "Regular stuff";
+  editingItemId = null;
+
+  if (newItemPanel) {
+    newItemPanel.hidden = true;
+  }
+
+  if (newItemButton) {
+    newItemButton.hidden = false;
+    newItemButton.textContent = "Edit regulars";
   }
 
   renderRoomItems();
@@ -684,16 +732,15 @@ function updateSelectedRoomLabel() {
     return;
   }
 
-  const selectedRoom = currentRooms.find(
-    (room) => room.id === selectedRoomId
-  );
+  const roomName = getSelectedRoomName();
+  setRoomSelectorLabel(roomName);
+  roomViewTitle.textContent = roomName;
 
-  if (!selectedRoom) {
-    return;
+  if (newItemButton) {
+    newItemButton.textContent = isRegularRoomSelected()
+      ? "Edit regulars"
+      : "New item";
   }
-
-  setRoomSelectorLabel(selectedRoom.name);
-  roomViewTitle.textContent = selectedRoom.name;
 }
 
 function getSortOrder(value) {
@@ -2168,8 +2215,17 @@ function renderRooms(rooms) {
 
   needingRoomsList.innerHTML = "";
 
+  const regularButton = document.createElement("button");
+  regularButton.type = "button";
+  regularButton.className = "room-button shopping-location-option regular-room-button";
+  regularButton.textContent = "Regular stuff";
+  regularButton.addEventListener("click", () => {
+    recordAppNavigation();
+    openRegularRoom();
+  });
+  needingRoomsList.append(regularButton);
+
   if (rooms.length === 0) {
-    needingRoomsList.innerHTML = "<p>No rooms have been created yet.</p>";
     return;
   }
 
@@ -2548,6 +2604,73 @@ function itemMatchesSettingsSearch(item, searchText) {
     );
 }
 
+function showBriefToast(message) {
+  document
+    .querySelectorAll(".brief-toast")
+    .forEach((toast) => toast.remove());
+
+  const toast = document.createElement("div");
+  toast.className = "brief-toast";
+  toast.textContent = message;
+  document.body.append(toast);
+
+  window.setTimeout(() => {
+    toast.classList.add("is-hiding");
+  }, 900);
+
+  window.setTimeout(() => {
+    toast.remove();
+  }, 1300);
+}
+
+async function toggleItemRegularList(item) {
+  const nextValue = !itemIsRegular(item);
+
+  try {
+    await updateDoc(householdDocument("items", item.id), {
+      regularList: nextValue,
+      updatedAt: serverTimestamp()
+    });
+
+    showBriefToast(
+      nextValue
+        ? "Added to regular list"
+        : "Removed from regular list"
+    );
+  } catch (error) {
+    console.error("Could not update regular list:", error);
+    alert("The regular list could not be updated.");
+  }
+}
+
+function createRegularListToggleButton(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "settings-row-icon-button settings-row-regular-button";
+  button.setAttribute("aria-pressed", String(itemIsRegular(item)));
+  button.setAttribute(
+    "aria-label",
+    itemIsRegular(item)
+      ? `Remove ${item.name} from regular list`
+      : `Add ${item.name} to regular list`
+  );
+
+  const graphic = document.createElement("span");
+  graphic.className = "collect-checkbox-graphic settings-regular-graphic";
+  graphic.textContent = itemIsRegular(item) ? "✓" : "";
+
+  button.append(graphic);
+
+  button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    button.disabled = true;
+    await toggleItemRegularList(item);
+    button.disabled = false;
+  });
+
+  return button;
+}
+
 async function deactivateSettingsItem(item) {
   if (currentNeededEntries.has(item.id)) {
     alert(
@@ -2615,6 +2738,8 @@ function createSettingsItemRow(item) {
   const actions = document.createElement("span");
   actions.className = "settings-row-actions";
 
+  const regularButton = createRegularListToggleButton(item);
+
   const editButton = createIconButton({
     className: "settings-row-icon-button settings-row-edit-button",
     icon: "✏️",
@@ -2638,7 +2763,7 @@ function createSettingsItemRow(item) {
     }
   });
 
-  actions.append(editButton, deleteButton);
+  actions.append(regularButton, editButton, deleteButton);
   row.append(text, actions);
 
   return row;
@@ -3561,11 +3686,17 @@ function renderRoomItems() {
 
   const roomSearchText = roomItemsSearch?.value.trim().toLowerCase() ?? "";
 
-  const allRoomItems = currentItems.filter(
-    (item) =>
-      item.locationId === selectedRoomId &&
-      item.active !== false
-  );
+  const allRoomItems = currentItems.filter((item) => {
+    if (item.active === false) {
+      return false;
+    }
+
+    if (isRegularRoomSelected()) {
+      return itemIsRegular(item);
+    }
+
+    return item.locationId === selectedRoomId;
+  });
 
   const roomItems = allRoomItems.filter((item) =>
     String(item.name ?? "").toLowerCase().includes(roomSearchText)
@@ -3589,10 +3720,19 @@ function renderRoomItems() {
 
   function appendSpecificProductOfferRows(item) {
     const products = specificProductsForItem(item.id);
+    const neededEntry = currentNeededEntries.get(item.id);
 
     products.forEach((product) => {
+      const isSelected =
+        neededEntry?.specificProductId &&
+        String(neededEntry.specificProductId) === String(product.id);
+
       const row = document.createElement("div");
       row.className = "item-row room-item-row specific-product-offer-row is-available";
+
+      if (isSelected) {
+        row.classList.add("is-selected-specific-product");
+      }
 
       const details = document.createElement("div");
       details.className = "item-row-details";
@@ -3621,13 +3761,20 @@ function renderRoomItems() {
 
       const addButton = createIconButton({
         className: "room-icon-button room-add-button add-needed-button",
-        icon: "Add",
-        label: `Add ${product.name} to needed list`,
-        onClick: () => {
-          addItemToNeededList(item, product);
+        icon: isSelected ? "Using" : neededEntry ? "Use" : "Add",
+        label: isSelected
+          ? `${product.name} is selected`
+          : `Use ${product.name} for ${item.name}`,
+        onClick: async () => {
+          if (isSelected) {
+            return;
+          }
+
+          await addOrSelectSpecificProduct(item, product);
         }
       });
 
+      addButton.disabled = Boolean(isSelected);
       controls.append(addButton);
       row.append(details, controls);
       roomItemsList.append(row);
@@ -3673,7 +3820,7 @@ function renderRoomItems() {
         icon: "Add",
         label: `Add ${item.name} to needed list`,
         onClick: () => {
-          addItemToNeededList(item);
+          addItemToNeededListWithProductChoice(item);
         }
       });
 
@@ -3726,6 +3873,7 @@ function renderRoomItems() {
 
     row.append(details, controls);
     roomItemsList.append(row);
+    appendSpecificProductOfferRows(item);
     renderedItemIds.add(item.id);
   }
 
@@ -4563,6 +4711,115 @@ function formatAmount(amount, unitId) {
   return `${amount} ${unit.symbol}`;
 }
 
+function closeSpecificProductChoicePanel() {
+  document
+    .querySelectorAll(".specific-product-choice-panel")
+    .forEach((panel) => panel.remove());
+}
+
+function openSpecificProductChoicePanel(item) {
+  const products = specificProductsForItem(item.id);
+
+  if (products.length === 0) {
+    addItemToNeededList(item);
+    return;
+  }
+
+  closeSpecificProductChoicePanel();
+
+  const panel = document.createElement("section");
+  panel.className = "specific-product-choice-panel settings-form";
+
+  const title = document.createElement("h3");
+  title.textContent = `Add ${item.name}`;
+
+  const list = document.createElement("div");
+  list.className = "specific-product-choice-list";
+
+  const genericButton = document.createElement("button");
+  genericButton.type = "button";
+  genericButton.className = "specific-product-choice-row";
+  genericButton.textContent = item.name;
+  genericButton.addEventListener("click", async () => {
+    await addItemToNeededList(item);
+    closeSpecificProductChoicePanel();
+  });
+
+  list.append(genericButton);
+
+  products.forEach((product) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "specific-product-choice-row";
+
+    const name = document.createElement("span");
+    name.className = "specific-product-choice-name";
+    name.textContent = product.name;
+    button.append(name);
+
+    const detailText = specificProductDetailText(product);
+
+    if (detailText) {
+      const detail = document.createElement("span");
+      detail.className = "specific-product-choice-detail";
+      detail.textContent = detailText;
+      button.append(detail);
+    }
+
+    button.addEventListener("click", async () => {
+      await addItemToNeededList(item, product);
+      closeSpecificProductChoicePanel();
+    });
+
+    list.append(button);
+  });
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "settings-add-button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", closeSpecificProductChoicePanel);
+
+  panel.append(title, list, cancelButton);
+  document.body.append(panel);
+
+  requestAnimationFrame(() => {
+    panel.scrollIntoView({
+      block: "end",
+      behavior: "smooth"
+    });
+  });
+}
+
+function addItemToNeededListWithProductChoice(item) {
+  const products = specificProductsForItem(item.id);
+
+  if (products.length === 0) {
+    addItemToNeededList(item);
+    return;
+  }
+
+  openSpecificProductChoicePanel(item);
+}
+
+async function addOrSelectSpecificProduct(item, specificProduct) {
+  if (!currentNeededEntries.has(item.id)) {
+    await addItemToNeededList(item, specificProduct);
+    return;
+  }
+
+  try {
+    await updateDoc(householdDocument("neededEntries", item.id), {
+      specificProductId: specificProduct?.id ?? null,
+      adjustedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Could not update selected product:", error);
+    alert("The selected product could not be updated.");
+  }
+}
+
 async function addItemToNeededList(item, specificProduct = null) {
   if (currentNeededEntries.has(item.id)) {
     alert(`${item.name} is already on the needed list.`);
@@ -4809,6 +5066,12 @@ function wireNavigation() {
 
   newItemButton.addEventListener("click", () => {
     recordAppNavigation();
+
+    if (isRegularRoomSelected()) {
+      openSettingsItemsFromShortcut();
+      return;
+    }
+
     closeSpecificProductQuickAdd();
     populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
 

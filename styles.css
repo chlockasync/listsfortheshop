@@ -2345,3 +2345,107 @@ main,
 .specific-product-offer-name {
   font-size: 0.94rem;
 }
+
+/* ===== Regular list and specific-product choice: 202607071747 ===== */
+.settings-row-regular-button {
+  border-color: rgb(0 0 0 / 16%) !important;
+  background: #ffffff !important;
+}
+
+.settings-row-regular-button[aria-pressed="true"] {
+  background: #ffffff !important;
+}
+
+.settings-regular-graphic {
+  width: 24px;
+  height: 24px;
+  font-size: 1rem;
+}
+
+.regular-room-button {
+  font-weight: 500;
+}
+
+.specific-product-offer-row.is-selected-specific-product {
+  background: #ffffff !important;
+}
+
+.specific-product-offer-row.is-selected-specific-product .specific-product-offer-name {
+  font-weight: 500;
+}
+
+.specific-product-choice-panel {
+  position: fixed;
+  right: max(0px, calc((100vw - 430px) / 2));
+  bottom: 48px;
+  left: max(0px, calc((100vw - 430px) / 2));
+  z-index: 35;
+  max-height: min(70dvh, 520px);
+  overflow: auto;
+  border-top: 1px solid #cccccc;
+  box-shadow: 0 -8px 20px rgb(0 0 0 / 16%);
+}
+
+.specific-product-choice-list {
+  display: grid;
+  gap: 0;
+  margin: 0 0 1rem;
+  border: 1px solid #dddddd;
+  border-bottom: 0;
+  background: white;
+}
+
+.specific-product-choice-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid #dddddd;
+  border-radius: 0;
+  background: white;
+  text-align: left;
+}
+
+.specific-product-choice-row:hover,
+.specific-product-choice-row:active {
+  background: #f4f4f4;
+}
+
+.specific-product-choice-name {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.specific-product-choice-detail {
+  margin-top: 0.1rem;
+  color: rgb(0 0 0 / 58%);
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.brief-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 66px;
+  z-index: 60;
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0.65rem 0.9rem;
+  transform: translateX(-50%);
+  border: 1px solid rgb(0 0 0 / 14%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 18%);
+  font-size: 0.92rem;
+  line-height: 1.2;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+
+.brief-toast.is-hiding {
+  opacity: 0;
+}

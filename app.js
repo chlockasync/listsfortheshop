@@ -1156,7 +1156,7 @@ function appendSettingsEditPanel({
     editingSettingsId !== item.id ||
     String(editingSettingsContextId ?? "") !== String(contextId ?? "")
   ) {
-    return;
+    return null;
   }
 
   const panel = document.createElement("section");
@@ -1243,7 +1243,7 @@ function appendSettingsEditPanel({
   form.append(fieldContainer, actions);
   panel.append(form);
   listElement.append(panel);
-
+  return panel;
 }
 
 
@@ -3072,7 +3072,7 @@ function appendSettingsSpecificProductEditPanel(
   product,
   listElement
 ) {
-  appendSettingsEditPanel({
+  const panel = appendSettingsEditPanel({
     listElement,
     settingsKey: "specific-products",
     item: product,
@@ -3081,6 +3081,12 @@ function appendSettingsSpecificProductEditPanel(
     ),
     onSave: saveSettingsSpecificProduct
   });
+
+  if (panel) {
+    panel.classList.add(
+      "settings-item-specific-product-edit-panel"
+    );
+  }
 }
 
 function activeSpecificProductsForSettingsItem(itemId) {
@@ -3128,11 +3134,8 @@ function appendSettingsSpecificProductsUnderItem({
     return;
   }
 
-  const productList = document.createElement("div");
-  productList.className = "settings-item-specific-products";
-
   itemRecord.products.forEach((product) => {
-    productList.append(
+    listElement.append(
       createSettingsSpecificProductRow(product, {
         nested: true
       })
@@ -3140,11 +3143,9 @@ function appendSettingsSpecificProductsUnderItem({
 
     appendSettingsSpecificProductEditPanel(
       product,
-      productList
+      listElement
     );
   });
-
-  listElement.append(productList);
 }
 
 function appendSettingsItemRecord(itemRecord, listElement) {
@@ -3810,7 +3811,11 @@ async function migrateLegacySpecificEntryBeforeGenericAdd(item) {
   await batch.commit();
 }
 
-function createItemNameDisplay(item, specificProduct = null) {
+function createItemNameDisplay(
+  item,
+  specificProduct = null,
+  { includeParentName = false } = {}
+) {
   const wrapper = document.createElement("span");
   wrapper.className = "item-name-display";
 
@@ -3821,7 +3826,9 @@ function createItemNameDisplay(item, specificProduct = null) {
   const name = document.createElement("span");
   name.className = "item-name";
   name.textContent = specificProduct
-    ? `${item.name} ${specificProduct.name}`
+    ? includeParentName
+      ? `${item.name} ${specificProduct.name}`
+      : specificProduct.name
     : item.name;
   wrapper.append(name);
 
@@ -4591,7 +4598,11 @@ function renderGettingItems() {
 
     const details = document.createElement("div");
     details.className = "item-row-details";
-    details.append(createItemNameDisplay(item, specificProduct));
+    details.append(
+      createItemNameDisplay(item, specificProduct, {
+        includeParentName: true
+      })
+    );
 
     const amount = document.createElement("span");
     amount.className = "item-amount";

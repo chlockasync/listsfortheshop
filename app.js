@@ -243,6 +243,189 @@ let currentItems = [];
 let currentSpecificProducts = [];
 let currentNeededEntries = new Map();
 let quickSpecificProductItemId = null;
+let lastNonSettingsView = "needing";
+let appHistoryDepth = 0;
+let suppressAppHistory = false;
+
+
+function recordAppNavigation() {
+  if (suppressAppHistory || !window.history?.pushState) {
+    return;
+  }
+
+  appHistoryDepth += 1;
+
+  window.history.pushState(
+    {
+      listsForTheShop: true,
+      depth: appHistoryDepth
+    },
+    "",
+    window.location.href
+  );
+}
+
+function runWithoutHistory(callback) {
+  suppressAppHistory = true;
+
+  try {
+    callback();
+  } finally {
+    suppressAppHistory = false;
+  }
+}
+
+function getOpenSettingsAddForm() {
+  return [
+    addStoreForm,
+    addStoreTypeForm,
+    addProductTypeForm,
+    addSettingsItemForm,
+    addSettingsSpecificProductForm,
+    addRoomForm,
+    addUnitForm
+  ].find((form) => form && !form.hidden) ?? null;
+}
+
+function closeOpenSettingsEditPanel() {
+  if (!editingSettingsKey && !editingSettingsId) {
+    return false;
+  }
+
+  const categoryName = getVisibleSettingsCategory();
+
+  editingSettingsKey = null;
+  editingSettingsId = null;
+  editingSettingsContextId = null;
+
+  if (categoryName === "items") {
+    renderSettingsItems();
+  } else if (categoryName === "specific-products") {
+    renderSettingsSpecificProducts();
+  } else if (categoryName === "stores") {
+    renderStores(currentStores);
+  } else if (categoryName === "store-types") {
+    renderStoreTypes(currentStoreTypes);
+  } else if (categoryName === "product-types") {
+    renderProductTypes(currentProductTypes);
+  } else if (categoryName === "rooms") {
+    renderRooms(currentRooms);
+  } else if (categoryName === "units") {
+    renderUnits(currentUnits);
+  }
+
+  updateBottomContextAction();
+  return true;
+}
+
+function closeFullNeededListToPreviousView() {
+  fullNeededView.hidden = true;
+
+  if (selectedRoomId) {
+    roomSelectorButton.hidden = false;
+    needingHome.hidden = true;
+    roomView.hidden = false;
+    roomSelectorButton.setAttribute("aria-expanded", "false");
+    updateSelectedRoomLabel();
+    renderRoomItems();
+  } else {
+    showNeedingHome();
+  }
+
+  updateBottomContextAction();
+}
+
+function handleAppBackButton() {
+  if (!specificProductPanel?.hidden) {
+    closeSpecificProductQuickAdd();
+    return true;
+  }
+
+  if (newItemPanel && !newItemPanel.hidden) {
+    newItemPanel.hidden = true;
+
+    if (newItemButton) {
+      newItemButton.hidden = false;
+    }
+
+    return true;
+  }
+
+  const openSettingsAddForm = getOpenSettingsAddForm();
+
+  if (openSettingsAddForm) {
+    openSettingsAddForm.hidden = true;
+    updateBottomContextAction();
+    return true;
+  }
+
+  if (closeOpenSettingsEditPanel()) {
+    return true;
+  }
+
+  if (!views.needing.hidden && !fullNeededView.hidden) {
+    closeFullNeededListToPreviousView();
+    return true;
+  }
+
+  if (!views.needing.hidden && selectedRoomId) {
+    showNeedingHome();
+    updateBottomContextAction();
+    return true;
+  }
+
+  if (!views.getting.hidden && selectedShoppingTarget) {
+    resetGettingToShoppingList();
+    return true;
+  }
+
+  if (!views.settings.hidden && selectedSettingsCategory) {
+    showSettingsHome();
+    updateBottomContextAction();
+    return true;
+  }
+
+  if (!views.settings.hidden) {
+    showView(lastNonSettingsView || "needing");
+    return true;
+  }
+
+  if (!views.getting.hidden) {
+    showView("needing");
+    return true;
+  }
+
+  return false;
+}
+
+function setupBrowserBackButton() {
+  if (!window.history?.replaceState) {
+    return;
+  }
+
+  window.history.replaceState(
+    {
+      listsForTheShop: true,
+      depth: appHistoryDepth
+    },
+    "",
+    window.location.href
+  );
+
+  window.addEventListener("popstate", () => {
+    if (appHistoryDepth > 0) {
+      appHistoryDepth -= 1;
+    }
+
+    runWithoutHistory(() => {
+      const handled = handleAppBackButton();
+
+      if (!handled && appHistoryDepth > 0) {
+        appHistoryDepth -= 1;
+      }
+    });
+  });
+}
 
 function showSettingsHome() {
   selectedSettingsCategory = null;
@@ -375,6 +558,10 @@ function openSettingsCategory(categoryName) {
 }
 
 function showView(viewName) {
+  if (viewName !== "settings") {
+    lastNonSettingsView = viewName;
+  }
+
   Object.entries(views).forEach(([name, element]) => {
     element.hidden = name !== viewName;
   });
@@ -716,6 +903,7 @@ function createSettingsRow({
     label: editLabel,
     onClick: (event) => {
       event.stopPropagation();
+      recordAppNavigation();
       onEdit();
     }
   });
@@ -1991,6 +2179,7 @@ function renderRooms(rooms) {
     roomButton.className = "room-button shopping-location-option";
     roomButton.textContent = `${room.name} stuff`;
     roomButton.addEventListener("click", () => {
+      recordAppNavigation();
       openRoom(room);
     });
     needingRoomsList.append(roomButton);
@@ -3112,6 +3301,8 @@ function openSpecificProductQuickAdd(item) {
     return;
   }
 
+  recordAppNavigation();
+
   if (newItemPanel) {
     newItemPanel.hidden = true;
   }
@@ -3934,6 +4125,7 @@ function renderShoppingLocations() {
     storeTypeButton.textContent = storeType.name.trim();
 
     storeTypeButton.addEventListener("click", () => {
+      recordAppNavigation();
       selectedShoppingTarget = {
         kind: "storeType",
         id: storeType.id,
@@ -3967,6 +4159,7 @@ function renderShoppingLocations() {
       storeButton.textContent = store.name.trim();
 
       storeButton.addEventListener("click", () => {
+        recordAppNavigation();
         selectedShoppingTarget = {
           kind: "store",
           id: store.id,
@@ -4530,27 +4723,32 @@ function wireNavigation() {
   );
 
   needingTabButton.addEventListener("click", () => {
+    recordAppNavigation();
     resetNeedingToRoomList();
     showView("needing");
   });
 
   gettingTabButton.addEventListener("click", () => {
+    recordAppNavigation();
     resetGettingToShoppingList();
     showView("getting");
   });
 
   settingsShortcutButton.addEventListener("click", () => {
+    recordAppNavigation();
     openSettingsHomeFromShortcut();
   });
 
   if (bottomContextAction) {
     bottomContextAction.addEventListener("click", () => {
       if (!views.needing.hidden) {
+        recordAppNavigation();
         openFullNeededList();
         return;
       }
 
       if (!views.settings.hidden && !bottomContextAction.disabled) {
+        recordAppNavigation();
         toggleCurrentSettingsAddForm();
         return;
       }
@@ -4574,6 +4772,7 @@ function wireNavigation() {
 
   settingsCategoryOptions.forEach((button) => {
     button.addEventListener("click", () => {
+      recordAppNavigation();
       openSettingsCategory(button.dataset.settingsCategory);
     });
   });
@@ -4591,6 +4790,7 @@ function wireNavigation() {
   }
 
   settingsCategoryButton.addEventListener("click", () => {
+    recordAppNavigation();
     editingSettingsKey = null;
     editingSettingsId = null;
     editingSettingsContextId = null;
@@ -4598,14 +4798,17 @@ function wireNavigation() {
   });
 
   roomSelectorButton.addEventListener("click", () => {
+    recordAppNavigation();
     showNeedingHome();
   });
 
   backToRoomsButton.addEventListener("click", () => {
+    recordAppNavigation();
     showNeedingHome();
   });
 
   newItemButton.addEventListener("click", () => {
+    recordAppNavigation();
     closeSpecificProductQuickAdd();
     populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
 
@@ -4636,6 +4839,7 @@ function wireNavigation() {
   }
 
   shoppingAtButton.addEventListener("click", () => {
+    recordAppNavigation();
     const willOpen = shoppingAtPanel.hidden;
     shoppingAtPanel.hidden = !willOpen;
     shoppingAtButton.setAttribute("aria-expanded", String(willOpen));
@@ -4652,6 +4856,7 @@ function wireNavigation() {
   });
 
   viewNeededListButton.addEventListener("click", () => {
+    recordAppNavigation();
     openFullNeededList();
   });
 
@@ -4667,25 +4872,14 @@ function wireNavigation() {
 
   if (editItemsFromNeededListButton) {
     editItemsFromNeededListButton.addEventListener("click", () => {
+      recordAppNavigation();
       openSettingsItemsFromShortcut();
     });
   }
 
   backFromNeededListButton.addEventListener("click", () => {
-    fullNeededView.hidden = true;
-
-    if (selectedRoomId) {
-      roomSelectorButton.hidden = false;
-      needingHome.hidden = true;
-      roomView.hidden = false;
-      roomSelectorButton.setAttribute("aria-expanded", "false");
-      updateSelectedRoomLabel();
-      renderRoomItems();
-    } else {
-      showNeedingHome();
-    }
-
-    updateBottomContextAction();
+    recordAppNavigation();
+    closeFullNeededListToPreviousView();
   });
 }
 
@@ -5092,6 +5286,7 @@ function startListeners() {
 
 wireNavigation();
 wireForms();
+setupBrowserBackButton();
 
 onAuthStateChanged(auth, (user) => {
   if (!user) {

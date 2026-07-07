@@ -146,6 +146,7 @@ const addItemForm = document.querySelector("#add-item-form");
 const itemNameInput = document.querySelector("#item-name");
 const itemDefaultAmountInput = document.querySelector("#item-default-amount");
 const roomItemsList = document.querySelector("#room-items-list");
+const roomItemsSearch = document.querySelector("#room-items-search");
 const viewNeededListButton = document.querySelector("#view-needed-list");
 const fullNeededView = document.querySelector("#full-needed-view");
 const backFromNeededListButton = document.querySelector("#back-from-needed-list");
@@ -270,12 +271,12 @@ function updateBottomContextAction() {
   if (!views.settings.hidden) {
     const form = getSettingsAddForm(selectedSettingsCategory);
 
-    bottomContextAction.textContent = form ? "Add" : "";
+    bottomContextAction.textContent = form ? "New" : "";
     bottomContextAction.disabled = !form;
     bottomContextAction.hidden = false;
 
     if (form) {
-      bottomContextAction.setAttribute("aria-label", `Add ${settingsCategoryNames[selectedSettingsCategory]}`);
+      bottomContextAction.setAttribute("aria-label", `New ${settingsCategoryNames[selectedSettingsCategory]}`);
     } else {
       bottomContextAction.removeAttribute("aria-label");
     }
@@ -419,7 +420,7 @@ function setContextButtonLabel(button, label) {
 
   const exitIcon = document.createElement("span");
   exitIcon.className = "context-exit-icon";
-  exitIcon.textContent = "⇥";
+  exitIcon.textContent = "←";
   exitIcon.setAttribute("aria-hidden", "true");
 
   button.append(name, exitIcon);
@@ -522,8 +523,11 @@ function createIconButton({
   return button;
 }
 
-function addLongPressHandler(element, handler, { duration = 700 } = {}) {
+function addLongPressHandler(element, handler, { duration = 550 } = {}) {
   let pressTimer = null;
+  let startX = 0;
+  let startY = 0;
+  let hasFired = false;
 
   function clearPress() {
     if (pressTimer) {
@@ -540,17 +544,48 @@ function addLongPressHandler(element, handler, { duration = 700 } = {}) {
     }
 
     clearPress();
+    hasFired = false;
+    startX = event.clientX;
+    startY = event.clientY;
     element.classList.add("is-long-pressing");
+
+    if (element.setPointerCapture) {
+      try {
+        element.setPointerCapture(event.pointerId);
+      } catch (error) {
+        // Some browsers/elements do not allow pointer capture.
+      }
+    }
 
     pressTimer = setTimeout(async () => {
       pressTimer = null;
+      hasFired = true;
       element.classList.remove("is-long-pressing");
       await handler(event);
     }, duration);
   });
 
-  ["pointerup", "pointerleave", "pointercancel"].forEach((eventName) => {
+  element.addEventListener("pointermove", (event) => {
+    const movedDistance = Math.hypot(
+      event.clientX - startX,
+      event.clientY - startY
+    );
+
+    if (movedDistance > 16) {
+      clearPress();
+    }
+  });
+
+  ["pointerup", "pointercancel"].forEach((eventName) => {
     element.addEventListener(eventName, clearPress);
+  });
+
+  element.addEventListener("click", (event) => {
+    if (hasFired) {
+      event.preventDefault();
+      event.stopPropagation();
+      hasFired = false;
+    }
   });
 
   element.addEventListener("contextmenu", (event) => {
@@ -2604,14 +2639,25 @@ function renderRoomItems() {
     return;
   }
 
-  const roomItems = currentItems.filter(
+  const roomSearchText = roomItemsSearch?.value.trim().toLowerCase() ?? "";
+
+  const allRoomItems = currentItems.filter(
     (item) =>
       item.locationId === selectedRoomId &&
       item.active !== false
   );
 
-  if (roomItems.length === 0) {
+  const roomItems = allRoomItems.filter((item) =>
+    String(item.name ?? "").toLowerCase().includes(roomSearchText)
+  );
+
+  if (allRoomItems.length === 0) {
     roomItemsList.innerHTML = "<p>No items have been created for this room yet.</p>";
+    return;
+  }
+
+  if (roomItems.length === 0) {
+    roomItemsList.innerHTML = "<p>No matching room items.</p>";
     return;
   }
 
@@ -2671,7 +2717,7 @@ function renderRoomItems() {
 
     const increaseButton = createIconButton({
       className: "room-icon-button increase-needed-button",
-      icon: "+",
+      icon: "",
       label: `Increase ${item.name}`,
       onClick: async () => {
         disableButtons(controlButtons);
@@ -2681,7 +2727,7 @@ function renderRoomItems() {
 
     const decreaseButton = createIconButton({
       className: "room-icon-button decrease-needed-button",
-      icon: "−",
+      icon: "",
       label: `Decrease ${item.name}`,
       onClick: async () => {
         disableButtons(controlButtons);
@@ -2963,7 +3009,7 @@ function appendFullNeededItemRow(item) {
 
   const increaseButton = createIconButton({
     className: "room-icon-button increase-needed-button",
-    icon: "+",
+    icon: "",
     label: `Increase ${item.name}`,
     onClick: async () => {
       disableButtons(buttons);
@@ -2973,7 +3019,7 @@ function appendFullNeededItemRow(item) {
 
   const decreaseButton = createIconButton({
     className: "room-icon-button decrease-needed-button",
-    icon: "−",
+    icon: "",
     label: `Decrease ${item.name}`,
     onClick: async () => {
       disableButtons(buttons);
@@ -3765,6 +3811,12 @@ function wireNavigation() {
   neededListSearch.addEventListener("input", () => {
     renderFullNeededList();
   });
+
+  if (roomItemsSearch) {
+    roomItemsSearch.addEventListener("input", () => {
+      renderRoomItems();
+    });
+  }
 
   if (editItemsFromNeededListButton) {
     editItemsFromNeededListButton.addEventListener("click", () => {

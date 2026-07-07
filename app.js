@@ -59,6 +59,44 @@ const settingsCategoryNames = {
   units: "Units"
 };
 
+function getSettingsAddForm(categoryName) {
+  return {
+    stores: addStoreForm,
+    "store-types": addStoreTypeForm,
+    "product-types": addProductTypeForm,
+    rooms: addRoomForm,
+    units: addUnitForm
+  }[categoryName] ?? null;
+}
+
+function closeSettingsAddForms({ except = null } = {}) {
+  [
+    addStoreForm,
+    addStoreTypeForm,
+    addProductTypeForm,
+    addRoomForm,
+    addUnitForm
+  ].forEach((form) => {
+    if (!form || form === except) {
+      return;
+    }
+
+    form.hidden = true;
+  });
+}
+
+function toggleCurrentSettingsAddForm() {
+  const form = getSettingsAddForm(selectedSettingsCategory);
+
+  if (!form) {
+    return;
+  }
+
+  const willOpen = form.hidden;
+  closeSettingsAddForms({ except: form });
+  form.hidden = !willOpen;
+}
+
 /* Rooms */
 const addRoomForm = document.querySelector("#add-room-form");
 const roomNameInput = document.querySelector("#room-name");
@@ -157,6 +195,8 @@ function showSettingsHome() {
   settingsCategoryPanels.forEach((panel) => {
     panel.hidden = true;
   });
+
+  closeSettingsAddForms();
 }
 
 function openSettingsHomeFromShortcut() {
@@ -183,7 +223,6 @@ function openFullNeededList() {
   roomView.hidden = true;
   fullNeededView.hidden = false;
   renderFullNeededList();
-  neededListSearch.focus();
   updateBottomContextAction();
 }
 
@@ -228,6 +267,22 @@ function updateBottomContextAction() {
     return;
   }
 
+  if (!views.settings.hidden) {
+    const form = getSettingsAddForm(selectedSettingsCategory);
+
+    bottomContextAction.textContent = form ? "Add" : "";
+    bottomContextAction.disabled = !form;
+    bottomContextAction.hidden = false;
+
+    if (form) {
+      bottomContextAction.setAttribute("aria-label", `Add ${settingsCategoryNames[selectedSettingsCategory]}`);
+    } else {
+      bottomContextAction.removeAttribute("aria-label");
+    }
+
+    return;
+  }
+
   bottomContextAction.textContent = "";
   bottomContextAction.disabled = true;
   bottomContextAction.hidden = false;
@@ -252,6 +307,8 @@ function openSettingsCategory(categoryName) {
   settingsCategoryPanels.forEach((categoryPanel) => {
     categoryPanel.hidden = categoryPanel !== panel;
   });
+
+  closeSettingsAddForms({ except: getSettingsAddForm(categoryName) });
 }
 
 function showView(viewName) {
@@ -362,7 +419,7 @@ function setContextButtonLabel(button, label) {
 
   const exitIcon = document.createElement("span");
   exitIcon.className = "context-exit-icon";
-  exitIcon.textContent = "↩";
+  exitIcon.textContent = "⇥";
   exitIcon.setAttribute("aria-hidden", "true");
 
   button.append(name, exitIcon);
@@ -463,6 +520,42 @@ function createIconButton({
   }
 
   return button;
+}
+
+function addLongPressHandler(element, handler, { duration = 700 } = {}) {
+  let pressTimer = null;
+
+  function clearPress() {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+
+    element.classList.remove("is-long-pressing");
+  }
+
+  element.addEventListener("pointerdown", (event) => {
+    if (element.disabled) {
+      return;
+    }
+
+    clearPress();
+    element.classList.add("is-long-pressing");
+
+    pressTimer = setTimeout(async () => {
+      pressTimer = null;
+      element.classList.remove("is-long-pressing");
+      await handler(event);
+    }, duration);
+  });
+
+  ["pointerup", "pointerleave", "pointercancel"].forEach((eventName) => {
+    element.addEventListener(eventName, clearPress);
+  });
+
+  element.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+  });
 }
 
 function createSettingsRow({
@@ -1694,7 +1787,7 @@ function renderRooms(rooms) {
     const roomButton = document.createElement("button");
     roomButton.type = "button";
     roomButton.className = "room-button shopping-location-option";
-    roomButton.textContent = room.name;
+    roomButton.textContent = `${room.name} stuff`;
     roomButton.addEventListener("click", () => {
       openRoom(room);
     });
@@ -1714,29 +1807,22 @@ function renderUnits(units) {
     collectionName: "units",
     items: units,
     emptyMessage: "No units have been created yet.",
-    label: (unit) => unit.name,
-    sublabel: (unit) => unit.symbol,
+    label: (unit) => unit.symbol ?? unit.name,
     fields: [
       {
-        key: "name",
-        label: "Unit name",
-        maxLength: 30,
-        value: () => units.find((unit) => unit.id === editingSettingsId)?.name ?? ""
-      },
-      {
         key: "symbol",
-        label: "Symbol",
+        label: "Unit symbol",
         maxLength: 10,
         value: () => units.find((unit) => unit.id === editingSettingsId)?.symbol ?? ""
       }
     ],
     onSave: async (values, unit) => {
-      if (!values.name || !values.symbol) {
-        throw new Error("Please complete all required fields.");
+      if (!values.symbol) {
+        throw new Error("Please enter a unit symbol.");
       }
 
       await updateDoc(householdDocument("units", unit.id), {
-        name: values.name,
+        name: values.symbol,
         symbol: values.symbol,
         displayMode: values.symbol === "×" ? "multiplier" : "suffix",
         updatedAt: serverTimestamp()
@@ -2036,7 +2122,7 @@ function getUnitDisplay(unitId) {
     (candidate) => String(candidate.id) === String(unitId)
   );
 
-  return unit ? `${unit.name} (${unit.symbol})` : "Unit not set";
+  return unit ? unit.symbol : "Unit not set";
 }
 
 function itemSettingsSublabel(item) {
@@ -2461,7 +2547,7 @@ function populateUnitDropdown(selectedUnitId = itemUnitSelect.value) {
   currentUnits.forEach((unit) => {
     const option = document.createElement("option");
     option.value = unit.id;
-    option.textContent = `${unit.name} (${unit.symbol})`;
+    option.textContent = unit.symbol;
     option.dataset.increment = unit.defaultIncrement ?? 1;
     itemUnitSelect.append(option);
   });
@@ -2715,7 +2801,7 @@ function appendRoomItemEditPanel(item) {
   currentUnits.forEach((unit) => {
     const option = document.createElement("option");
     option.value = unit.id;
-    option.textContent = `${unit.name} (${unit.symbol})`;
+    option.textContent = unit.symbol;
 
     if (unit.id === item.unitId) {
       option.selected = true;
@@ -3164,7 +3250,7 @@ function renderGettingItems() {
     checkboxGraphic.textContent = isCollected ? "✓" : "";
     collectButton.append(checkboxGraphic);
 
-    collectButton.addEventListener("click", async () => {
+    addLongPressHandler(collectButton, async () => {
       collectButton.disabled = true;
       await setNeededItemCollected(item, !isCollected);
     });
@@ -3587,16 +3673,35 @@ function wireNavigation() {
   });
 
   if (bottomContextAction) {
-    bottomContextAction.addEventListener("click", async () => {
+    bottomContextAction.addEventListener("click", () => {
       if (!views.needing.hidden) {
         openFullNeededList();
         return;
       }
 
+      if (!views.settings.hidden && !bottomContextAction.disabled) {
+        toggleCurrentSettingsAddForm();
+        return;
+      }
+
       if (!views.getting.hidden && !bottomContextAction.disabled) {
-        await finishCurrentShop();
+        alert("Press and hold Finish shop to remove collected items.");
       }
     });
+
+    addLongPressHandler(bottomContextAction, async () => {
+      if (views.getting.hidden || bottomContextAction.disabled) {
+        return;
+      }
+
+      const confirmed = confirm(
+        "Finish shop and remove collected items from the needed list?"
+      );
+
+      if (confirmed) {
+        await finishCurrentShop();
+      }
+    }, { duration: 900 });
   }
 
   settingsCategoryOptions.forEach((button) => {
@@ -3627,7 +3732,6 @@ function wireNavigation() {
   });
 
   newItemButton.addEventListener("click", () => {
-    resetNewItemForm();
     newItemPanel.hidden = false;
     newItemButton.hidden = true;
   });
@@ -3645,7 +3749,13 @@ function wireNavigation() {
   });
 
   finishShopButton.addEventListener("click", async () => {
-    await finishCurrentShop();
+    const confirmed = confirm(
+      "Finish shop and remove collected items from the needed list?"
+    );
+
+    if (confirmed) {
+      await finishCurrentShop();
+    }
   });
 
   viewNeededListButton.addEventListener("click", () => {
@@ -3704,7 +3814,7 @@ function wireForms() {
       });
 
       addRoomForm.reset();
-      roomNameInput.focus();
+      addRoomForm.hidden = true;
     } catch (error) {
       console.error("Could not add room:", error);
       alert("The room could not be added.");
@@ -3720,10 +3830,9 @@ function wireForms() {
   addUnitForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const unitName = unitNameInput.value.trim();
     const unitSymbol = unitSymbolInput.value.trim();
 
-    if (!unitName || !unitSymbol) {
+    if (!unitSymbol) {
       return;
     }
 
@@ -3732,7 +3841,7 @@ function wireForms() {
 
     try {
       await addDoc(householdCollection("units"), {
-        name: unitName,
+        name: unitSymbol,
         symbol: unitSymbol,
         displayMode: unitSymbol === "×" ? "multiplier" : "suffix",
         defaultIncrement: 1,
@@ -3743,7 +3852,7 @@ function wireForms() {
       });
 
       addUnitForm.reset();
-      unitNameInput.focus();
+      addUnitForm.hidden = true;
     } catch (error) {
       console.error("Could not add unit:", error);
       alert("The unit could not be added.");
@@ -3773,7 +3882,7 @@ function wireForms() {
       });
 
       addStoreTypeForm.reset();
-      storeTypeNameInput.focus();
+      addStoreTypeForm.hidden = true;
     } catch (error) {
       console.error("Could not add store type:", error);
       alert("The store type could not be added.");
@@ -3806,7 +3915,7 @@ function wireForms() {
       });
 
       addStoreForm.reset();
-      storeNameInput.focus();
+      addStoreForm.hidden = true;
     } catch (error) {
       console.error("Could not add store:", error);
       alert("The store could not be added.");

@@ -2449,3 +2449,56 @@ main,
 .brief-toast.is-hiding {
   opacity: 0;
 }
+
+
+/* ===== Independent specific products and full-screen entry form: 202607071956 ===== */
+#specific-product-panel {
+  top: 0 !important;
+  right: max(0px, calc((100vw - 430px) / 2)) !important;
+  bottom: 0 !important;
+  left: max(0px, calc((100vw - 430px) / 2)) !important;
+  width: auto !important;
+  max-height: none !important;
+  height: 100dvh;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: calc(
+    var(--bottom-bar-height) +
+    max(1rem, env(safe-area-inset-bottom))
+  );
+  transform: none !important;
+  border-top: 0 !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+body:has(#specific-product-panel:not([hidden])) {
+  overflow: hidden;
+}
+
+.specific-product-offer-row .item-name-display,
+.specific-product-needed-row .item-name-display {
+  padding-left: 1.15rem;
+}
+
+.specific-product-offer-row .item-row-details {
+  padding-left: 0 !important;
+}
+
+.specific-product-offer-row.is-needed {
+  background: #ffffff !important;
+}
+
+.specific-product-offer-row.is-available {
+  background: var(--space-tint) !important;
+}
+
+.specific-product-offer-name,
+.item-name-display.is-specific-product .item-name {
+  font-size: 0.94rem;
+  font-weight: 500;
+}
+
+.specific-product-offer-row .room-current-quantity,
+.specific-product-needed-row .room-current-quantity {
+  flex: 0 0 auto;
+}

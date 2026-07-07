@@ -496,7 +496,10 @@ function updateBottomContextAction() {
     bottomContextAction.textContent = "Full list";
     bottomContextAction.disabled = false;
     bottomContextAction.hidden = false;
-    bottomContextAction.setAttribute("aria-label", "Open full needed list");
+    bottomContextAction.setAttribute(
+      "aria-label",
+      "Open full needed list"
+    );
     return;
   }
 
@@ -505,24 +508,44 @@ function updateBottomContextAction() {
     bottomContextAction.hidden = false;
     bottomContextAction.setAttribute("aria-label", "Finish shop");
 
-    const hasCollectedVisibleItems = currentItems.some((item) => {
-      const neededEntry = currentNeededEntries.get(item.id);
+    if (!selectedShoppingTarget) {
+      bottomContextAction.disabled = true;
+      return;
+    }
 
-      if (neededEntry?.status !== "collected") {
-        return false;
+    const selectedStore =
+      selectedShoppingTarget.kind === "store"
+        ? currentStores.find(
+            (store) => store.id === selectedShoppingTarget.id
+          )
+        : null;
+
+    const selectedStoreTypeId =
+      selectedShoppingTarget.kind === "store"
+        ? selectedShoppingTarget.storeTypeId
+        : selectedShoppingTarget.id;
+
+    const hasCollectedVisibleItems = currentNeededRecords().some(
+      (record) => {
+        if (record.entry.status !== "collected") {
+          return false;
+        }
+
+        if (
+          !itemBelongsToStoreType(
+            record.item,
+            selectedStoreTypeId
+          )
+        ) {
+          return false;
+        }
+
+        return specificProductIsAvailableAtStore(
+          record.specificProduct,
+          selectedStore?.id
+        );
       }
-
-      if (!selectedShoppingTarget) {
-        return false;
-      }
-
-      const selectedStoreTypeId =
-        selectedShoppingTarget.kind === "store"
-          ? selectedShoppingTarget.storeTypeId
-          : selectedShoppingTarget.id;
-
-      return itemBelongsToStoreType(item, selectedStoreTypeId);
-    });
+    );
 
     bottomContextAction.disabled = !hasCollectedVisibleItems;
     return;
@@ -2672,9 +2695,9 @@ function createRegularListToggleButton(item) {
 }
 
 async function deactivateSettingsItem(item) {
-  if (currentNeededEntries.has(item.id)) {
+  if (neededEntriesForItem(item.id).length > 0) {
     alert(
-      `${item.name} is currently on the needed list. Remove it from the needed list before removing it from Items.`
+      `${item.name} is currently on the needed list. Remove all generic and specific entries for it before removing it from Items.`
     );
     return;
   }
@@ -2687,7 +2710,10 @@ async function deactivateSettingsItem(item) {
     showDependencyBlock(item.name, [
       dependencyListLine(
         "Specific products linked to this item",
-        dependencyNames(linkedSpecificProducts, (product) => product.name)
+        dependencyNames(
+          linkedSpecificProducts,
+          (product) => product.name
+        )
       )
     ]);
     return;
@@ -2695,9 +2721,7 @@ async function deactivateSettingsItem(item) {
 
   if (
     !window.confirm(
-      `Remove ${item.name}?
-
-This will remove it from normal item lists.`
+      `Remove ${item.name}?\n\nThis will remove it from normal item lists.`
     )
   ) {
     return;
@@ -3474,13 +3498,7 @@ function openSpecificProductQuickAdd(item) {
 
   prepareQuickSpecificProductForm(item);
   specificProductPanel.hidden = false;
-
-  requestAnimationFrame(() => {
-    specificProductPanel.scrollIntoView({
-      block: "nearest",
-      behavior: "smooth"
-    });
-  });
+  specificProductPanel.scrollTop = 0;
 }
 
 function closeSpecificProductQuickAdd() {
@@ -3693,25 +3711,168 @@ function specificProductForNeededEntry(neededEntry) {
   ) ?? null;
 }
 
+
+function allNeededEntries() {
+  return Array.from(currentNeededEntries.values());
+}
+
+function genericNeededEntryForItem(itemId) {
+  return allNeededEntries().find(
+    (entry) =>
+      String(entry.itemId ?? entry.id) === String(itemId) &&
+      !entry.specificProductId
+  ) ?? null;
+}
+
+function specificNeededEntryForProduct(productId) {
+  return allNeededEntries().find(
+    (entry) =>
+      entry.specificProductId &&
+      String(entry.specificProductId) === String(productId)
+  ) ?? null;
+}
+
+function neededEntriesForItem(itemId) {
+  return allNeededEntries().filter(
+    (entry) => String(entry.itemId ?? entry.id) === String(itemId)
+  );
+}
+
+function itemHasAnyNeededEntry(itemId) {
+  return neededEntriesForItem(itemId).length > 0;
+}
+
+function specificNeededEntryDocumentId(productId) {
+  return `specific-${productId}`;
+}
+
+function itemForNeededEntry(entry) {
+  return currentItems.find(
+    (item) => String(item.id) === String(entry.itemId ?? entry.id)
+  ) ?? null;
+}
+
+function neededRecordForEntry(entry) {
+  const item = itemForNeededEntry(entry);
+
+  if (!item || item.active === false) {
+    return null;
+  }
+
+  return {
+    item,
+    entry,
+    specificProduct: specificProductForNeededEntry(entry)
+  };
+}
+
+function currentNeededRecords() {
+  return allNeededEntries()
+    .map(neededRecordForEntry)
+    .filter(Boolean);
+}
+
+function neededRecordMatchesSearch(record, searchText) {
+  if (!searchText) {
+    return true;
+  }
+
+  return [
+    record.item.name,
+    record.specificProduct?.name,
+    specificProductDetailText(record.specificProduct ?? {})
+  ]
+    .map((value) => String(value ?? '').toLowerCase())
+    .some((value) => value.includes(searchText));
+}
+
+function compareNeededRecords(a, b) {
+  const itemNameDifference = String(a.item.name ?? '')
+    .localeCompare(String(b.item.name ?? ''));
+
+  if (itemNameDifference !== 0) {
+    return itemNameDifference;
+  }
+
+  if (!a.specificProduct && b.specificProduct) {
+    return -1;
+  }
+
+  if (a.specificProduct && !b.specificProduct) {
+    return 1;
+  }
+
+  return String(a.specificProduct?.name ?? '')
+    .localeCompare(String(b.specificProduct?.name ?? ''));
+}
+
+function specificProductIsAvailableAtStore(specificProduct, storeId) {
+  if (!specificProduct || !storeId) {
+    return true;
+  }
+
+  const storeIds = Array.isArray(specificProduct.storeIds)
+    ? specificProduct.storeIds
+    : [];
+
+  return (
+    storeIds.length === 0 ||
+    storeIds.some((candidateId) => String(candidateId) === String(storeId))
+  );
+}
+
+async function migrateLegacySpecificEntryBeforeGenericAdd(item) {
+  const legacyEntry = currentNeededEntries.get(item.id);
+
+  if (!legacyEntry?.specificProductId) {
+    return;
+  }
+
+  const { id, ...entryData } = legacyEntry;
+  const replacementId = specificNeededEntryDocumentId(
+    legacyEntry.specificProductId
+  );
+
+  const batch = writeBatch(db);
+
+  batch.set(
+    householdDocument('neededEntries', replacementId),
+    {
+      ...entryData,
+      itemId: item.id,
+      adjustedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  batch.delete(householdDocument('neededEntries', item.id));
+  await batch.commit();
+}
+
 function createItemNameDisplay(item, specificProduct = null) {
   const wrapper = document.createElement("span");
   wrapper.className = "item-name-display";
 
+  if (specificProduct) {
+    wrapper.classList.add("is-specific-product");
+  }
+
   const name = document.createElement("span");
   name.className = "item-name";
-  name.textContent = item.name;
+  name.textContent = specificProduct
+    ? `${item.name} ${specificProduct.name}`
+    : item.name;
   wrapper.append(name);
 
   if (specificProduct) {
-    const detail = document.createElement("span");
-    detail.className = "item-specific-product-detail";
-
     const extra = specificProductDetailText(specificProduct);
-    detail.textContent = extra
-      ? `${specificProduct.name} · ${extra}`
-      : specificProduct.name;
 
-    wrapper.append(detail);
+    if (extra) {
+      const detail = document.createElement("span");
+      detail.className = "item-specific-product-detail";
+      detail.textContent = extra;
+      wrapper.append(detail);
+    }
   }
 
   return wrapper;
@@ -3738,12 +3899,26 @@ function renderRoomItems() {
     return item.locationId === selectedRoomId;
   });
 
-  const roomItems = allRoomItems.filter((item) =>
-    String(item.name ?? "").toLowerCase().includes(roomSearchText)
-  );
+  const roomItems = allRoomItems.filter((item) => {
+    if (!roomSearchText) {
+      return true;
+    }
+
+    const specificProductText = specificProductsForItem(item.id)
+      .flatMap((product) => [
+        product.name,
+        specificProductDetailText(product)
+      ])
+      .join(" ");
+
+    return `${item.name} ${specificProductText}`
+      .toLowerCase()
+      .includes(roomSearchText);
+  });
 
   if (allRoomItems.length === 0) {
-    roomItemsList.innerHTML = "<p>No items have been created for this room yet.</p>";
+    roomItemsList.innerHTML =
+      "<p>No items have been created for this room yet.</p>";
     return;
   }
 
@@ -3754,85 +3929,121 @@ function renderRoomItems() {
 
   const renderedItemIds = new Set();
 
-  function sortItemsByName(a, b) {
+  function sortItemsByNeedThenName(a, b) {
+    const needDifference =
+      Number(!itemHasAnyNeededEntry(a.id)) -
+      Number(!itemHasAnyNeededEntry(b.id));
+
+    if (needDifference !== 0) {
+      return needDifference;
+    }
+
     return String(a.name ?? "").localeCompare(String(b.name ?? ""));
   }
 
-  function appendSpecificProductOfferRows(item) {
-    const products = specificProductsForItem(item.id);
-    const neededEntry = currentNeededEntries.get(item.id);
+  function createQuantityControls(item, neededEntry, labelName) {
+    const controls = document.createElement("div");
+    controls.className = "room-item-controls";
 
-    products.forEach((product) => {
-      const isSelected =
-        neededEntry?.specificProductId &&
-        String(neededEntry.specificProductId) === String(product.id);
+    const amountDisplay = document.createElement("strong");
+    amountDisplay.className = "room-current-quantity";
+    amountDisplay.textContent = formatAmount(
+      neededEntry.amount,
+      neededEntry.unitId
+    );
+
+    const increaseButton = createIconButton({
+      className: "room-icon-button increase-needed-button",
+      icon: "+",
+      label: `Increase ${labelName}`,
+      onClick: async () => {
+        disableButtons(controlButtons);
+        await changeNeededAmount(
+          item,
+          neededEntry,
+          item.increment ?? 1
+        );
+      }
+    });
+
+    const decreaseButton = createIconButton({
+      className: "room-icon-button decrease-needed-button",
+      icon: "−",
+      label: `Decrease ${labelName}`,
+      onClick: async () => {
+        disableButtons(controlButtons);
+        await changeNeededAmount(
+          item,
+          neededEntry,
+          -(item.increment ?? 1)
+        );
+      }
+    });
+
+    const controlButtons = [
+      increaseButton,
+      decreaseButton
+    ];
+
+    return {
+      amountDisplay,
+      controls,
+      buttons: [increaseButton, decreaseButton]
+    };
+  }
+
+  function appendSpecificProductRows(item) {
+    specificProductsForItem(item.id).forEach((product) => {
+      const neededEntry = specificNeededEntryForProduct(product.id);
+      const isNeeded = Boolean(neededEntry);
 
       const row = document.createElement("div");
-      row.className = "item-row room-item-row specific-product-offer-row is-available";
-
-      if (isSelected) {
-        row.classList.add("is-selected-specific-product");
-      }
+      row.className =
+        "item-row room-item-row specific-product-offer-row";
+      row.classList.add(isNeeded ? "is-needed" : "is-available");
 
       const details = document.createElement("div");
       details.className = "item-row-details";
-
-      const text = document.createElement("span");
-      text.className = "item-name-display specific-product-offer-text";
-
-      const name = document.createElement("span");
-      name.className = "item-name specific-product-offer-name";
-      name.textContent = product.name;
-      text.append(name);
-
-      const extra = specificProductDetailText(product);
-
-      if (extra) {
-        const detail = document.createElement("span");
-        detail.className = "item-specific-product-detail";
-        detail.textContent = extra;
-        text.append(detail);
-      }
-
-      details.append(text);
+      details.append(createItemNameDisplay(item, product));
 
       const controls = document.createElement("div");
       controls.className = "room-item-controls";
 
-      const addButton = createIconButton({
-        className: "room-icon-button room-add-button add-needed-button",
-        icon: isSelected ? "Using" : neededEntry ? "Use" : "Add",
-        label: isSelected
-          ? `${product.name} is selected`
-          : `Use ${product.name} for ${item.name}`,
-        onClick: async () => {
-          if (isSelected) {
-            return;
+      if (!isNeeded) {
+        const addButton = createIconButton({
+          className:
+            "room-icon-button room-add-button add-needed-button",
+          icon: "Add",
+          label: `Add ${item.name} ${product.name} to needed list`,
+          onClick: async () => {
+            await addSpecificProductToNeededList(item, product);
           }
+        });
 
-          await addOrSelectSpecificProduct(item, product);
-        }
-      });
+        controls.append(addButton);
+      } else {
+        const quantity = createQuantityControls(
+          item,
+          neededEntry,
+          `${item.name} ${product.name}`
+        );
 
-      addButton.disabled = Boolean(isSelected);
-      controls.append(addButton);
+        details.append(quantity.amountDisplay);
+        controls.append(...quantity.buttons);
+      }
+
       row.append(details, controls);
       roomItemsList.append(row);
     });
   }
 
   function appendRoomItemRow(item) {
-    const neededEntry = currentNeededEntries.get(item.id);
+    const neededEntry = genericNeededEntryForItem(item.id);
     const isNeeded = Boolean(neededEntry);
 
     const row = document.createElement("div");
     row.className = "item-row room-item-row";
-
-    if (isNeeded) {
-      row.classList.add("is-needed");
-    } else {
-      row.classList.add("is-available");
-    }
+    row.classList.add(isNeeded ? "is-needed" : "is-available");
 
     addLongPressHandler(
       row,
@@ -3847,107 +4058,58 @@ function renderRoomItems() {
 
     const details = document.createElement("div");
     details.className = "item-row-details";
-
-    const specificProduct = specificProductForNeededEntry(neededEntry);
-    details.append(createItemNameDisplay(item, specificProduct));
+    details.append(createItemNameDisplay(item));
 
     const controls = document.createElement("div");
     controls.className = "room-item-controls";
 
     if (!isNeeded) {
       const addButton = createIconButton({
-        className: "room-icon-button room-add-button add-needed-button",
+        className:
+          "room-icon-button room-add-button add-needed-button",
         icon: "Add",
         label: `Add ${item.name} to needed list`,
-        onClick: () => {
-          addItemToNeededListWithProductChoice(item);
+        onClick: async () => {
+          await addItemToNeededList(item);
         }
       });
 
       controls.append(addButton);
-      row.append(details, controls);
-      roomItemsList.append(row);
-      appendSpecificProductOfferRows(item);
-      renderedItemIds.add(item.id);
-      return;
+    } else {
+      const quantity = createQuantityControls(
+        item,
+        neededEntry,
+        item.name
+      );
+
+      details.append(quantity.amountDisplay);
+      controls.append(...quantity.buttons);
     }
-
-    const amountDisplay = document.createElement("strong");
-    amountDisplay.className = "room-current-quantity";
-    amountDisplay.textContent = formatAmount(
-      neededEntry.amount,
-      neededEntry.unitId
-    );
-
-    const increaseButton = createIconButton({
-      className: "room-icon-button increase-needed-button",
-      icon: "+",
-      label: `Increase ${item.name}`,
-      onClick: async () => {
-        disableButtons(controlButtons);
-        await changeNeededAmount(item, item.increment ?? 1);
-      }
-    });
-
-    const decreaseButton = createIconButton({
-      className: "room-icon-button decrease-needed-button",
-      icon: "−",
-      label: `Decrease ${item.name}`,
-      onClick: async () => {
-        disableButtons(controlButtons);
-        await changeNeededAmount(item, -(item.increment ?? 1));
-      }
-    });
-
-    const controlButtons = [
-      increaseButton,
-      decreaseButton
-    ];
-
-    details.append(amountDisplay);
-
-    controls.append(
-      increaseButton,
-      decreaseButton
-    );
 
     row.append(details, controls);
     roomItemsList.append(row);
-    appendSpecificProductOfferRows(item);
+    appendSpecificProductRows(item);
     renderedItemIds.add(item.id);
   }
 
   function appendProductTypeBlock(productType) {
-    const productTypeItems = roomItems
-      .filter((item) => String(item.productTypeId) === String(productType.id));
-
-    const neededItems = productTypeItems
-      .filter((item) => currentNeededEntries.has(item.id))
-      .sort(sortItemsByName);
-
-    const availableItems = productTypeItems
-      .filter((item) => !currentNeededEntries.has(item.id))
-      .sort(sortItemsByName);
-
-    neededItems.forEach(appendRoomItemRow);
-    availableItems.forEach(appendRoomItemRow);
+    roomItems
+      .filter(
+        (item) =>
+          String(item.productTypeId) === String(productType.id)
+      )
+      .sort(sortItemsByNeedThenName)
+      .forEach(appendRoomItemRow);
   }
 
-  orderedProductTypesForDefaultRoomView().forEach(appendProductTypeBlock);
+  orderedProductTypesForDefaultRoomView().forEach(
+    appendProductTypeBlock
+  );
 
-  const remainingItems = roomItems
-    .filter((item) => !renderedItemIds.has(item.id));
-
-  const remainingNeededItems = remainingItems
-    .filter((item) => currentNeededEntries.has(item.id))
-    .sort(sortItemsByName);
-
-  const remainingAvailableItems = remainingItems
-    .filter((item) => !currentNeededEntries.has(item.id))
-    .sort(sortItemsByName);
-
-  remainingNeededItems.forEach(appendRoomItemRow);
-  remainingAvailableItems.forEach(appendRoomItemRow);
+  roomItems
+    .filter((item) => !renderedItemIds.has(item.id))
+    .sort(sortItemsByNeedThenName)
+    .forEach(appendRoomItemRow);
 }
 
 function disableButtons(buttons) {
@@ -4144,15 +4306,15 @@ function productTypeForItem(item) {
   );
 }
 
-function appendFullNeededItemRow(item) {
-  const neededEntry = currentNeededEntries.get(item.id);
-
-  if (!neededEntry) {
-    return;
-  }
+function appendFullNeededItemRow(record) {
+  const { item, entry, specificProduct } = record;
 
   const row = document.createElement("div");
   row.className = "item-row full-needed-item-row is-needed";
+
+  if (specificProduct) {
+    row.classList.add("specific-product-needed-row");
+  }
 
   addLongPressHandler(
     row,
@@ -4167,19 +4329,18 @@ function appendFullNeededItemRow(item) {
 
   const details = document.createElement("div");
   details.className = "item-row-details";
-
-  const specificProduct = specificProductForNeededEntry(neededEntry);
   details.append(createItemNameDisplay(item, specificProduct));
-
-  const controls = document.createElement("div");
-  controls.className = "room-item-controls full-needed-controls";
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
   amountDisplay.textContent = formatAmount(
-    neededEntry.amount,
-    neededEntry.unitId
+    entry.amount,
+    entry.unitId
   );
+  details.append(amountDisplay);
+
+  const controls = document.createElement("div");
+  controls.className = "room-item-controls full-needed-controls";
 
   const increaseButton = createIconButton({
     className: "room-icon-button increase-needed-button",
@@ -4187,7 +4348,11 @@ function appendFullNeededItemRow(item) {
     label: `Increase ${item.name}`,
     onClick: async () => {
       disableButtons(buttons);
-      await changeNeededAmount(item, item.increment ?? 1);
+      await changeNeededAmount(
+        item,
+        entry,
+        item.increment ?? 1
+      );
     }
   });
 
@@ -4197,7 +4362,11 @@ function appendFullNeededItemRow(item) {
     label: `Decrease ${item.name}`,
     onClick: async () => {
       disableButtons(buttons);
-      await changeNeededAmount(item, -(item.increment ?? 1));
+      await changeNeededAmount(
+        item,
+        entry,
+        -(item.increment ?? 1)
+      );
     }
   });
 
@@ -4206,87 +4375,98 @@ function appendFullNeededItemRow(item) {
     decreaseButton
   ];
 
-  details.append(amountDisplay);
-
-  controls.append(
-    increaseButton,
-    decreaseButton
-  );
-
+  controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
   fullNeededItems.append(row);
 }
 
-function appendFullNeededProductGroup(productType, items) {
-  const groupedItems = items
-    .filter((item) => String(item.productTypeId) === String(productType.id))
-    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+function appendFullNeededProductGroup(productType, records) {
+  const groupedRecords = records
+    .filter(
+      (record) =>
+        String(record.item.productTypeId) === String(productType.id)
+    )
+    .sort(compareNeededRecords);
 
-  if (groupedItems.length === 0) {
+  if (groupedRecords.length === 0) {
     return false;
   }
 
-  groupedItems.forEach(appendFullNeededItemRow);
+  groupedRecords.forEach(appendFullNeededItemRow);
   return true;
 }
 
 function renderFullNeededList() {
   fullNeededItems.innerHTML = "";
 
-  const searchText = neededListSearch.value.trim().toLowerCase();
+  const searchText = neededListSearch.value
+    .trim()
+    .toLowerCase();
 
-  const neededItems = currentItems
-    .filter((item) => currentNeededEntries.has(item.id))
-    .filter((item) => String(item.name ?? "").toLowerCase().includes(searchText));
+  const neededRecords = currentNeededRecords()
+    .filter((record) => neededRecordMatchesSearch(record, searchText));
 
-  if (neededItems.length === 0) {
-    fullNeededItems.innerHTML = "<p>No matching needed items.</p>";
+  if (neededRecords.length === 0) {
+    fullNeededItems.innerHTML =
+      "<p>No matching needed items.</p>";
     return;
   }
 
   let renderedAny = false;
 
   currentStoreTypes.forEach((storeType) => {
-    const storeTypeItems = neededItems.filter((item) => {
-      const productType = productTypeForItem(item);
+    const storeTypeRecords = neededRecords.filter((record) => {
+      const productType = productTypeForItem(record.item);
 
-      return productType &&
-        productTypeBelongsToStoreType(productType, storeType.id);
+      return (
+        productType &&
+        productTypeBelongsToStoreType(productType, storeType.id)
+      );
     });
 
-    if (storeTypeItems.length === 0) {
+    if (storeTypeRecords.length === 0) {
       return;
     }
 
     appendFullNeededStoreHeading(storeType.name);
 
-    const productTypesForStoreType = currentProductTypes
-      .filter((productType) => productTypeBelongsToStoreType(productType, storeType.id))
-      .sort(sortProductTypesForStoreType(storeType.id));
-
-    productTypesForStoreType.forEach((productType) => {
-      if (appendFullNeededProductGroup(productType, storeTypeItems)) {
-        renderedAny = true;
-      }
-    });
+    currentProductTypes
+      .filter((productType) =>
+        productTypeBelongsToStoreType(productType, storeType.id)
+      )
+      .sort(sortProductTypesForStoreType(storeType.id))
+      .forEach((productType) => {
+        if (
+          appendFullNeededProductGroup(
+            productType,
+            storeTypeRecords
+          )
+        ) {
+          renderedAny = true;
+        }
+      });
   });
 
-  const unassignedItems = neededItems
-    .filter((item) => {
-      const productType = productTypeForItem(item);
+  const unassignedRecords = neededRecords
+    .filter((record) => {
+      const productType = productTypeForItem(record.item);
 
-      return !productType || productTypeStoreTypeIds(productType).length === 0;
+      return (
+        !productType ||
+        productTypeStoreTypeIds(productType).length === 0
+      );
     })
-    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+    .sort(compareNeededRecords);
 
-  if (unassignedItems.length > 0) {
+  if (unassignedRecords.length > 0) {
     appendFullNeededStoreHeading("Store type not set");
-    unassignedItems.forEach(appendFullNeededItemRow);
+    unassignedRecords.forEach(appendFullNeededItemRow);
     renderedAny = true;
   }
 
   if (!renderedAny) {
-    fullNeededItems.innerHTML = "<p>No matching needed items.</p>";
+    fullNeededItems.innerHTML =
+      "<p>No matching needed items.</p>";
   }
 }
 
@@ -4382,7 +4562,9 @@ function renderGettingItems() {
 
   const selectedStore =
     selectedShoppingTarget.kind === "store"
-      ? currentStores.find((store) => store.id === selectedShoppingTarget.id)
+      ? currentStores.find(
+          (store) => store.id === selectedShoppingTarget.id
+        )
       : null;
 
   const selectedStoreTypeId =
@@ -4391,50 +4573,56 @@ function renderGettingItems() {
       : selectedShoppingTarget.id;
 
   if (!selectedStoreTypeId) {
-    gettingItemsList.innerHTML = "<p>Choose where you are shopping.</p>";
+    gettingItemsList.innerHTML =
+      "<p>Choose where you are shopping.</p>";
     updateBottomContextAction();
     return;
   }
 
-  const matchingNeededItems = currentItems.filter((item) => {
-    const neededEntry = currentNeededEntries.get(item.id);
-
-    if (!neededEntry) {
+  const matchingRecords = currentNeededRecords().filter((record) => {
+    if (!itemBelongsToStoreType(record.item, selectedStoreTypeId)) {
       return false;
     }
 
-    return itemBelongsToStoreType(item, selectedStoreTypeId);
+    if (
+      selectedStore &&
+      !specificProductIsAvailableAtStore(
+        record.specificProduct,
+        selectedStore.id
+      )
+    ) {
+      return false;
+    }
+
+    return true;
   });
 
-  if (matchingNeededItems.length === 0) {
-    gettingItemsList.innerHTML = "<p>No needed items for this shop.</p>";
+  if (matchingRecords.length === 0) {
+    gettingItemsList.innerHTML =
+      "<p>No needed items for this shop.</p>";
     updateBottomContextAction();
     return;
   }
 
-  const collectedItems = matchingNeededItems.filter((item) => {
-    const neededEntry = currentNeededEntries.get(item.id);
-    return neededEntry?.status === "collected";
-  });
+  const collectedRecords = matchingRecords.filter(
+    (record) => record.entry.status === "collected"
+  );
 
-  finishShopButton.hidden = collectedItems.length === 0;
+  finishShopButton.hidden = collectedRecords.length === 0;
   updateBottomContextAction();
 
-  const renderedItemIds = new Set();
+  const renderedEntryIds = new Set();
 
-  function appendGettingProductHeading(label) {
-    const heading = document.createElement("div");
-    heading.className = "getting-product-heading";
-    heading.textContent = label;
-    gettingItemsList.append(heading);
-  }
-
-  function appendGettingItemRow(item) {
-    const neededEntry = currentNeededEntries.get(item.id);
-    const isCollected = neededEntry.status === "collected";
+  function appendGettingRecord(record) {
+    const { item, entry, specificProduct } = record;
+    const isCollected = entry.status === "collected";
 
     const row = document.createElement("div");
     row.className = "item-row getting-item-row";
+
+    if (specificProduct) {
+      row.classList.add("specific-product-needed-row");
+    }
 
     if (isCollected) {
       row.classList.add("is-collected");
@@ -4442,17 +4630,14 @@ function renderGettingItems() {
 
     const details = document.createElement("div");
     details.className = "item-row-details";
-
-    const specificProduct = specificProductForNeededEntry(neededEntry);
     details.append(createItemNameDisplay(item, specificProduct));
 
     const amount = document.createElement("span");
     amount.className = "item-amount";
     amount.textContent = formatAmount(
-      neededEntry.amount,
-      neededEntry.unitId
+      entry.amount,
+      entry.unitId
     );
-
     details.append(amount);
 
     const collectButton = document.createElement("button");
@@ -4473,12 +4658,16 @@ function renderGettingItems() {
 
     addLongPressHandler(collectButton, async () => {
       collectButton.disabled = true;
-      await setNeededItemCollected(item, !isCollected);
+      await setNeededItemCollected(
+        item,
+        entry,
+        !isCollected
+      );
     });
 
     row.append(details, collectButton);
     gettingItemsList.append(row);
-    renderedItemIds.add(item.id);
+    renderedEntryIds.add(entry.id);
   }
 
   const orderedProductTypes = getOrderedProductTypesForShoppingTarget(
@@ -4487,24 +4676,19 @@ function renderGettingItems() {
   );
 
   orderedProductTypes.forEach((productType) => {
-    const productTypeItems = matchingNeededItems
-      .filter((item) => String(item.productTypeId) === String(productType.id))
-      .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
-
-    if (productTypeItems.length === 0) {
-      return;
-    }
-
-    productTypeItems.forEach(appendGettingItemRow);
+    matchingRecords
+      .filter(
+        (record) =>
+          String(record.item.productTypeId) === String(productType.id)
+      )
+      .sort(compareNeededRecords)
+      .forEach(appendGettingRecord);
   });
 
-  const remainingItems = matchingNeededItems
-    .filter((item) => !renderedItemIds.has(item.id))
-    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
-
-  if (remainingItems.length > 0) {
-    remainingItems.forEach(appendGettingItemRow);
-  }
+  matchingRecords
+    .filter((record) => !renderedEntryIds.has(record.entry.id))
+    .sort(compareNeededRecords)
+    .forEach(appendGettingRecord);
 }
 
 function startItemsListener() {
@@ -4832,49 +5016,34 @@ function openSpecificProductChoicePanel(item) {
 }
 
 function addItemToNeededListWithProductChoice(item) {
-  const products = specificProductsForItem(item.id);
-
-  if (products.length === 0) {
-    addItemToNeededList(item);
-    return;
-  }
-
-  openSpecificProductChoicePanel(item);
+  addItemToNeededList(item);
 }
 
 async function addOrSelectSpecificProduct(item, specificProduct) {
-  if (!currentNeededEntries.has(item.id)) {
-    await addItemToNeededList(item, specificProduct);
-    return;
-  }
-
-  try {
-    await updateDoc(householdDocument("neededEntries", item.id), {
-      specificProductId: specificProduct?.id ?? null,
-      adjustedAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error("Could not update selected product:", error);
-    alert("The selected product could not be updated.");
-  }
+  await addSpecificProductToNeededList(item, specificProduct);
 }
 
-async function addItemToNeededList(item, specificProduct = null) {
-  if (currentNeededEntries.has(item.id)) {
+async function addItemToNeededList(item) {
+  if (genericNeededEntryForItem(item.id)) {
     alert(`${item.name} is already on the needed list.`);
     return;
   }
 
   try {
-    const neededEntryRef = householdDocument("neededEntries", item.id);
+    await migrateLegacySpecificEntryBeforeGenericAdd(item);
+
+    const neededEntryRef = householdDocument(
+      "neededEntries",
+      item.id
+    );
+
     const itemRef = householdDocument("items", item.id);
 
     await setDoc(neededEntryRef, {
       itemId: item.id,
       amount: item.defaultAmount,
       unitId: item.unitId,
-      specificProductId: specificProduct?.id ?? null,
+      specificProductId: null,
       status: "needed",
       addedAt: serverTimestamp(),
       adjustedAt: serverTimestamp(),
@@ -4897,8 +5066,60 @@ async function addItemToNeededList(item, specificProduct = null) {
   }
 }
 
-async function changeNeededAmount(item, change) {
-  const neededEntryRef = householdDocument("neededEntries", item.id);
+
+
+async function addSpecificProductToNeededList(item, specificProduct) {
+  if (specificNeededEntryForProduct(specificProduct.id)) {
+    alert(
+      `${item.name} ${specificProduct.name} is already on the needed list.`
+    );
+    return;
+  }
+
+  try {
+    const neededEntryRef = householdDocument(
+      "neededEntries",
+      specificNeededEntryDocumentId(specificProduct.id)
+    );
+
+    const itemRef = householdDocument("items", item.id);
+
+    await setDoc(neededEntryRef, {
+      itemId: item.id,
+      amount: item.defaultAmount,
+      unitId: item.unitId,
+      specificProductId: specificProduct.id,
+      status: "needed",
+      addedAt: serverTimestamp(),
+      adjustedAt: serverTimestamp(),
+      statusChangedAt: serverTimestamp(),
+      collectedAt: null
+    });
+
+    await setDoc(
+      itemRef,
+      {
+        addCount: increment(1),
+        lastAddedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error(
+      "Could not add specific product to needed list:",
+      error
+    );
+    alert("The specific product could not be added to the needed list.");
+  }
+}
+
+async function changeNeededAmount(item, neededEntry, change) {
+  const neededEntryRef = householdDocument(
+    "neededEntries",
+    neededEntry.id
+  );
+
   const itemRef = householdDocument("items", item.id);
 
   try {
@@ -4909,7 +5130,10 @@ async function changeNeededAmount(item, change) {
         return;
       }
 
-      const currentAmount = Number(neededSnapshot.data().amount);
+      const currentAmount = Number(
+        neededSnapshot.data().amount
+      );
+
       const nextAmount = currentAmount + change;
 
       if (nextAmount <= 0) {
@@ -4936,8 +5160,11 @@ async function changeNeededAmount(item, change) {
   }
 }
 
-async function removeNeededItem(item) {
-  const neededEntryRef = householdDocument("neededEntries", item.id);
+async function removeNeededItem(neededEntry) {
+  const neededEntryRef = householdDocument(
+    "neededEntries",
+    neededEntry.id
+  );
 
   try {
     await deleteDoc(neededEntryRef);
@@ -4947,13 +5174,22 @@ async function removeNeededItem(item) {
   }
 }
 
-async function setNeededItemCollected(item, isCollected) {
-  const neededEntryRef = householdDocument("neededEntries", item.id);
+async function setNeededItemCollected(
+  item,
+  neededEntry,
+  isCollected
+) {
+  const neededEntryRef = householdDocument(
+    "neededEntries",
+    neededEntry.id
+  );
 
   try {
     await updateDoc(neededEntryRef, {
       status: isCollected ? "collected" : "needed",
-      collectedAt: isCollected ? serverTimestamp() : null,
+      collectedAt: isCollected
+        ? serverTimestamp()
+        : null,
       statusChangedAt: serverTimestamp()
     });
   } catch (error) {
@@ -4968,22 +5204,34 @@ async function finishCurrentShop() {
     return;
   }
 
+  const selectedStore =
+    selectedShoppingTarget.kind === "store"
+      ? currentStores.find(
+          (store) => store.id === selectedShoppingTarget.id
+        )
+      : null;
+
   const selectedStoreTypeId =
     selectedShoppingTarget.kind === "store"
       ? selectedShoppingTarget.storeTypeId
       : selectedShoppingTarget.id;
 
-  const collectedItems = currentItems.filter((item) => {
-    const neededEntry = currentNeededEntries.get(item.id);
-
-    if (neededEntry?.status !== "collected") {
+  const collectedRecords = currentNeededRecords().filter((record) => {
+    if (record.entry.status !== "collected") {
       return false;
     }
 
-    return itemBelongsToStoreType(item, selectedStoreTypeId);
+    if (!itemBelongsToStoreType(record.item, selectedStoreTypeId)) {
+      return false;
+    }
+
+    return specificProductIsAvailableAtStore(
+      record.specificProduct,
+      selectedStore?.id
+    );
   });
 
-  if (collectedItems.length === 0) {
+  if (collectedRecords.length === 0) {
     return;
   }
 
@@ -4992,8 +5240,13 @@ async function finishCurrentShop() {
   try {
     const batch = writeBatch(db);
 
-    collectedItems.forEach((item) => {
-      batch.delete(householdDocument("neededEntries", item.id));
+    collectedRecords.forEach((record) => {
+      batch.delete(
+        householdDocument(
+          "neededEntries",
+          record.entry.id
+        )
+      );
     });
 
     await batch.commit();

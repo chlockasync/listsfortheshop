@@ -1418,3 +1418,311 @@ button {
     min-height: calc(100dvh - 56px);
   }
 }
+
+/* ===== Mobile layout polish pass: 202607071500 ===== */
+:root {
+  --bottom-bar-height: 48px;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+body {
+  padding-bottom: var(--bottom-bar-height);
+}
+
+main {
+  padding-bottom: calc(1rem + var(--bottom-bar-height));
+}
+
+.main-tabs button {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+.main-tabs button[aria-pressed="true"] {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  background: white;
+}
+
+.bottom-action-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  width: min(430px, 100%);
+  min-height: var(--bottom-bar-height);
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  border-top: 1px solid #ccc;
+  background: white;
+}
+
+.bottom-bar-button,
+.bottom-bar-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: var(--bottom-bar-height);
+  margin: 0;
+  padding: 0 0.35rem;
+  border: 0;
+  border-right: 1px solid #ccc;
+  border-radius: 0;
+  background: white;
+  color: #222;
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.bottom-bar-button:last-child,
+.bottom-bar-status:last-child {
+  border-right: 0;
+}
+
+.bottom-bar-button:hover,
+.bottom-bar-button[aria-pressed="true"] {
+  background: #eeeeee;
+}
+
+.bottom-context-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.bottom-bar-status {
+  flex-direction: column;
+  gap: 0.08rem;
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+#app-build {
+  font-size: 0.62rem;
+  opacity: 0.55;
+}
+
+.utility-controls {
+  display: none !important;
+}
+
+#view-needed-list,
+#finish-shop-button {
+  display: none !important;
+}
+
+#needing-home,
+#room-view,
+#full-needed-view,
+#getting-view,
+#settings-view {
+  padding-bottom: calc(var(--bottom-bar-height) + 0.75rem);
+}
+
+#room-selector-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem;
+  text-align: left;
+}
+
+.room-selector-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-selector-exit {
+  flex: 0 0 auto;
+  opacity: 0.65;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.full-needed-header-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid #ccc;
+  background: white;
+}
+
+.full-needed-header-actions button {
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #ccc;
+  border-radius: 0;
+  background: white;
+  font-size: 0.98rem;
+  text-align: center;
+}
+
+.full-needed-header-actions button:last-child {
+  border-right: 0;
+}
+
+.full-needed-header-actions button:hover {
+  background: #eeeeee;
+}
+
+#full-needed-view h2 {
+  margin: 1rem 1rem 0.7rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.full-needed-product-heading,
+.getting-product-heading {
+  display: none !important;
+}
+
+/* Make operational rows feel like the room/shopping selector lists. */
+.shopping-location-option,
+.room-button,
+.item-row,
+.settings-list-item,
+.store-product-type-order-list > .settings-list-item,
+.settings-category-option {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.item-name,
+.settings-order-name,
+.store-product-type-order-row .settings-order-name,
+.room-item-row.is-needed .item-name,
+.room-item-row.is-available .item-name {
+  font-weight: 400 !important;
+}
+
+.settings-order-sublabel,
+.settings-item-sublabel,
+.item-amount {
+  font-weight: 400;
+  color: rgb(0 0 0 / 58%);
+}
+
+#room-items-list .item-row,
+#full-needed-items .item-row,
+#getting-items-list .item-row,
+.settings-orderable-list > .settings-list-item {
+  min-height: 50px;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+#getting-items-list .item-row {
+  min-height: 46px;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+
+.getting-item-row {
+  gap: 0.5rem;
+}
+
+.getting-item-row .item-row-details {
+  gap: 0.65rem;
+}
+
+.collect-checkbox-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 0.65rem;
+  background: #f7f7f7;
+  box-shadow: none;
+}
+
+.collect-checkbox-button:hover {
+  background: #eeeeee;
+}
+
+.collect-checkbox-button[aria-pressed="true"] {
+  background: #eeeeee;
+}
+
+.collect-checkbox-graphic {
+  width: 27px;
+  height: 27px;
+  border-radius: 0.45rem;
+  font-size: 1.2rem;
+}
+
+.room-icon-button,
+.settings-row-icon-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-color: rgb(0 0 0 / 12%);
+  font-family: Arial, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.room-icon-button.decrease-needed-button,
+.room-icon-button.increase-needed-button {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+
+.room-icon-button.room-add-button {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0 0.6rem;
+  font-size: 0.86rem;
+}
+
+.room-current-quantity {
+  min-width: 2.6rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.full-needed-store-heading {
+  padding: 0.6rem 1rem 0.45rem;
+  border-top: 8px solid #f4f4f4;
+  background: #f4f4f4;
+  color: rgb(0 0 0 / 62%);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --bottom-bar-height: 50px;
+  }
+}
+
+#new-item-button {
+  bottom: var(--bottom-bar-height) !important;
+}
+
+body:has(
+  #room-view:not([hidden])
+  #new-item-button:not([hidden])
+) .bottom-action-bar {
+  bottom: 0;
+}

@@ -1,3 +1,4 @@
+/* Style restore: preserves earlier manual nav/global button styling. */
 * {
   box-sizing: border-box;
 }
@@ -31,14 +32,15 @@ select {
 button {
   min-height: 44px;
   padding: 0.7rem 1rem;
-  border: 0;
-  border-radius: 0;
+  border: 0px solid #999;
+  border-radius: 0.0rem;
   background: white;
+  font: inherit;
   cursor: pointer;
 }
 
 button:hover {
-  background: #eeeeee;
+  background: #eee;
 }
 
 button:disabled {
@@ -91,14 +93,13 @@ section {
   margin: 0;
   padding: 0;
   border: 0;
-  border-bottom: 4px solid transparent;
   border-radius: 0;
   background: #eeeeee;
   font-size: 1.05rem;
 }
 
 .main-tabs button:first-child {
-  border-right: 1px solid #cccccc;
+  border-right: 1px solid #ccc;
 }
 
 .main-tabs button[aria-pressed="true"] {
@@ -379,7 +380,7 @@ section {
   margin: 0;
   padding: 0;
   border: 0;
-  border-bottom: 1px solid #cccccc;
+  border-bottom: 1px solid #ccc;
   border-radius: 0;
   background: white;
   font-size: 1.05rem;
@@ -642,7 +643,7 @@ body:has(
   margin: 0;
   padding: 0;
   border: 0;
-  border-bottom: 1px solid #cccccc;
+  border-bottom: 1px solid #ccc;
   border-radius: 0;
   background: white;
   font-size: 1.05rem;
@@ -832,7 +833,7 @@ body:has(
   margin: 0;
   padding: 0;
   border: 0;
-  border-bottom: 1px solid #cccccc;
+  border-bottom: 1px solid #ccc;
   border-radius: 0;
   background: white;
   font-size: 1.05rem;

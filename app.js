@@ -2873,6 +2873,216 @@ function appendSettingsItemEditPanel(item, listElement) {
   });
 }
 
+function recordedStoreNames(storeIds = []) {
+  if (!Array.isArray(storeIds) || storeIds.length === 0) {
+    return "";
+  }
+
+  return storeIds
+    .map((storeId) =>
+      currentStores.find(
+        (store) => String(store.id) === String(storeId)
+      )?.name ?? ""
+    )
+    .map((name) => String(name).trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function specificProductSublabel(product, { includeItem = true } = {}) {
+  const parts = [
+    includeItem ? getItemName(product.itemId) : "",
+    product.size,
+    product.colour,
+    recordedStoreNames(product.storeIds)
+  ]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean);
+
+  return parts.join(" · ");
+}
+
+function specificProductMatchesSearch(product, searchText) {
+  if (!searchText) {
+    return true;
+  }
+
+  return [
+    product.name,
+    getItemName(product.itemId),
+    product.size,
+    product.colour,
+    recordedStoreNames(product.storeIds)
+  ]
+    .map((value) => String(value ?? "").toLowerCase())
+    .some((value) => value.includes(searchText));
+}
+
+function createSettingsSpecificProductRow(
+  product,
+  { nested = false } = {}
+) {
+  const row = document.createElement("div");
+  row.className =
+    "settings-list-item settings-specific-product-row";
+
+  if (nested) {
+    row.classList.add("settings-item-specific-product-row");
+  }
+
+  const text = document.createElement("span");
+  text.className = "settings-order-text";
+
+  const name = document.createElement("span");
+  name.className = "settings-order-name";
+  name.textContent = product.name;
+  text.append(name);
+
+  const sublabel = specificProductSublabel(product, {
+    includeItem: !nested
+  });
+
+  if (sublabel) {
+    const detail = document.createElement("span");
+    detail.className = "settings-order-sublabel";
+    detail.textContent = sublabel;
+    text.append(detail);
+  }
+
+  const actions = document.createElement("span");
+  actions.className = "settings-row-actions";
+
+  const editButton = createIconButton({
+    className:
+      "settings-row-icon-button settings-row-edit-button",
+    icon: "✏️",
+    label: `Edit ${product.name}`,
+    onClick: () => {
+      setEditingSettings("specific-products", product.id);
+    }
+  });
+
+  const deleteButton = createIconButton({
+    className:
+      "settings-row-icon-button settings-row-delete-button",
+    icon: "🗑️",
+    label: `Delete ${product.name}`,
+    onClick: async () => {
+      if (specificNeededEntryForProduct(product.id)) {
+        alert(
+          `${product.name} is currently on the needed list. Remove it from the needed list before deleting it.`
+        );
+        return;
+      }
+
+      if (!confirmSettingsDelete(product.name)) {
+        return;
+      }
+
+      await deleteSettingsDocument(
+        "specificProducts",
+        product.id
+      );
+    }
+  });
+
+  actions.append(editButton, deleteButton);
+  row.append(text, actions);
+
+  return row;
+}
+
+function specificProductEditFields(products) {
+  return [
+    {
+      key: "itemId",
+      label: "Item",
+      type: "select",
+      emptyText: "Choose an item",
+      options: itemOptions,
+      value: () =>
+        products.find(
+          (product) => product.id === editingSettingsId
+        )?.itemId ?? ""
+    },
+    {
+      key: "name",
+      label: "Product name",
+      maxLength: 100,
+      value: () =>
+        products.find(
+          (product) => product.id === editingSettingsId
+        )?.name ?? ""
+    },
+    {
+      key: "size",
+      label: "Size",
+      required: false,
+      maxLength: 40,
+      value: () =>
+        products.find(
+          (product) => product.id === editingSettingsId
+        )?.size ?? ""
+    },
+    {
+      key: "colour",
+      label: "Colour",
+      required: false,
+      maxLength: 40,
+      value: () =>
+        products.find(
+          (product) => product.id === editingSettingsId
+        )?.colour ?? ""
+    },
+    {
+      key: "storeIds",
+      label: "Stores",
+      type: "checkboxes",
+      options: storeOptions,
+      required: false,
+      value: () =>
+        products.find(
+          (product) => product.id === editingSettingsId
+        )?.storeIds ?? []
+    }
+  ];
+}
+
+async function saveSettingsSpecificProduct(values, product) {
+  if (!values.itemId || !values.name) {
+    throw new Error(
+      "Please choose an item and enter a product name."
+    );
+  }
+
+  await updateDoc(
+    householdDocument("specificProducts", product.id),
+    {
+      itemId: values.itemId,
+      name: values.name,
+      size: values.size ?? "",
+      colour: values.colour ?? "",
+      storeIds: values.storeIds ?? [],
+      updatedAt: serverTimestamp()
+    }
+  );
+}
+
+function appendSettingsSpecificProductEditPanel(
+  product,
+  listElement
+) {
+  appendSettingsEditPanel({
+    listElement,
+    settingsKey: "specific-products",
+    item: product,
+    fields: specificProductEditFields(
+      currentSpecificProducts
+    ),
+    onSave: saveSettingsSpecificProduct
+  });
+}
+
 function activeSpecificProductsForSettingsItem(itemId) {
   return currentSpecificProducts
     .filter(
@@ -3445,7 +3655,7 @@ function specificProductDetailText(product) {
   return [
     product.size,
     product.colour,
-    getStoreNames(product.storeIds ?? [])
+    recordedStoreNames(product.storeIds)
   ]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)

@@ -3310,7 +3310,14 @@ function resetSettingsItemAddForm() {
   populateSettingsItemUnitSelect();
 }
 
-function createStoreCheckboxList(container, selectedStoreIds = []) {
+function createStoreCheckboxList(
+  container,
+  selectedStoreIds = [],
+  {
+    allowedStoreTypeIds = null,
+    emptyMessage = "No stores are available."
+  } = {}
+) {
   if (!container) {
     return;
   }
@@ -3322,12 +3329,28 @@ function createStoreCheckboxList(container, selectedStoreIds = []) {
     selectedStoreIds.map((id) => String(id))
   );
 
-  if (currentStores.length === 0) {
-    container.innerHTML = "<p>No stores are available.</p>";
+  const allowedStoreTypeIdSet = Array.isArray(
+    allowedStoreTypeIds
+  )
+    ? new Set(
+        allowedStoreTypeIds.map((id) => String(id))
+      )
+    : null;
+
+  const availableStores = currentStores.filter(
+    (store) =>
+      !allowedStoreTypeIdSet ||
+      allowedStoreTypeIdSet.has(
+        String(store.storeTypeId)
+      )
+  );
+
+  if (availableStores.length === 0) {
+    container.innerHTML = `<p>${emptyMessage}</p>`;
     return;
   }
 
-  currentStores.forEach((store) => {
+  availableStores.forEach((store) => {
     const { optionLabel } = createSettingsCheckboxOption({
       value: store.id,
       text: store.name,
@@ -3418,7 +3441,24 @@ function prepareQuickSpecificProductForm(item) {
   specificProductPanelTitle.textContent =
     `Add specific product to ${item.name}`;
   addSpecificProductForm.reset();
-  createStoreCheckboxList(specificProductStoresContainer);
+
+  const productType = currentProductTypes.find(
+    (candidate) => candidate.id === item.productTypeId
+  );
+
+  const allowedStoreTypeIds = productType
+    ? productTypeStoreTypeIds(productType)
+    : [];
+
+  createStoreCheckboxList(
+    specificProductStoresContainer,
+    [],
+    {
+      allowedStoreTypeIds,
+      emptyMessage:
+        "No stores are available for this item's product type."
+    }
+  );
 }
 
 function openSpecificProductQuickAdd(item) {

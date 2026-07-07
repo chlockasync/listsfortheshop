@@ -2284,3 +2284,64 @@ main,
 .settings-specific-products-list {
   background: var(--space-tint) !important;
 }
+
+/* ===== Room product-offer and nav colour polish: 202607071710 ===== */
+.main-tabs button[data-view="needing"],
+.main-tabs button[data-view="needing"]:hover,
+.main-tabs button[data-view="needing"]:active,
+.main-tabs button[data-view="needing"][aria-pressed="true"] {
+  background: #f3f9f1 !important;
+}
+
+.main-tabs button[data-view="getting"],
+.main-tabs button[data-view="getting"]:hover,
+.main-tabs button[data-view="getting"]:active,
+.main-tabs button[data-view="getting"][aria-pressed="true"] {
+  background: #f1f6fb !important;
+}
+
+#room-items-list .room-item-row.is-available {
+  background: var(--space-tint) !important;
+}
+
+#room-items-list .room-item-row.is-needed {
+  background: #ffffff !important;
+}
+
+.room-item-row.is-needed .item-name,
+.full-needed-item-row.is-needed .item-name,
+.room-item-row.is-available .item-name {
+  font-weight: 500 !important;
+}
+
+.item-name-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.item-specific-product-detail {
+  display: block;
+  overflow: hidden;
+  color: rgb(0 0 0 / 58%);
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specific-product-offer-row {
+  min-height: 42px !important;
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+}
+
+.specific-product-offer-row .item-row-details {
+  padding-left: 1.15rem;
+}
+
+.specific-product-offer-name {
+  font-size: 0.94rem;
+}

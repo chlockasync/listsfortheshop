@@ -3306,6 +3306,61 @@ function orderedProductTypesForDefaultRoomView() {
   return orderedProductTypes;
 }
 
+
+function specificProductsForItem(itemId) {
+  return currentSpecificProducts
+    .filter((product) =>
+      product.active !== false &&
+      String(product.itemId) === String(itemId)
+    )
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+}
+
+function specificProductDetailText(product) {
+  return [
+    product.size,
+    product.colour,
+    getStoreNames(product.storeIds ?? [])
+  ]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function specificProductForNeededEntry(neededEntry) {
+  if (!neededEntry?.specificProductId) {
+    return null;
+  }
+
+  return currentSpecificProducts.find(
+    (product) => String(product.id) === String(neededEntry.specificProductId)
+  ) ?? null;
+}
+
+function createItemNameDisplay(item, specificProduct = null) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "item-name-display";
+
+  const name = document.createElement("span");
+  name.className = "item-name";
+  name.textContent = item.name;
+  wrapper.append(name);
+
+  if (specificProduct) {
+    const detail = document.createElement("span");
+    detail.className = "item-specific-product-detail";
+
+    const extra = specificProductDetailText(specificProduct);
+    detail.textContent = extra
+      ? `${specificProduct.name} · ${extra}`
+      : specificProduct.name;
+
+    wrapper.append(detail);
+  }
+
+  return wrapper;
+}
+
 function renderRoomItems() {
   roomItemsList.innerHTML = "";
 
@@ -3341,6 +3396,53 @@ function renderRoomItems() {
     return String(a.name ?? "").localeCompare(String(b.name ?? ""));
   }
 
+  function appendSpecificProductOfferRows(item) {
+    const products = specificProductsForItem(item.id);
+
+    products.forEach((product) => {
+      const row = document.createElement("div");
+      row.className = "item-row room-item-row specific-product-offer-row is-available";
+
+      const details = document.createElement("div");
+      details.className = "item-row-details";
+
+      const text = document.createElement("span");
+      text.className = "item-name-display specific-product-offer-text";
+
+      const name = document.createElement("span");
+      name.className = "item-name specific-product-offer-name";
+      name.textContent = product.name;
+      text.append(name);
+
+      const extra = specificProductDetailText(product);
+
+      if (extra) {
+        const detail = document.createElement("span");
+        detail.className = "item-specific-product-detail";
+        detail.textContent = extra;
+        text.append(detail);
+      }
+
+      details.append(text);
+
+      const controls = document.createElement("div");
+      controls.className = "room-item-controls";
+
+      const addButton = createIconButton({
+        className: "room-icon-button room-add-button add-needed-button",
+        icon: "Add",
+        label: `Add ${product.name} to needed list`,
+        onClick: () => {
+          addItemToNeededList(item, product);
+        }
+      });
+
+      controls.append(addButton);
+      row.append(details, controls);
+      roomItemsList.append(row);
+    });
+  }
+
   function appendRoomItemRow(item) {
     const neededEntry = currentNeededEntries.get(item.id);
     const isNeeded = Boolean(neededEntry);
@@ -3368,10 +3470,8 @@ function renderRoomItems() {
     const details = document.createElement("div");
     details.className = "item-row-details";
 
-    const name = document.createElement("span");
-    name.className = "item-name";
-    name.textContent = item.name;
-    details.append(name);
+    const specificProduct = specificProductForNeededEntry(neededEntry);
+    details.append(createItemNameDisplay(item, specificProduct));
 
     const controls = document.createElement("div");
     controls.className = "room-item-controls";
@@ -3389,6 +3489,7 @@ function renderRoomItems() {
       controls.append(addButton);
       row.append(details, controls);
       roomItemsList.append(row);
+      appendSpecificProductOfferRows(item);
       renderedItemIds.add(item.id);
       return;
     }
@@ -3688,10 +3789,8 @@ function appendFullNeededItemRow(item) {
   const details = document.createElement("div");
   details.className = "item-row-details";
 
-  const name = document.createElement("span");
-  name.className = "item-name";
-  name.textContent = item.name;
-  details.append(name);
+  const specificProduct = specificProductForNeededEntry(neededEntry);
+  details.append(createItemNameDisplay(item, specificProduct));
 
   const controls = document.createElement("div");
   controls.className = "room-item-controls full-needed-controls";
@@ -3963,9 +4062,8 @@ function renderGettingItems() {
     const details = document.createElement("div");
     details.className = "item-row-details";
 
-    const name = document.createElement("span");
-    name.className = "item-name";
-    name.textContent = item.name;
+    const specificProduct = specificProductForNeededEntry(neededEntry);
+    details.append(createItemNameDisplay(item, specificProduct));
 
     const amount = document.createElement("span");
     amount.className = "item-amount";
@@ -3974,7 +4072,7 @@ function renderGettingItems() {
       neededEntry.unitId
     );
 
-    details.append(name, amount);
+    details.append(amount);
 
     const collectButton = document.createElement("button");
     collectButton.type = "button";
@@ -4272,7 +4370,7 @@ function formatAmount(amount, unitId) {
   return `${amount} ${unit.symbol}`;
 }
 
-async function addItemToNeededList(item) {
+async function addItemToNeededList(item, specificProduct = null) {
   if (currentNeededEntries.has(item.id)) {
     alert(`${item.name} is already on the needed list.`);
     return;
@@ -4286,6 +4384,7 @@ async function addItemToNeededList(item) {
       itemId: item.id,
       amount: item.defaultAmount,
       unitId: item.unitId,
+      specificProductId: specificProduct?.id ?? null,
       status: "needed",
       addedAt: serverTimestamp(),
       adjustedAt: serverTimestamp(),

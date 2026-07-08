@@ -5221,7 +5221,6 @@ function startItemsListener() {
       renderRoomItems();
       renderFullNeededList();
       renderSettingsItems();
-      renderSettingsSpecificProducts();
       renderGettingItems();
     },
     (error) => {
@@ -5248,7 +5247,10 @@ function startSpecificProductsListener() {
         .filter((product) => product.active !== false)
         .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
 
-      renderSettingsSpecificProducts();
+      renderRoomItems();
+      renderFullNeededList();
+      renderSettingsItems();
+      renderGettingItems();
     },
     (error) => {
       console.error("Could not load specific products:", error);
@@ -5275,7 +5277,7 @@ function startStoresListener() {
         .sort(sortBySavedOrderThenName);
 
       renderStores(currentStores);
-      renderSettingsSpecificProducts();
+      renderSettingsItems();
     },
     (error) => {
       console.error("Could not load stores:", error);
@@ -5328,7 +5330,6 @@ function startProductTypesListener() {
         .sort(sortBySavedOrderThenName);
 
       renderProductTypes(currentProductTypes);
-      renderSettingsSpecificProducts();
     },
     (error) => {
       console.error("Could not load product types:", error);
@@ -5359,7 +5360,6 @@ function startRoomsListener() {
         .sort(sortBySavedOrderThenName);
 
       renderRooms(currentRooms);
-      renderSettingsSpecificProducts();
     },
     (error) => {
       console.error("Could not load rooms:", error);

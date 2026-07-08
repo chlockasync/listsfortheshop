@@ -252,6 +252,7 @@ let editingItemId = null;
 let editingSettingsKey = null;
 let editingSettingsId = null;
 let editingSettingsContextId = null;
+let pendingEditFormScroll = false;
 
 let roomsListenerStarted = false;
 let unitsListenerStarted = false;
@@ -1375,9 +1376,35 @@ function appendSettingsEditPanel({
   form.append(fieldContainer, actions);
   panel.append(form);
   listElement.append(panel);
+
+  if (pendingEditFormScroll) {
+    pendingEditFormScroll = false;
+    scrollEditFormToTop(panel);
+  }
+
   return panel;
 }
 
+function scrollEditFormToTop(panel) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const headerHeight =
+        document.querySelector(".app-header")
+          ?.getBoundingClientRect().height ?? 0;
+
+      const panelTop =
+        window.scrollY +
+        panel.getBoundingClientRect().top -
+        headerHeight;
+
+      window.scrollTo({
+        top: Math.max(0, panelTop),
+        left: 0,
+        behavior: "smooth"
+      });
+    });
+  });
+}
 
 function setEditingSettings(settingsKey, id) {
   if (
@@ -1388,10 +1415,12 @@ function setEditingSettings(settingsKey, id) {
     editingSettingsKey = null;
     editingSettingsId = null;
     editingSettingsContextId = null;
+    pendingEditFormScroll = false;
   } else {
     editingSettingsKey = settingsKey;
     editingSettingsId = id;
     editingSettingsContextId = null;
+    pendingEditFormScroll = true;
   }
 
   renderSettingsLists();
@@ -1406,10 +1435,12 @@ function setEditingProductType(id, storeTypeId) {
     editingSettingsKey = null;
     editingSettingsId = null;
     editingSettingsContextId = null;
+    pendingEditFormScroll = false;
   } else {
     editingSettingsKey = "product-types";
     editingSettingsId = id;
     editingSettingsContextId = storeTypeId;
+    pendingEditFormScroll = true;
   }
 
   renderSettingsLists();
@@ -4609,6 +4640,7 @@ function appendRoomItemEditPanel(item) {
   form.append(fields, actions);
   panel.append(form);
   roomItemsList.append(panel);
+  scrollEditFormToTop(panel);
   nameInput.focus();
 }
 

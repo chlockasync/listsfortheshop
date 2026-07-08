@@ -155,6 +155,7 @@ const settingsItemNameInput = document.querySelector("#settings-item-name");
 const settingsItemRoomSelect = document.querySelector("#settings-item-room");
 const settingsItemProductTypeSelect = document.querySelector("#settings-item-product-type");
 const settingsItemStoreSelect = document.querySelector("#settings-item-store");
+const settingsItemSpecificAttributesInput = document.querySelector("#settings-item-specific-attributes");
 const settingsItemDefaultAmountInput = document.querySelector("#settings-item-default-amount");
 const settingsItemUnitSelect = document.querySelector("#settings-item-unit");
 const settingsItemIncrementInput = document.querySelector("#settings-item-increment");
@@ -170,6 +171,7 @@ const newItemPanel = document.querySelector("#new-item-panel");
 const cancelNewItemButton = document.querySelector("#cancel-new-item");
 const itemProductTypeSelect = document.querySelector("#item-product-type");
 const itemStoreSelect = document.querySelector("#item-store");
+const itemSpecificAttributesInput = document.querySelector("#item-specific-attributes");
 const itemUnitSelect = document.querySelector("#item-unit");
 const itemIncrementInput = document.querySelector("#item-increment");
 const addItemForm = document.querySelector("#add-item-form");
@@ -181,8 +183,7 @@ const specificProductPanel = document.querySelector("#specific-product-panel");
 const specificProductPanelTitle = document.querySelector("#specific-product-panel-title");
 const addSpecificProductForm = document.querySelector("#add-specific-product-form");
 const specificProductNameInput = document.querySelector("#specific-product-name");
-const specificProductSizeInput = document.querySelector("#specific-product-size");
-const specificProductColourInput = document.querySelector("#specific-product-colour");
+const specificProductAttributesInput = document.querySelector("#specific-product-attributes");
 const specificProductStoresContainer = document.querySelector("#specific-product-stores");
 const cancelSpecificProductButton = document.querySelector("#cancel-specific-product");
 const viewNeededListButton = document.querySelector("#view-needed-list");
@@ -2792,6 +2793,7 @@ function itemSettingsSublabel(item) {
   const productType = productTypeForItem(item);
   const parts = [
     productType?.name ?? "Product type not set",
+    item.specificAttributes,
     getRoomName(item.locationId),
     getUnitDisplay(item.unitId),
     getItemStoreName(item)
@@ -2812,6 +2814,7 @@ function itemMatchesSettingsSearch(item, searchText) {
 
   return [
     item.name,
+    item.specificAttributes,
     productType?.name,
     roomName,
     unitName,
@@ -3029,6 +3032,16 @@ function itemEditFields(items) {
       value: () => items.find((item) => item.id === editingSettingsId)?.storeId ?? ""
     },
     {
+      key: "specificAttributes",
+      label: "Specific Attributes",
+      required: false,
+      maxLength: 100,
+      value: () =>
+        items.find(
+          (item) => item.id === editingSettingsId
+        )?.specificAttributes ?? ""
+    },
+    {
       key: "defaultAmount",
       label: "Amount",
       type: "number",
@@ -3092,6 +3105,7 @@ async function saveSettingsItem(values, item) {
     locationId: values.locationId,
     productTypeId: values.productTypeId,
     storeId: values.storeId || null,
+    specificAttributes: values.specificAttributes ?? "",
     defaultAmount: values.defaultAmount,
     unitId: values.unitId,
     increment: values.increment,
@@ -3148,8 +3162,7 @@ function recordedStoreNames(storeIds = []) {
 function specificProductSublabel(product, { includeItem = true } = {}) {
   const parts = [
     includeItem ? getItemName(product.itemId) : "",
-    product.size,
-    product.colour,
+    product.specificAttributes ?? product.size,
     recordedStoreNames(product.storeIds)
   ]
     .map((part) => String(part ?? "").trim())
@@ -3166,8 +3179,7 @@ function specificProductMatchesSearch(product, searchText) {
   return [
     product.name,
     getItemName(product.itemId),
-    product.size,
-    product.colour,
+    product.specificAttributes ?? product.size,
     recordedStoreNames(product.storeIds)
   ]
     .map((value) => String(value ?? "").toLowerCase())
@@ -3271,24 +3283,17 @@ function specificProductEditFields(products) {
         )?.name ?? ""
     },
     {
-      key: "size",
-      label: "Size",
+      key: "specificAttributes",
+      label: "Specific Attributes",
       required: false,
-      maxLength: 40,
-      value: () =>
-        products.find(
-          (product) => product.id === editingSettingsId
-        )?.size ?? ""
-    },
-    {
-      key: "colour",
-      label: "Colour",
-      required: false,
-      maxLength: 40,
-      value: () =>
-        products.find(
-          (product) => product.id === editingSettingsId
-        )?.colour ?? ""
+      maxLength: 100,
+      value: () => {
+        const product = products.find(
+          (candidate) => candidate.id === editingSettingsId
+        );
+
+        return product?.specificAttributes ?? product?.size ?? "";
+      }
     },
     {
       key: "storeIds",
@@ -3316,8 +3321,7 @@ async function saveSettingsSpecificProduct(values, product) {
     {
       itemId: values.itemId,
       name: values.name,
-      size: values.size ?? "",
-      colour: values.colour ?? "",
+      specificAttributes: values.specificAttributes ?? "",
       storeIds: values.storeIds ?? [],
       updatedAt: serverTimestamp()
     }
@@ -3927,8 +3931,7 @@ function specificProductsForItem(itemId) {
 
 function specificProductDetailText(product) {
   return [
-    product.size,
-    product.colour,
+    product.specificAttributes ?? product.size,
     recordedStoreNames(product.storeIds)
   ]
     .map((part) => String(part ?? "").trim())
@@ -4019,6 +4022,7 @@ function neededRecordMatchesSearch(record, searchText) {
 
   return [
     record.item.name,
+    record.item.specificAttributes,
     productType?.name,
     record.specificProduct?.name,
     specificProductDetailText(record.specificProduct ?? {})
@@ -4132,15 +4136,15 @@ function createItemNameDisplay(
     : item.name;
   wrapper.append(name);
 
-  if (specificProduct) {
-    const extra = specificProductDetailText(specificProduct);
+  const extra = specificProduct
+    ? specificProductDetailText(specificProduct)
+    : String(item.specificAttributes ?? "").trim();
 
-    if (extra) {
-      const detail = document.createElement("span");
-      detail.className = "item-specific-product-detail";
-      detail.textContent = extra;
-      wrapper.append(detail);
-    }
+  if (extra) {
+    const detail = document.createElement("span");
+    detail.className = "item-specific-product-detail";
+    detail.textContent = extra;
+    wrapper.append(detail);
   }
 
   return wrapper;
@@ -4184,7 +4188,7 @@ function renderRoomItems() {
       ])
       .join(" ");
 
-    return `${item.name} ${productType?.name ?? ""} ${specificProductText}`
+    return `${item.name} ${item.specificAttributes ?? ""} ${productType?.name ?? ""} ${specificProductText}`
       .toLowerCase()
       .includes(roomSearchText);
   });
@@ -5925,6 +5929,7 @@ function wireForms() {
       const locationId = settingsItemRoomSelect.value;
       const productTypeId = settingsItemProductTypeSelect.value;
       const storeId = settingsItemStoreSelect?.value ?? "";
+      const specificAttributes = settingsItemSpecificAttributesInput?.value.trim() ?? "";
       const unitId = settingsItemUnitSelect.value;
       const defaultAmount = Number(settingsItemDefaultAmountInput.value);
       const increment = Number(settingsItemIncrementInput.value);
@@ -5969,6 +5974,7 @@ function wireForms() {
           locationId,
           productTypeId,
           storeId: storeId || null,
+          specificAttributes,
           defaultAmount,
           unitId,
           increment,
@@ -5996,8 +6002,7 @@ function wireForms() {
       event.preventDefault();
 
       const productName = specificProductNameInput.value.trim();
-      const size = specificProductSizeInput.value.trim();
-      const colour = specificProductColourInput.value.trim();
+      const specificAttributes = specificProductAttributesInput.value.trim();
       const storeIds = getCheckedValues(specificProductStoresContainer);
 
       if (!quickSpecificProductItemId || !productName) {
@@ -6012,8 +6017,7 @@ function wireForms() {
         await addDoc(householdCollection("specificProducts"), {
           itemId: quickSpecificProductItemId,
           name: productName,
-          size,
-          colour,
+          specificAttributes,
           storeIds,
           active: true,
           createdAt: serverTimestamp(),
@@ -6036,6 +6040,7 @@ function wireForms() {
     const itemName = itemNameInput.value.trim();
     const productTypeId = itemProductTypeSelect.value;
     const storeId = itemStoreSelect?.value ?? "";
+    const specificAttributes = itemSpecificAttributesInput?.value.trim() ?? "";
     const unitId = itemUnitSelect.value;
     const defaultAmount = Number(itemDefaultAmountInput.value);
     const increment = Number(itemIncrementInput.value);
@@ -6080,6 +6085,7 @@ function wireForms() {
         locationId: selectedRoomId,
         productTypeId,
         storeId: storeId || null,
+        specificAttributes,
         defaultAmount,
         unitId,
         increment,

@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1627">
-  <script type="module" src="app.js?v=1627"></script>
+  <link rel="stylesheet" href="styles.css?v=1715">
+  <script type="module" src="app.js?v=1715"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -143,6 +143,17 @@
                 </option>
               </select>
 
+              <label for="item-specific-attributes">
+                Specific Attributes (optional)
+              </label>
+
+              <input
+                type="text"
+                id="item-specific-attributes"
+                maxlength="100"
+                autocomplete="off"
+              >
+
               <div class="amount-unit-step-row">
                 <label for="item-default-amount">
                   Amount
@@ -216,25 +227,14 @@
                 autocomplete="off"
               >
 
-              <label for="specific-product-size">
-                Size
+              <label for="specific-product-attributes">
+                Specific Attributes
               </label>
 
               <input
                 type="text"
-                id="specific-product-size"
-                maxlength="40"
-                autocomplete="off"
-              >
-
-              <label for="specific-product-colour">
-                Colour
-              </label>
-
-              <input
-                type="text"
-                id="specific-product-colour"
-                maxlength="40"
+                id="specific-product-attributes"
+                maxlength="100"
                 autocomplete="off"
               >
 
@@ -564,6 +564,17 @@
                 </option>
               </select>
 
+              <label for="settings-item-specific-attributes">
+                Specific Attributes (optional)
+              </label>
+
+              <input
+                type="text"
+                id="settings-item-specific-attributes"
+                maxlength="100"
+                autocomplete="off"
+              >
+
               <div class="amount-unit-step-row">
                 <label for="settings-item-default-amount">
                   Amount
@@ -702,7 +713,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607081627">V16.27</span>
+      <span id="app-build" title="Build 202607081715">V17.15</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

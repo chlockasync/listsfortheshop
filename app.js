@@ -256,6 +256,7 @@ let editingItemId = null;
 let editingSettingsKey = null;
 let editingSettingsId = null;
 let editingSettingsContextId = null;
+let ignoreHeaderAutoHideUntil = 0;
 
 let roomsListenerStarted = false;
 let unitsListenerStarted = false;
@@ -459,6 +460,14 @@ function setupAutoHidingHeader() {
 
   function updateHeader() {
     const currentScrollY = Math.max(0, window.scrollY);
+
+    if (performance.now() < ignoreHeaderAutoHideUntil) {
+      header.classList.remove("is-hidden");
+      lastScrollY = currentScrollY;
+      ticking = false;
+      return;
+    }
+
     const movedUp = currentScrollY < lastScrollY - 2;
     const movedDown = currentScrollY > lastScrollY + 2;
 
@@ -1280,6 +1289,7 @@ function createFormField(field) {
 
 function appendSettingsEditPanel({
   listElement,
+  rowElement = null,
   settingsKey,
   contextId = null,
   item,
@@ -1294,6 +1304,8 @@ function appendSettingsEditPanel({
   ) {
     return null;
   }
+
+  rowElement?.classList.add("is-editing");
 
   const panel = document.createElement("section");
   panel.className = "settings-inline-edit-panel settings-form";
@@ -1430,29 +1442,23 @@ function scrollEditFormToTop(panel) {
   placeElementAtTop(panel);
 }
 
-function scrollOpenSettingsEditToTop() {
-  const expectedKey = editingSettingsKey;
-  const expectedId = String(editingSettingsId ?? "");
-  const expectedContextId = String(
-    editingSettingsContextId ?? ""
-  );
+function clearSettingsEditScrollSpace() {
+  document
+    .querySelectorAll(".settings-edit-scroll-space")
+    .forEach((element) => element.remove());
+}
 
+function scrollOpenSettingsEditToTop() {
   let attempts = 0;
 
   function alignEditedRow() {
     attempts += 1;
 
-    const panel = Array.from(
-      document.querySelectorAll(
-        ".settings-inline-edit-panel"
-      )
-    ).find((candidate) =>
-      candidate.dataset.settingsEditKey === expectedKey &&
-      candidate.dataset.settingsEditId === expectedId &&
-      candidate.dataset.settingsEditContextId === expectedContextId
+    const editedRow = document.querySelector(
+      ".settings-list-item.is-editing"
     );
 
-    if (!panel) {
+    if (!editedRow) {
       if (attempts < 8) {
         requestAnimationFrame(alignEditedRow);
       }
@@ -1460,65 +1466,52 @@ function scrollOpenSettingsEditToTop() {
       return;
     }
 
-    const editedRow = panel.previousElementSibling;
-    const target = editedRow ?? panel;
+    const categoryPanel = editedRow.closest(
+      ".settings-category-panel"
+    );
     const header = document.querySelector(".app-header");
-    const listElement = panel.parentElement;
+
+    if (!categoryPanel) {
+      return;
+    }
+
+    clearSettingsEditScrollSpace();
+
+    const scrollSpace = document.createElement("div");
+    scrollSpace.className = "settings-edit-scroll-space";
+    scrollSpace.setAttribute("aria-hidden", "true");
+    scrollSpace.style.height = "0px";
+    scrollSpace.style.pointerEvents = "none";
+    categoryPanel.append(scrollSpace);
 
     header?.classList.remove("is-hidden");
 
-    const existingSpacer = listElement?.querySelector(
-      ":scope > .settings-edit-scroll-spacer"
-    );
-
-    existingSpacer?.remove();
-
-    const spacer = document.createElement("div");
-    spacer.className = "settings-edit-scroll-spacer";
-    spacer.setAttribute("aria-hidden", "true");
-    spacer.style.height = `${
-      window.visualViewport?.height ?? window.innerHeight
-    }px`;
-    spacer.style.pointerEvents = "none";
-    listElement?.append(spacer);
-
-    const root = document.documentElement;
-    const previousOverflowAnchor = root.style.overflowAnchor;
-    root.style.overflowAnchor = "none";
-
     requestAnimationFrame(() => {
+      const headerHeight = header?.offsetHeight ?? 0;
+      const viewportHeight =
+        window.visualViewport?.height ?? window.innerHeight;
+      const rowDocumentTop =
+        window.scrollY + editedRow.getBoundingClientRect().top;
+      const targetScrollTop = Math.max(
+        0,
+        rowDocumentTop - headerHeight
+      );
+      const scrollRoot = document.scrollingElement;
+      const requiredDocumentHeight =
+        targetScrollTop + viewportHeight;
+      const missingHeight = Math.max(
+        0,
+        requiredDocumentHeight - (scrollRoot?.scrollHeight ?? 0)
+      );
+
+      scrollSpace.style.height = `${missingHeight + 1}px`;
+      ignoreHeaderAutoHideUntil = performance.now() + 500;
+
       requestAnimationFrame(() => {
-        const headerHeight =
-          header?.getBoundingClientRect().height ?? 0;
-
-        const targetDocumentTop =
-          window.scrollY +
-          target.getBoundingClientRect().top;
-
         window.scrollTo({
-          top: Math.max(
-            0,
-            targetDocumentTop - headerHeight
-          ),
+          top: targetScrollTop,
           left: 0,
           behavior: "auto"
-        });
-
-        requestAnimationFrame(() => {
-          const correction =
-            target.getBoundingClientRect().top -
-            headerHeight;
-
-          if (Math.abs(correction) > 1) {
-            window.scrollBy({
-              top: correction,
-              left: 0,
-              behavior: "auto"
-            });
-          }
-
-          root.style.overflowAnchor =
-            previousOverflowAnchor;
         });
       });
     });
@@ -1528,6 +1521,8 @@ function scrollOpenSettingsEditToTop() {
 }
 
 function setEditingSettings(settingsKey, id) {
+  clearSettingsEditScrollSpace();
+
   const isClosing =
     editingSettingsKey === settingsKey &&
     editingSettingsId === id &&
@@ -1551,6 +1546,8 @@ function setEditingSettings(settingsKey, id) {
 }
 
 function setEditingProductType(id, storeTypeId) {
+  clearSettingsEditScrollSpace();
+
   const isClosing =
     editingSettingsKey === "product-types" &&
     editingSettingsId === id &&
@@ -2571,6 +2568,7 @@ function renderSettingsRows({
 
     appendSettingsEditPanel({
       listElement,
+      rowElement: row,
       settingsKey,
       item,
       fields,
@@ -2586,6 +2584,10 @@ function renderSettingsRows({
 }
 
 function renderSettingsLists() {
+  if (!editingSettingsKey || !editingSettingsId) {
+    clearSettingsEditScrollSpace();
+  }
+
   renderRooms(currentRooms);
   renderUnits(currentUnits);
   renderStoreTypes(currentStoreTypes);
@@ -2913,6 +2915,7 @@ function appendProductTypeGroup({
 
     appendSettingsEditPanel({
       listElement: groupList,
+      rowElement: row,
       settingsKey: "product-types",
       contextId: storeTypeId,
       item: productType,
@@ -3150,6 +3153,7 @@ async function deactivateSettingsItem(item) {
 function createSettingsItemRow(item) {
   const row = document.createElement("div");
   row.className = "settings-list-item settings-item-edit-row";
+  row.dataset.documentId = item.id;
 
   const text = document.createElement("span");
   text.className = "settings-order-text";
@@ -3320,9 +3324,14 @@ async function saveSettingsItem(values, item) {
   });
 }
 
-function appendSettingsItemEditPanel(item, listElement) {
+function appendSettingsItemEditPanel(
+  item,
+  listElement,
+  rowElement
+) {
   appendSettingsEditPanel({
     listElement,
+    rowElement,
     settingsKey: "items",
     item,
     fields: itemEditFields(currentItems),
@@ -3400,6 +3409,7 @@ function createSettingsSpecificProductRow(
   const row = document.createElement("div");
   row.className =
     "settings-list-item settings-specific-product-row";
+  row.dataset.documentId = product.id;
 
   if (nested) {
     row.classList.add("settings-item-specific-product-row");
@@ -3538,10 +3548,12 @@ async function saveSettingsSpecificProduct(values, product) {
 
 function appendSettingsSpecificProductEditPanel(
   product,
-  listElement
+  listElement,
+  rowElement
 ) {
   const panel = appendSettingsEditPanel({
     listElement,
+    rowElement,
     settingsKey: "specific-products",
     item: product,
     fields: specificProductEditFields(
@@ -3603,22 +3615,28 @@ function appendSettingsSpecificProductsUnderItem({
   }
 
   itemRecord.products.forEach((product) => {
-    listElement.append(
-      createSettingsSpecificProductRow(product, {
-        nested: true
-      })
-    );
+    const row = createSettingsSpecificProductRow(product, {
+      nested: true
+    });
+
+    listElement.append(row);
 
     appendSettingsSpecificProductEditPanel(
       product,
-      listElement
+      listElement,
+      row
     );
   });
 }
 
 function appendSettingsItemRecord(itemRecord, listElement) {
-  listElement.append(createSettingsItemRow(itemRecord.item));
-  appendSettingsItemEditPanel(itemRecord.item, listElement);
+  const row = createSettingsItemRow(itemRecord.item);
+  listElement.append(row);
+  appendSettingsItemEditPanel(
+    itemRecord.item,
+    listElement,
+    row
+  );
   appendSettingsSpecificProductsUnderItem({
     itemRecord,
     listElement

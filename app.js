@@ -399,6 +399,43 @@ function handleAppBackButton() {
   return false;
 }
 
+function setupAutoHidingHeader() {
+  const header = document.querySelector(".app-header");
+
+  if (!header) {
+    return;
+  }
+
+  let lastScrollY = window.scrollY;
+  let ticking = false;
+
+  function updateHeader() {
+    const currentScrollY = Math.max(0, window.scrollY);
+    const movedUp = currentScrollY < lastScrollY - 2;
+    const movedDown = currentScrollY > lastScrollY + 2;
+
+    if (currentScrollY <= 8 || movedUp) {
+      header.classList.remove("is-hidden");
+    } else if (movedDown && currentScrollY > header.offsetHeight) {
+      header.classList.add("is-hidden");
+    }
+
+    lastScrollY = currentScrollY;
+    ticking = false;
+  }
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateHeader);
+        ticking = true;
+      }
+    },
+    { passive: true }
+  );
+}
+
 function setupBrowserBackButton() {
   if (!window.history?.replaceState) {
     return;
@@ -441,12 +478,23 @@ function showSettingsHome() {
   closeSettingsAddForms();
 }
 
+function scrollAppToTop() {
+  requestAnimationFrame(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "auto"
+    });
+  });
+}
+
 function openSettingsHomeFromShortcut() {
   editingSettingsKey = null;
   editingSettingsId = null;
   editingSettingsContextId = null;
   selectedSettingsCategory = null;
   showView("settings");
+  scrollAppToTop();
 }
 
 function openSettingsItemsFromShortcut() {
@@ -567,6 +615,8 @@ function openSettingsCategory(categoryName) {
     return;
   }
 
+  const categoryChanged = selectedSettingsCategory !== categoryName;
+
   selectedSettingsCategory = categoryName;
   settingsHome.hidden = true;
   setContextButtonLabel(
@@ -581,6 +631,10 @@ function openSettingsCategory(categoryName) {
 
   closeSettingsAddForms({ except: getSettingsAddForm(categoryName) });
   updateBottomContextAction();
+
+  if (categoryChanged) {
+    scrollAppToTop();
+  }
 }
 
 function showView(viewName) {
@@ -836,7 +890,9 @@ function addLongPressHandler(
   let pressTimer = null;
   let startX = 0;
   let startY = 0;
-  let hasFired = false;
+  let longPressReady = false;
+  let suppressClick = false;
+  let pointerIsDown = false;
 
   function shouldIgnore(event) {
     return Boolean(
@@ -845,12 +901,14 @@ function addLongPressHandler(
     );
   }
 
-  function clearPress() {
+  function resetPress() {
     if (pressTimer) {
       clearTimeout(pressTimer);
       pressTimer = null;
     }
 
+    longPressReady = false;
+    pointerIsDown = false;
     element.classList.remove("is-long-pressing");
   }
 
@@ -860,8 +918,9 @@ function addLongPressHandler(
     }
 
     event.preventDefault();
-    clearPress();
-    hasFired = false;
+    resetPress();
+    suppressClick = false;
+    pointerIsDown = true;
     startX = event.clientX;
     startY = event.clientY;
     element.classList.add("is-long-pressing");
@@ -874,16 +933,17 @@ function addLongPressHandler(
       }
     }
 
-    pressTimer = setTimeout(async () => {
+    pressTimer = setTimeout(() => {
       pressTimer = null;
-      hasFired = true;
-      element.classList.remove("is-long-pressing");
-      await handler(event);
+
+      if (pointerIsDown) {
+        longPressReady = true;
+      }
     }, duration);
   });
 
   element.addEventListener("pointermove", (event) => {
-    if (!pressTimer) {
+    if (!pointerIsDown) {
       return;
     }
 
@@ -893,24 +953,46 @@ function addLongPressHandler(
     );
 
     if (movedDistance > 28) {
-      clearPress();
+      resetPress();
     }
   });
 
-  ["pointerup", "pointercancel"].forEach((eventName) => {
-    element.addEventListener(eventName, clearPress);
+  element.addEventListener("pointerup", async (event) => {
+    if (!pointerIsDown) {
+      return;
+    }
+
+    const shouldActivate = longPressReady;
+    resetPress();
+
+    if (!shouldActivate) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClick = true;
+    await handler(event);
   });
+
+  element.addEventListener("pointercancel", resetPress);
+
+  ["contextmenu", "selectstart", "dragstart"].forEach(
+    (eventName) => {
+      element.addEventListener(eventName, (event) => {
+        if (!shouldIgnore(event)) {
+          event.preventDefault();
+        }
+      });
+    }
+  );
 
   element.addEventListener("click", (event) => {
-    if (hasFired) {
+    if (suppressClick) {
       event.preventDefault();
       event.stopPropagation();
-      hasFired = false;
+      suppressClick = false;
     }
-  });
-
-  element.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
   });
 }
 
@@ -6034,6 +6116,7 @@ function startListeners() {
 wireNavigation();
 wireForms();
 setupBrowserBackButton();
+setupAutoHidingHeader();
 
 onAuthStateChanged(auth, (user) => {
   if (!user) {

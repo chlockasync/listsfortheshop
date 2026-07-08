@@ -2600,3 +2600,39 @@ body:has(#getting-view:not([hidden]))
   .bottom-context-action.is-long-pressing {
   filter: brightness(0.94);
 }
+
+
+/* ===== Mobile navigation and long-press repair: 202607081627 ===== */
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  width: min(430px, 100%);
+  transform: translate(-50%, 0);
+  transition: transform 160ms ease;
+  will-change: transform;
+}
+
+.app-header.is-hidden {
+  transform: translate(-50%, -100%);
+}
+
+main {
+  padding-top: calc(1rem + 56px);
+}
+
+#needing-view,
+#getting-view,
+#settings-view {
+  margin-top: -1rem;
+}
+
+#shopping-at-button,
+#shopping-location-options .shopping-location-option,
+#getting-items-list .collect-checkbox-button,
+#finish-shop-button,
+body:has(#getting-view:not([hidden])) .bottom-context-action {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

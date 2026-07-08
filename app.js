@@ -159,6 +159,10 @@ function toggleCurrentSettingsAddForm() {
   const willOpen = form.hidden;
   closeSettingsAddForms({ except: form });
   form.hidden = !willOpen;
+
+  if (willOpen && categoryName === "items") {
+    placeElementAtTop(form, settingsItemNameInput);
+  }
 }
 
 /* Rooms */
@@ -1385,25 +1389,47 @@ function appendSettingsEditPanel({
   return panel;
 }
 
-function scrollEditFormToTop(panel) {
+function placeElementAtTop(element, focusElement = null) {
+  if (!element) {
+    return;
+  }
+
   requestAnimationFrame(() => {
+    const header = document.querySelector(".app-header");
+    header?.classList.remove("is-hidden");
+
+    element.scrollIntoView({
+      block: "start",
+      inline: "nearest",
+      behavior: "auto"
+    });
+
     requestAnimationFrame(() => {
-      const headerHeight =
-        document.querySelector(".app-header")
-          ?.getBoundingClientRect().height ?? 0;
+      const headerHeight = header?.offsetHeight ?? 0;
+      const elementTop = element.getBoundingClientRect().top;
+      const adjustment = elementTop - headerHeight;
 
-      const panelTop =
-        window.scrollY +
-        panel.getBoundingClientRect().top -
-        headerHeight;
+      if (Math.abs(adjustment) > 1) {
+        window.scrollBy({
+          top: adjustment,
+          left: 0,
+          behavior: "auto"
+        });
+      }
 
-      window.scrollTo({
-        top: Math.max(0, panelTop),
-        left: 0,
-        behavior: "smooth"
-      });
+      if (focusElement) {
+        try {
+          focusElement.focus({ preventScroll: true });
+        } catch (_error) {
+          focusElement.focus();
+        }
+      }
     });
   });
+}
+
+function scrollEditFormToTop(panel) {
+  placeElementAtTop(panel);
 }
 
 function setEditingSettings(settingsKey, id) {
@@ -5741,12 +5767,7 @@ function wireNavigation() {
     newItemPanel.hidden = false;
     newItemButton.hidden = true;
 
-    requestAnimationFrame(() => {
-      newItemPanel.scrollIntoView({
-        block: "nearest",
-        behavior: "smooth"
-      });
-    });
+    placeElementAtTop(newItemPanel, itemNameInput);
   });
 
   cancelNewItemButton.addEventListener("click", () => {

@@ -3930,8 +3930,14 @@ function neededRecordMatchesSearch(record, searchText) {
     return true;
   }
 
+  const productType = currentProductTypes.find(
+    (candidate) =>
+      String(candidate.id) === String(record.item.productTypeId)
+  );
+
   return [
     record.item.name,
+    productType?.name,
     record.specificProduct?.name,
     specificProductDetailText(record.specificProduct ?? {})
   ]
@@ -4084,6 +4090,11 @@ function renderRoomItems() {
       return true;
     }
 
+    const productType = currentProductTypes.find(
+      (candidate) =>
+        String(candidate.id) === String(item.productTypeId)
+    );
+
     const specificProductText = specificProductsForItem(item.id)
       .flatMap((product) => [
         product.name,
@@ -4091,7 +4102,7 @@ function renderRoomItems() {
       ])
       .join(" ");
 
-    return `${item.name} ${specificProductText}`
+    return `${item.name} ${productType?.name ?? ""} ${specificProductText}`
       .toLowerCase()
       .includes(roomSearchText);
   });

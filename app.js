@@ -26,6 +26,49 @@ import {
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
+function ensureSpecificAttributesField({
+  formSelector,
+  afterSelector,
+  inputId
+}) {
+  if (document.querySelector(`#${inputId}`)) {
+    return;
+  }
+
+  const form = document.querySelector(formSelector);
+  const afterElement = form?.querySelector(afterSelector);
+
+  if (!form || !afterElement) {
+    return;
+  }
+
+  const label = document.createElement("label");
+  label.htmlFor = inputId;
+  label.textContent = "Specific Attributes (optional)";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.id = inputId;
+  input.maxLength = 100;
+  input.autocomplete = "off";
+  input.placeholder = "e.g. 2 L, gluten-free, fragrance-free";
+
+  afterElement.insertAdjacentElement("afterend", input);
+  input.insertAdjacentElement("beforebegin", label);
+}
+
+ensureSpecificAttributesField({
+  formSelector: "#add-item-form",
+  afterSelector: "#item-store",
+  inputId: "item-specific-attributes"
+});
+
+ensureSpecificAttributesField({
+  formSelector: "#add-settings-item-form",
+  afterSelector: "#settings-item-store",
+  inputId: "settings-item-specific-attributes"
+});
+
 const navigationButtons = document.querySelectorAll("[data-view]");
 
 const views = {
@@ -1213,6 +1256,10 @@ function createFormField(field) {
 
     if (field.step !== undefined) {
       input.step = String(field.step);
+    }
+
+    if (field.placeholder) {
+      input.placeholder = field.placeholder;
     }
 
     input.value = field.value() ?? "";
@@ -3033,9 +3080,10 @@ function itemEditFields(items) {
     },
     {
       key: "specificAttributes",
-      label: "Specific Attributes",
+      label: "Specific Attributes (optional)",
       required: false,
       maxLength: 100,
+      placeholder: "e.g. 2 L, gluten-free, fragrance-free",
       value: () =>
         items.find(
           (item) => item.id === editingSettingsId
@@ -3284,9 +3332,10 @@ function specificProductEditFields(products) {
     },
     {
       key: "specificAttributes",
-      label: "Specific Attributes",
+      label: "Specific Attributes (optional)",
       required: false,
       maxLength: 100,
+      placeholder: "e.g. 2 L, gluten-free, fragrance-free",
       value: () => {
         const product = products.find(
           (candidate) => candidate.id === editingSettingsId

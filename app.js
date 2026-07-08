@@ -1437,7 +1437,11 @@ function scrollOpenSettingsEditToTop() {
     editingSettingsContextId ?? ""
   );
 
-  requestAnimationFrame(() => {
+  let attempts = 0;
+
+  function alignEditedRow() {
+    attempts += 1;
+
     const panel = Array.from(
       document.querySelectorAll(
         ".settings-inline-edit-panel"
@@ -1449,60 +1453,78 @@ function scrollOpenSettingsEditToTop() {
     );
 
     if (!panel) {
+      if (attempts < 8) {
+        requestAnimationFrame(alignEditedRow);
+      }
+
       return;
     }
 
     const editedRow = panel.previousElementSibling;
-    const target =
-      editedRow?.classList.contains("settings-list-item")
-        ? editedRow
-        : panel;
-
+    const target = editedRow ?? panel;
     const header = document.querySelector(".app-header");
+    const listElement = panel.parentElement;
+
     header?.classList.remove("is-hidden");
 
-    /*
-     * Short edit forms near the bottom of a list may not leave enough
-     * document height for their row to reach the top of the viewport.
-     * Add temporary space to the rebuilt list, then scroll the exact row.
-     * The spacer disappears automatically on the next list render.
-     */
-    const listElement = panel.parentElement;
     const existingSpacer = listElement?.querySelector(
       ":scope > .settings-edit-scroll-spacer"
     );
+
     existingSpacer?.remove();
 
     const spacer = document.createElement("div");
     spacer.className = "settings-edit-scroll-spacer";
     spacer.setAttribute("aria-hidden", "true");
-
-    const viewportHeight =
-      window.visualViewport?.height ?? window.innerHeight;
-
-    spacer.style.height = `${Math.max(0, viewportHeight)}px`;
+    spacer.style.height = `${
+      window.visualViewport?.height ?? window.innerHeight
+    }px`;
     spacer.style.pointerEvents = "none";
     listElement?.append(spacer);
 
+    const root = document.documentElement;
+    const previousOverflowAnchor = root.style.overflowAnchor;
+    root.style.overflowAnchor = "none";
+
     requestAnimationFrame(() => {
-      const headerHeight =
-        header?.getBoundingClientRect().height ?? 0;
+      requestAnimationFrame(() => {
+        const headerHeight =
+          header?.getBoundingClientRect().height ?? 0;
 
-      target.scrollIntoView({
-        block: "start",
-        inline: "nearest",
-        behavior: "auto"
-      });
+        const targetDocumentTop =
+          window.scrollY +
+          target.getBoundingClientRect().top;
 
-      if (headerHeight > 0) {
-        window.scrollBy({
-          top: -headerHeight,
+        window.scrollTo({
+          top: Math.max(
+            0,
+            targetDocumentTop - headerHeight
+          ),
           left: 0,
           behavior: "auto"
         });
-      }
+
+        requestAnimationFrame(() => {
+          const correction =
+            target.getBoundingClientRect().top -
+            headerHeight;
+
+          if (Math.abs(correction) > 1) {
+            window.scrollBy({
+              top: correction,
+              left: 0,
+              behavior: "auto"
+            });
+          }
+
+          root.style.overflowAnchor =
+            previousOverflowAnchor;
+        });
+      });
     });
-  });
+  }
+
+  requestAnimationFrame(alignEditedRow);
 }
 
 function setEditingSettings(settingsKey, id) {

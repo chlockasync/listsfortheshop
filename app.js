@@ -1452,36 +1452,55 @@ function scrollOpenSettingsEditToTop() {
       return;
     }
 
-    const previousElement = panel.previousElementSibling;
+    const editedRow = panel.previousElementSibling;
     const target =
-      previousElement?.classList.contains(
-        "settings-list-item"
-      )
-        ? previousElement
+      editedRow?.classList.contains("settings-list-item")
+        ? editedRow
         : panel;
 
-    const header = document.querySelector(
-      ".app-header"
-    );
-
+    const header = document.querySelector(".app-header");
     header?.classList.remove("is-hidden");
+
+    /*
+     * Short edit forms near the bottom of a list may not leave enough
+     * document height for their row to reach the top of the viewport.
+     * Add temporary space to the rebuilt list, then scroll the exact row.
+     * The spacer disappears automatically on the next list render.
+     */
+    const listElement = panel.parentElement;
+    const existingSpacer = listElement?.querySelector(
+      ":scope > .settings-edit-scroll-spacer"
+    );
+    existingSpacer?.remove();
+
+    const spacer = document.createElement("div");
+    spacer.className = "settings-edit-scroll-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+
+    const viewportHeight =
+      window.visualViewport?.height ?? window.innerHeight;
+
+    spacer.style.height = `${Math.max(0, viewportHeight)}px`;
+    spacer.style.pointerEvents = "none";
+    listElement?.append(spacer);
 
     requestAnimationFrame(() => {
       const headerHeight =
         header?.getBoundingClientRect().height ?? 0;
 
-      const targetTop = Math.max(
-        0,
-        window.scrollY +
-          target.getBoundingClientRect().top -
-          headerHeight
-      );
-
-      window.scrollTo({
-        top: targetTop,
-        left: 0,
+      target.scrollIntoView({
+        block: "start",
+        inline: "nearest",
         behavior: "auto"
       });
+
+      if (headerHeight > 0) {
+        window.scrollBy({
+          top: -headerHeight,
+          left: 0,
+          behavior: "auto"
+        });
+      }
     });
   });
 }

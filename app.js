@@ -4509,7 +4509,11 @@ function appendFullNeededItemRow(record) {
 
   const details = document.createElement("div");
   details.className = "item-row-details";
-  details.append(createItemNameDisplay(item, specificProduct));
+  details.append(
+    createItemNameDisplay(item, specificProduct, {
+      includeParentName: Boolean(specificProduct)
+    })
+  );
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
@@ -4672,7 +4676,7 @@ function renderShoppingLocations() {
     storeTypeButton.className = "shopping-location-option";
     storeTypeButton.textContent = storeType.name.trim();
 
-    storeTypeButton.addEventListener("click", () => {
+    addLongPressHandler(storeTypeButton, () => {
       recordAppNavigation();
       selectedShoppingTarget = {
         kind: "storeType",
@@ -4706,7 +4710,7 @@ function renderShoppingLocations() {
       storeButton.className = "shopping-location-option";
       storeButton.textContent = store.name.trim();
 
-      storeButton.addEventListener("click", () => {
+      addLongPressHandler(storeButton, () => {
         recordAppNavigation();
         selectedShoppingTarget = {
           kind: "store",
@@ -5578,14 +5582,14 @@ function wireNavigation() {
     });
   }
 
-  shoppingAtButton.addEventListener("click", () => {
+  addLongPressHandler(shoppingAtButton, () => {
     recordAppNavigation();
     const willOpen = shoppingAtPanel.hidden;
     shoppingAtPanel.hidden = !willOpen;
     shoppingAtButton.setAttribute("aria-expanded", String(willOpen));
   });
 
-  finishShopButton.addEventListener("click", async () => {
+  addLongPressHandler(finishShopButton, async () => {
     const confirmed = confirm(
       "Finish shop and remove collected items from the needed list?"
     );
@@ -5593,7 +5597,7 @@ function wireNavigation() {
     if (confirmed) {
       await finishCurrentShop();
     }
-  });
+  }, { duration: 450 });
 
   viewNeededListButton.addEventListener("click", () => {
     recordAppNavigation();

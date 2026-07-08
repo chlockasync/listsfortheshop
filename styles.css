@@ -2541,3 +2541,62 @@ body:has(#specific-product-panel:not([hidden])) {
   width: 100%;
   min-width: 0;
 }
+
+
+/* ===== Getting action and navigation polish: 202607081548 ===== */
+.main-tabs button {
+  font-size: 1.15rem;
+}
+
+.bottom-action-bar .settings-shortcut {
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: var(--bottom-bar-height);
+  padding: 0 0.35rem;
+  border-radius: 0;
+  opacity: 1;
+  font-size: 0.92rem;
+  line-height: 1.1;
+  pointer-events: auto;
+}
+
+/* Specific products should read as ordinary shopping rows in Getting. */
+
+#getting-items-list .specific-product-needed-row .item-name-display,
+#full-needed-items .specific-product-needed-row .item-name-display {
+  padding-left: 0;
+}
+
+#getting-items-list
+  .specific-product-needed-row
+  .item-name-display.is-specific-product
+  .item-name,
+#full-needed-items
+  .specific-product-needed-row
+  .item-name-display.is-specific-product
+  .item-name {
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+/* Long-press applies to shopping actions, without text selection interference. */
+#shopping-at-button,
+#shopping-location-options .shopping-location-option,
+#getting-items-list .collect-checkbox-button,
+#finish-shop-button,
+body:has(#getting-view:not([hidden])) .bottom-context-action {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#shopping-at-button.is-long-pressing,
+#shopping-location-options .shopping-location-option.is-long-pressing,
+#getting-items-list .collect-checkbox-button.is-long-pressing,
+#finish-shop-button.is-long-pressing,
+body:has(#getting-view:not([hidden]))
+  .bottom-context-action.is-long-pressing {
+  filter: brightness(0.94);
+}

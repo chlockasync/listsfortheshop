@@ -256,7 +256,6 @@ let editingItemId = null;
 let editingSettingsKey = null;
 let editingSettingsId = null;
 let editingSettingsContextId = null;
-let pendingEditFormScroll = false;
 
 let roomsListenerStarted = false;
 let unitsListenerStarted = false;
@@ -1378,13 +1377,12 @@ function appendSettingsEditPanel({
   });
 
   form.append(fieldContainer, actions);
+  panel.dataset.settingsEditKey = settingsKey;
+  panel.dataset.settingsEditId = String(item.id);
+  panel.dataset.settingsEditContextId = String(contextId ?? "");
+
   panel.append(form);
   listElement.append(panel);
-
-  if (pendingEditFormScroll) {
-    pendingEditFormScroll = false;
-    scrollEditFormToTop(panel);
-  }
 
   return panel;
 }
@@ -1432,44 +1430,107 @@ function scrollEditFormToTop(panel) {
   placeElementAtTop(panel);
 }
 
+function scrollOpenSettingsEditToTop() {
+  const expectedKey = editingSettingsKey;
+  const expectedId = String(editingSettingsId ?? "");
+  const expectedContextId = String(
+    editingSettingsContextId ?? ""
+  );
+
+  requestAnimationFrame(() => {
+    const panel = Array.from(
+      document.querySelectorAll(
+        ".settings-inline-edit-panel"
+      )
+    ).find((candidate) =>
+      candidate.dataset.settingsEditKey === expectedKey &&
+      candidate.dataset.settingsEditId === expectedId &&
+      candidate.dataset.settingsEditContextId === expectedContextId
+    );
+
+    if (!panel) {
+      return;
+    }
+
+    const previousElement = panel.previousElementSibling;
+    const target =
+      previousElement?.classList.contains(
+        "settings-list-item"
+      )
+        ? previousElement
+        : panel;
+
+    const header = document.querySelector(
+      ".app-header"
+    );
+
+    header?.classList.remove("is-hidden");
+
+    requestAnimationFrame(() => {
+      const headerHeight =
+        header?.getBoundingClientRect().height ?? 0;
+
+      const targetTop = Math.max(
+        0,
+        window.scrollY +
+          target.getBoundingClientRect().top -
+          headerHeight
+      );
+
+      window.scrollTo({
+        top: targetTop,
+        left: 0,
+        behavior: "auto"
+      });
+    });
+  });
+}
+
 function setEditingSettings(settingsKey, id) {
-  if (
+  const isClosing =
     editingSettingsKey === settingsKey &&
     editingSettingsId === id &&
-    editingSettingsContextId === null
-  ) {
+    editingSettingsContextId === null;
+
+  if (isClosing) {
     editingSettingsKey = null;
     editingSettingsId = null;
     editingSettingsContextId = null;
-    pendingEditFormScroll = false;
   } else {
     editingSettingsKey = settingsKey;
     editingSettingsId = id;
     editingSettingsContextId = null;
-    pendingEditFormScroll = true;
   }
 
   renderSettingsLists();
+
+  if (!isClosing) {
+    scrollOpenSettingsEditToTop();
+  }
 }
 
 function setEditingProductType(id, storeTypeId) {
-  if (
+  const isClosing =
     editingSettingsKey === "product-types" &&
     editingSettingsId === id &&
-    String(editingSettingsContextId) === String(storeTypeId)
-  ) {
+    String(editingSettingsContextId) ===
+      String(storeTypeId);
+
+  if (isClosing) {
     editingSettingsKey = null;
     editingSettingsId = null;
     editingSettingsContextId = null;
-    pendingEditFormScroll = false;
   } else {
     editingSettingsKey = "product-types";
     editingSettingsId = id;
     editingSettingsContextId = storeTypeId;
-    pendingEditFormScroll = true;
   }
 
   renderSettingsLists();
+
+  if (!isClosing) {
+    scrollOpenSettingsEditToTop();
+  }
 }
 
 function pluralize(count, singular, plural = `${singular}s`) {

@@ -241,7 +241,7 @@ const backFromNeededListButton = document.querySelector("#back-from-needed-list"
 const editItemsFromNeededListButton = document.querySelector("#edit-items-from-needed-list");
 const neededListSearch = document.querySelector("#needed-list-search");
 const fullNeededItems = document.querySelector("#full-needed-items");
-const temporaryNoteDialog = document.querySelector("#temporary-note-dialog");
+const temporaryNotePanel = document.querySelector("#temporary-note-panel");
 const temporaryNoteForm = document.querySelector("#temporary-note-form");
 const temporaryNoteItemName = document.querySelector("#temporary-note-item-name");
 const temporaryNoteText = document.querySelector("#temporary-note-text");
@@ -406,6 +406,11 @@ function closeFullNeededListToPreviousView() {
 }
 
 function handleAppBackButton() {
+  if (temporaryNotePanel && !temporaryNotePanel.hidden) {
+    closeTemporaryNotePanel();
+    return true;
+  }
+
   if (!specificProductPanel?.hidden) {
     closeSpecificProductQuickAdd();
     return true;
@@ -1197,6 +1202,157 @@ function addLongPressHandler(
       event.stopPropagation();
       suppressClick = false;
     }
+  });
+}
+
+function addScrollableHoldHandler(
+  element,
+  handler,
+  {
+    duration = 450,
+    moveTolerance = 20,
+    ignoreSelector = "button, input, select, textarea, a"
+  } = {}
+) {
+  let timer = null;
+  let active = false;
+  let fired = false;
+  let startX = 0;
+  let startY = 0;
+  let activeTouchId = null;
+  let suppressNextClick = false;
+  let recentTouchUntil = 0;
+
+  function shouldIgnore(event) {
+    return Boolean(
+      ignoreSelector &&
+      event.target?.closest?.(ignoreSelector)
+    );
+  }
+
+  function cancelHold() {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+
+    active = false;
+    activeTouchId = null;
+    element.classList.remove("is-long-pressing");
+  }
+
+  function beginHold(x, y) {
+    cancelHold();
+    active = true;
+    fired = false;
+    startX = x;
+    startY = y;
+    element.classList.add("is-long-pressing");
+
+    timer = window.setTimeout(async () => {
+      timer = null;
+
+      if (!active || fired) {
+        return;
+      }
+
+      fired = true;
+      suppressNextClick = true;
+      element.classList.remove("is-long-pressing");
+      await handler();
+    }, duration);
+  }
+
+  function movedTooFar(x, y) {
+    return Math.hypot(x - startX, y - startY) > moveTolerance;
+  }
+
+  element.classList.add(
+    "has-long-press",
+    "long-press-allows-scroll"
+  );
+
+  element.addEventListener(
+    "touchstart",
+    (event) => {
+      if (
+        element.disabled ||
+        shouldIgnore(event) ||
+        event.touches.length !== 1
+      ) {
+        return;
+      }
+
+      const touch = event.changedTouches[0];
+      recentTouchUntil = Date.now() + 900;
+      activeTouchId = touch.identifier;
+      beginHold(touch.clientX, touch.clientY);
+      activeTouchId = touch.identifier;
+    },
+    { passive: true }
+  );
+
+  element.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!active || activeTouchId === null) {
+        return;
+      }
+
+      const touch = Array.from(event.changedTouches).find(
+        (candidate) => candidate.identifier === activeTouchId
+      );
+
+      if (touch && movedTooFar(touch.clientX, touch.clientY)) {
+        cancelHold();
+      }
+    },
+    { passive: true }
+  );
+
+  element.addEventListener("touchend", cancelHold, {
+    passive: true
+  });
+  element.addEventListener("touchcancel", cancelHold, {
+    passive: true
+  });
+
+  element.addEventListener("mousedown", (event) => {
+    if (
+      Date.now() < recentTouchUntil ||
+      event.button !== 0 ||
+      element.disabled ||
+      shouldIgnore(event)
+    ) {
+      return;
+    }
+
+    beginHold(event.clientX, event.clientY);
+  });
+
+  element.addEventListener("mousemove", (event) => {
+    if (active && movedTooFar(event.clientX, event.clientY)) {
+      cancelHold();
+    }
+  });
+
+  element.addEventListener("mouseup", cancelHold);
+  element.addEventListener("mouseleave", cancelHold);
+
+  element.addEventListener("contextmenu", (event) => {
+    if (!shouldIgnore(event)) {
+      event.preventDefault();
+    }
+  });
+
+  element.addEventListener("click", (event) => {
+    if (!suppressNextClick) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNextClick = false;
   });
 }
 
@@ -3539,16 +3695,14 @@ function createSettingsItemRow(item) {
   actions.append(regularButton, editButton, deleteButton);
   row.append(text, actions);
 
-  addLongPressHandler(
+  addScrollableHoldHandler(
     row,
     () => {
       openSpecificProductQuickAdd(item);
     },
     {
-      duration: 360,
-      ignoreSelector: "button, input, select, textarea",
-      allowScroll: true,
-      moveTolerance: 12
+      duration: 450,
+      moveTolerance: 20
     }
   );
 
@@ -4563,6 +4717,28 @@ function specificNeededEntryDocumentId(productId) {
   return `specific-${productId}`;
 }
 
+function neededEntryDocumentIdFor(
+  item,
+  specificProduct = null,
+  neededEntry = null
+) {
+  if (specificProduct?.id) {
+    const canonicalId = specificNeededEntryDocumentId(
+      specificProduct.id
+    );
+
+    if (currentNeededEntries.has(canonicalId)) {
+      return canonicalId;
+    }
+  }
+
+  if (neededEntry?.id) {
+    return neededEntry.id;
+  }
+
+  return item?.id ?? null;
+}
+
 function itemForNeededEntry(entry) {
   return currentItems.find(
     (item) => String(item.id) === String(entry.itemId ?? entry.id)
@@ -4748,29 +4924,47 @@ function temporaryNoteItemLabel(item, specificProduct = null) {
     : item.name;
 }
 
-function closeTemporaryNoteDialog() {
+function closeTemporaryNotePanel() {
   temporaryNoteEntryId = null;
 
-  if (temporaryNoteDialog?.open) {
-    temporaryNoteDialog.close();
+  if (temporaryNotePanel) {
+    temporaryNotePanel.hidden = true;
   }
 }
 
-function openTemporaryNoteDialog(item, neededEntry, specificProduct = null) {
-  if (!temporaryNoteDialog || !neededEntry?.id) {
+function openTemporaryNotePanel(
+  item,
+  neededEntry,
+  specificProduct = null
+) {
+  if (!temporaryNotePanel || !neededEntry) {
     return;
   }
 
-  temporaryNoteEntryId = neededEntry.id;
+  const entryId = neededEntryDocumentIdFor(
+    item,
+    specificProduct,
+    neededEntry
+  );
+
+  if (!entryId) {
+    return;
+  }
+
+  recordAppNavigation();
+  closeSpecificProductQuickAdd();
+
+  temporaryNoteEntryId = entryId;
   temporaryNoteItemName.textContent = temporaryNoteItemLabel(
     item,
     specificProduct
   );
   temporaryNoteText.value = neededEntry.temporaryNote ?? "";
-  temporaryNoteDialog.showModal();
+  temporaryNotePanel.hidden = false;
+  temporaryNotePanel.scrollTop = 0;
 
   requestAnimationFrame(() => {
-    temporaryNoteText.focus();
+    temporaryNoteText.focus({ preventScroll: true });
     temporaryNoteText.setSelectionRange(
       temporaryNoteText.value.length,
       temporaryNoteText.value.length
@@ -4868,7 +5062,12 @@ function renderRoomItems() {
     return String(a.name ?? "").localeCompare(String(b.name ?? ""));
   }
 
-  function createQuantityControls(item, neededEntry, labelName) {
+  function createQuantityControls(
+    item,
+    neededEntry,
+    labelName,
+    specificProduct = null
+  ) {
     const controls = document.createElement("div");
     controls.className = "room-item-controls";
 
@@ -4888,7 +5087,8 @@ function renderRoomItems() {
         await changeNeededAmount(
           item,
           neededEntry,
-          item.increment ?? 1
+          item.increment ?? 1,
+          specificProduct
         );
       }
     });
@@ -4902,7 +5102,8 @@ function renderRoomItems() {
         await changeNeededAmount(
           item,
           neededEntry,
-          -(item.increment ?? 1)
+          -(item.increment ?? 1),
+          specificProduct
         );
       }
     });
@@ -4956,7 +5157,8 @@ function renderRoomItems() {
         const quantity = createQuantityControls(
           item,
           neededEntry,
-          `${item.name} ${product.name}`
+          `${item.name} ${product.name}`,
+          product
         );
 
         details.append(quantity.amountDisplay);
@@ -4967,7 +5169,7 @@ function renderRoomItems() {
 
       if (isNeeded) {
         addDoubleTapHandler(row, () => {
-          openTemporaryNoteDialog(item, neededEntry, product);
+          openTemporaryNotePanel(item, neededEntry, product);
         });
       }
 
@@ -5021,7 +5223,7 @@ function renderRoomItems() {
 
     if (isNeeded) {
       addDoubleTapHandler(row, () => {
-        openTemporaryNoteDialog(item, neededEntry);
+        openTemporaryNotePanel(item, neededEntry);
       });
     }
 
@@ -5296,7 +5498,8 @@ function appendFullNeededItemRow(record) {
       await changeNeededAmount(
         item,
         entry,
-        item.increment ?? 1
+        item.increment ?? 1,
+        specificProduct
       );
     }
   });
@@ -5310,7 +5513,8 @@ function appendFullNeededItemRow(record) {
       await changeNeededAmount(
         item,
         entry,
-        -(item.increment ?? 1)
+        -(item.increment ?? 1),
+        specificProduct
       );
     }
   });
@@ -5323,7 +5527,7 @@ function appendFullNeededItemRow(record) {
   controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
   addDoubleTapHandler(row, () => {
-    openTemporaryNoteDialog(item, entry, specificProduct);
+    openTemporaryNotePanel(item, entry, specificProduct);
   });
   fullNeededItems.append(row);
 }
@@ -5682,8 +5886,8 @@ function startSpecificProductsListener() {
     (snapshot) => {
       currentSpecificProducts = snapshot.docs
         .map((documentSnapshot) => ({
-          id: documentSnapshot.id,
-          ...documentSnapshot.data()
+          ...documentSnapshot.data(),
+          id: documentSnapshot.id
         }))
         .filter((product) => product.active !== false)
         .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
@@ -5852,8 +6056,8 @@ function startNeededEntriesListener() {
         snapshot.docs.map((documentSnapshot) => [
           documentSnapshot.id,
           {
-            id: documentSnapshot.id,
-            ...documentSnapshot.data()
+            ...documentSnapshot.data(),
+            id: documentSnapshot.id
           }
         ])
       );
@@ -6067,10 +6271,25 @@ async function addSpecificProductToNeededList(item, specificProduct) {
   }
 }
 
-async function changeNeededAmount(item, neededEntry, change) {
+async function changeNeededAmount(
+  item,
+  neededEntry,
+  change,
+  specificProduct = null
+) {
+  const neededEntryId = neededEntryDocumentIdFor(
+    item,
+    specificProduct,
+    neededEntry
+  );
+
+  if (!neededEntryId) {
+    return;
+  }
+
   const neededEntryRef = householdDocument(
     "neededEntries",
-    neededEntry.id
+    neededEntryId
   );
 
   const itemRef = householdDocument("items", item.id);
@@ -6367,7 +6586,7 @@ function wireNavigation() {
 
   cancelTemporaryNoteButton?.addEventListener(
     "click",
-    closeTemporaryNoteDialog
+    closeTemporaryNotePanel
   );
 
   clearTemporaryNoteButton?.addEventListener("click", async () => {
@@ -6375,16 +6594,11 @@ function wireNavigation() {
 
     try {
       await saveTemporaryNote();
-      closeTemporaryNoteDialog();
+      closeTemporaryNotePanel();
     } catch (error) {
       console.error("Could not clear temporary note:", error);
       alert("The temporary note could not be cleared.");
     }
-  });
-
-  temporaryNoteDialog?.addEventListener("cancel", (event) => {
-    event.preventDefault();
-    closeTemporaryNoteDialog();
   });
 
   temporaryNoteForm?.addEventListener("submit", async (event) => {
@@ -6396,7 +6610,7 @@ function wireNavigation() {
 
     try {
       await saveTemporaryNote();
-      closeTemporaryNoteDialog();
+      closeTemporaryNotePanel();
     } catch (error) {
       console.error("Could not save temporary note:", error);
       alert("The temporary note could not be saved.");

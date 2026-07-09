@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1402">
-  <script type="module" src="app.js?v=1402"></script>
+  <link rel="stylesheet" href="styles.css?v=1419">
+  <script type="module" src="app.js?v=1419"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -287,6 +287,67 @@
               </div>
             </div>
 
+          </form>
+        </section>
+
+        <section
+          id="temporary-note-panel"
+          class="temporary-note-panel settings-form"
+          hidden
+        >
+          <form id="temporary-note-form">
+            <div class="form-heading-row">
+              <h3>Temporary note</h3>
+
+              <div class="form-heading-actions">
+                <button
+                  type="button"
+                  id="cancel-temporary-note"
+                  aria-label="Cancel temporary note"
+                  title="Cancel"
+                >
+                  ×
+                </button>
+
+                <button
+                  type="submit"
+                  aria-label="Save temporary note"
+                  title="Save"
+                >
+                  ✓
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-form-fields">
+              <p
+                id="temporary-note-item-name"
+                class="temporary-note-item-name"
+              ></p>
+
+              <label for="temporary-note-text">
+                Note
+              </label>
+
+              <textarea
+                id="temporary-note-text"
+                maxlength="300"
+                rows="6"
+                autocomplete="off"
+              ></textarea>
+
+              <p class="temporary-note-warning">
+                This note will be deleted when the item is removed from the needed list.
+              </p>
+
+              <button
+                type="button"
+                id="clear-temporary-note"
+                class="settings-add-button temporary-note-clear-button"
+              >
+                Clear note
+              </button>
+            </div>
           </form>
         </section>
     </section>
@@ -731,48 +792,6 @@
     </section>
   </main>
 
-  <dialog id="temporary-note-dialog" class="temporary-note-dialog">
-    <form id="temporary-note-form">
-      <div class="temporary-note-heading">
-        <h3>Temporary note</h3>
-        <button
-          type="button"
-          id="cancel-temporary-note"
-          aria-label="Close temporary note"
-          title="Close"
-        >
-          ×
-        </button>
-      </div>
-
-      <p id="temporary-note-item-name" class="temporary-note-item-name"></p>
-
-      <label for="temporary-note-text">
-        Note
-      </label>
-
-      <textarea
-        id="temporary-note-text"
-        maxlength="300"
-        rows="4"
-        autocomplete="off"
-      ></textarea>
-
-      <p class="temporary-note-warning">
-        This note will be deleted when the item is removed from the needed list.
-      </p>
-
-      <div class="temporary-note-actions">
-        <button type="button" id="clear-temporary-note">
-          Clear note
-        </button>
-        <button type="submit">
-          Save note
-        </button>
-      </div>
-    </form>
-  </dialog>
-
   <nav class="bottom-action-bar" aria-label="App actions">
     <button
       type="button"
@@ -785,7 +804,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607091402">V14.02</span>
+      <span id="app-build" title="Build 202607091419">V14.19</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

@@ -1360,17 +1360,19 @@ function addDoubleTapHandler(
   element,
   handler,
   {
-    maxDelay = 360,
-    moveTolerance = 14,
+    maxDelay = 440,
+    moveTolerance = 18,
     ignoreSelector = "button, input, select, textarea, a"
   } = {}
 ) {
   let lastTapTime = 0;
   let lastTapX = 0;
   let lastTapY = 0;
-  let pointerStartX = 0;
-  let pointerStartY = 0;
-  let pointerMoved = false;
+  let activeTouchId = null;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchMoved = false;
+  let recentTouchUntil = 0;
 
   function shouldIgnore(event) {
     return Boolean(
@@ -1379,41 +1381,17 @@ function addDoubleTapHandler(
     );
   }
 
-  element.classList.add("has-double-tap");
+  function resetCurrentTouch() {
+    activeTouchId = null;
+    touchMoved = false;
+  }
 
-  element.addEventListener("pointerdown", (event) => {
-    if (shouldIgnore(event)) {
-      return;
-    }
-
-    pointerStartX = event.clientX;
-    pointerStartY = event.clientY;
-    pointerMoved = false;
-  });
-
-  element.addEventListener("pointermove", (event) => {
-    if (
-      Math.hypot(
-        event.clientX - pointerStartX,
-        event.clientY - pointerStartY
-      ) > moveTolerance
-    ) {
-      pointerMoved = true;
-    }
-  });
-
-  element.addEventListener("pointerup", (event) => {
-    if (shouldIgnore(event) || pointerMoved) {
-      lastTapTime = 0;
-      return;
-    }
-
-    const now = performance.now();
-    const closeEnough =
-      Math.hypot(
-        event.clientX - lastTapX,
-        event.clientY - lastTapY
-      ) <= 36;
+  function registerTap(event, x, y) {
+    const now = Date.now();
+    const closeEnough = Math.hypot(
+      x - lastTapX,
+      y - lastTapY
+    ) <= 48;
 
     if (
       lastTapTime > 0 &&
@@ -1428,8 +1406,102 @@ function addDoubleTapHandler(
     }
 
     lastTapTime = now;
-    lastTapX = event.clientX;
-    lastTapY = event.clientY;
+    lastTapX = x;
+    lastTapY = y;
+  }
+
+  element.classList.add("has-double-tap");
+
+  element.addEventListener(
+    "touchstart",
+    (event) => {
+      if (
+        shouldIgnore(event) ||
+        event.touches.length !== 1
+      ) {
+        resetCurrentTouch();
+        return;
+      }
+
+      const touch = event.changedTouches[0];
+      activeTouchId = touch.identifier;
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      touchMoved = false;
+      recentTouchUntil = Date.now() + 800;
+    },
+    { passive: true }
+  );
+
+  element.addEventListener(
+    "touchmove",
+    (event) => {
+      if (activeTouchId === null) {
+        return;
+      }
+
+      const touch = Array.from(event.changedTouches).find(
+        (candidate) => candidate.identifier === activeTouchId
+      );
+
+      if (
+        touch &&
+        Math.hypot(
+          touch.clientX - touchStartX,
+          touch.clientY - touchStartY
+        ) > moveTolerance
+      ) {
+        touchMoved = true;
+        lastTapTime = 0;
+      }
+    },
+    { passive: true }
+  );
+
+  element.addEventListener(
+    "touchend",
+    (event) => {
+      if (activeTouchId === null) {
+        return;
+      }
+
+      const touch = Array.from(event.changedTouches).find(
+        (candidate) => candidate.identifier === activeTouchId
+      );
+
+      if (!touch) {
+        return;
+      }
+
+      const wasMoved = touchMoved;
+      resetCurrentTouch();
+
+      if (wasMoved || shouldIgnore(event)) {
+        lastTapTime = 0;
+        return;
+      }
+
+      registerTap(event, touch.clientX, touch.clientY);
+    },
+    { passive: false }
+  );
+
+  element.addEventListener("touchcancel", () => {
+    resetCurrentTouch();
+    lastTapTime = 0;
+  }, { passive: true });
+
+  element.addEventListener("dblclick", (event) => {
+    if (
+      Date.now() < recentTouchUntil ||
+      shouldIgnore(event)
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    handler(event);
   });
 }
 
@@ -3981,6 +4053,16 @@ function createSettingsSpecificProductRow(
   actions.append(editButton, deleteButton);
   row.append(text, actions);
 
+  const parentItem = currentItems.find(
+    (item) => String(item.id) === String(product.itemId)
+  );
+
+  if (parentItem) {
+    addScrollableHoldHandler(row, () => {
+      openSpecificProductQuickAdd(parentItem);
+    });
+  }
+
   return row;
 }
 
@@ -5167,6 +5249,10 @@ function renderRoomItems() {
 
       row.append(details, controls);
 
+      addScrollableHoldHandler(row, () => {
+        openSpecificProductQuickAdd(item);
+      });
+
       if (isNeeded) {
         addDoubleTapHandler(row, () => {
           openTemporaryNotePanel(item, neededEntry, product);
@@ -5220,6 +5306,10 @@ function renderRoomItems() {
     }
 
     row.append(details, controls);
+
+    addScrollableHoldHandler(row, () => {
+      openSpecificProductQuickAdd(item);
+    });
 
     if (isNeeded) {
       addDoubleTapHandler(row, () => {
@@ -5526,6 +5616,11 @@ function appendFullNeededItemRow(record) {
 
   controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
+
+  addScrollableHoldHandler(row, () => {
+    openSpecificProductQuickAdd(item);
+  });
+
   addDoubleTapHandler(row, () => {
     openTemporaryNotePanel(item, entry, specificProduct);
   });

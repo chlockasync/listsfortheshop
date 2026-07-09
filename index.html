@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1419">
-  <script type="module" src="app.js?v=1419"></script>
+  <link rel="stylesheet" href="styles.css?v=1431">
+  <script type="module" src="app.js?v=1431"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -80,7 +80,7 @@
           type="button"
           id="back-to-rooms"
           hidden
-        >
+  >
           ← Back to rooms
         </button>
 
@@ -104,7 +104,7 @@
           id="new-item-panel"
           class="new-item-panel settings-form"
           hidden
-        >
+  >
           <form id="add-item-form">
             <div class="form-heading-row">
               <h3>New item</h3>
@@ -220,136 +220,6 @@
 
       </div>
 
-        <section
-          id="specific-product-panel"
-          class="specific-product-panel settings-form"
-          hidden
-        >
-          <form id="add-specific-product-form">
-            <div class="form-heading-row">
-              <h3 id="specific-product-panel-title">
-                Add specific product
-              </h3>
-
-              <div class="form-heading-actions">
-                <button
-                  type="button"
-                  id="cancel-specific-product"
-                  aria-label="Cancel specific product"
-                  title="Cancel"
-                >
-                  ×
-                </button>
-
-                <button
-                  type="submit"
-                  aria-label="Save specific product"
-                  title="Save"
-                >
-                  ✓
-                </button>
-              </div>
-            </div>
-
-            <div class="settings-form-fields">
-              <label for="specific-product-name">
-                Product name
-              </label>
-
-              <input
-                type="text"
-                id="specific-product-name"
-                required
-                maxlength="100"
-                autocomplete="off"
-              >
-
-              <label for="specific-product-attributes">
-                Specific Attributes
-              </label>
-
-              <input
-                type="text"
-                id="specific-product-attributes"
-                maxlength="100"
-                autocomplete="off"
-              >
-
-              <div class="settings-field-label">
-                Stores
-              </div>
-
-              <div
-                id="specific-product-stores"
-                class="settings-checkbox-list"
-              >
-                <p>No stores are available.</p>
-              </div>
-            </div>
-
-          </form>
-        </section>
-
-        <section
-          id="temporary-note-panel"
-          class="temporary-note-panel settings-form"
-          hidden
-        >
-          <form id="temporary-note-form">
-            <div class="form-heading-row">
-              <h3>Temporary note</h3>
-
-              <div class="form-heading-actions">
-                <button
-                  type="button"
-                  id="cancel-temporary-note"
-                  aria-label="Cancel temporary note"
-                  title="Cancel"
-                >
-                  ×
-                </button>
-
-                <button
-                  type="submit"
-                  aria-label="Save temporary note"
-                  title="Save"
-                >
-                  ✓
-                </button>
-              </div>
-            </div>
-
-            <div class="settings-form-fields">
-              <p
-                id="temporary-note-item-name"
-                class="temporary-note-item-name"
-              ></p>
-
-              <label for="temporary-note-text">
-                Note
-              </label>
-
-              <textarea
-                id="temporary-note-text"
-                maxlength="300"
-                rows="6"
-                autocomplete="off"
-              ></textarea>
-
-              <p class="temporary-note-warning">
-                This note will be deleted when the item is removed from the needed list.
-              </p>
-
-              <button
-                type="button"
-                id="clear-temporary-note"
-                class="settings-add-button temporary-note-clear-button"
-              >
-                Clear note
-              </button>
-            </div>
-          </form>
-        </section>
     </section>
 
     <section id="getting-view" hidden>
@@ -444,7 +314,7 @@
           id="settings-stores-panel"
           class="settings-category-panel"
           hidden
-        >
+  >
           <div
             id="settings-stores-list"
             class="settings-orderable-list"
@@ -498,7 +368,7 @@
           id="settings-store-types-panel"
           class="settings-category-panel"
           hidden
-        >
+  >
           <div
             id="settings-store-types-list"
             class="settings-orderable-list"
@@ -539,7 +409,7 @@
           id="settings-product-types-panel"
           class="settings-category-panel"
           hidden
-        >
+  >
           <div
             id="settings-product-types-list"
             class="settings-orderable-list"
@@ -591,7 +461,7 @@
           id="settings-items-panel"
           class="settings-category-panel"
           hidden
-        >
+  >
           <div class="settings-search-block">
             <input
               type="search"
@@ -713,7 +583,7 @@
           id="settings-rooms-panel"
           class="settings-category-panel"
           hidden
-        >
+  >
           <div
             id="settings-rooms-list"
             class="settings-orderable-list"
@@ -752,7 +622,7 @@
           id="settings-units-panel"
           class="settings-category-panel"
           hidden
-        >
+  >
           <div
             id="settings-units-list"
             class="settings-orderable-list"
@@ -792,6 +662,137 @@
     </section>
   </main>
 
+  <section
+    id="specific-product-panel"
+    class="specific-product-panel settings-form"
+    hidden
+  >
+    <form id="add-specific-product-form">
+      <div class="form-heading-row">
+        <h3 id="specific-product-panel-title">
+          Add specific product
+        </h3>
+
+        <div class="form-heading-actions">
+          <button
+            type="button"
+            id="cancel-specific-product"
+            aria-label="Cancel specific product"
+            title="Cancel"
+          >
+            ×
+          </button>
+
+          <button
+            type="submit"
+            aria-label="Save specific product"
+            title="Save"
+          >
+            ✓
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-form-fields">
+        <label for="specific-product-name">
+          Product name
+        </label>
+
+        <input
+          type="text"
+          id="specific-product-name"
+          required
+          maxlength="100"
+          autocomplete="off"
+        >
+
+        <label for="specific-product-attributes">
+          Specific Attributes
+        </label>
+
+        <input
+          type="text"
+          id="specific-product-attributes"
+          maxlength="100"
+          autocomplete="off"
+        >
+
+        <div class="settings-field-label">
+          Stores
+        </div>
+
+        <div
+          id="specific-product-stores"
+          class="settings-checkbox-list"
+        >
+          <p>No stores are available.</p>
+        </div>
+      </div>
+
+    </form>
+  </section>
+
+  <section
+    id="temporary-note-panel"
+    class="temporary-note-panel settings-form"
+    hidden
+  >
+    <form id="temporary-note-form">
+      <div class="form-heading-row">
+        <h3>Temporary note</h3>
+
+        <div class="form-heading-actions">
+          <button
+            type="button"
+            id="cancel-temporary-note"
+            aria-label="Cancel temporary note"
+            title="Cancel"
+          >
+            ×
+          </button>
+
+          <button
+            type="submit"
+            aria-label="Save temporary note"
+            title="Save"
+          >
+            ✓
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-form-fields">
+        <p
+          id="temporary-note-item-name"
+          class="temporary-note-item-name"
+        ></p>
+
+        <label for="temporary-note-text">
+          Note
+        </label>
+
+        <textarea
+          id="temporary-note-text"
+          maxlength="300"
+          rows="6"
+          autocomplete="off"
+        ></textarea>
+
+        <p class="temporary-note-warning">
+          This note will be deleted when the item is removed from the needed list.
+        </p>
+
+        <button
+          type="button"
+          id="clear-temporary-note"
+          class="settings-add-button temporary-note-clear-button"
+        >
+          Clear note
+        </button>
+      </div>
+    </form>
+  </section>
+
   <nav class="bottom-action-bar" aria-label="App actions">
     <button
       type="button"
@@ -804,7 +805,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607091419">V14.19</span>
+      <span id="app-build" title="Build 202607091431">V14.31</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

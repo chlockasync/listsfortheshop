@@ -2985,3 +2985,11 @@ body:has(#temporary-note-panel:not([hidden])) {
 .settings-item-edit-row.is-long-pressing {
   filter: brightness(0.94);
 }
+
+/* ===== Overlay visibility and dependable row gestures: 202607091428 ===== */
+/* The add-specific-product and temporary-note panels now sit directly under
+   body, so no hidden app view can conceal them. */
+.has-double-tap,
+.has-long-press.has-double-tap {
+  touch-action: manipulation !important;
+}

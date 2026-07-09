@@ -2869,3 +2869,47 @@ body {
   border: 1px solid rgb(0 0 0 / 18%);
   background: #eeeeee;
 }
+
+
+/* ===== Native scrolling and long-press reset: 202607091358 ===== */
+html,
+body {
+  overscroll-behavior-y: auto;
+}
+
+.has-long-press,
+.has-long-press.long-press-allows-scroll,
+.has-double-tap,
+.settings-item-edit-row {
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Only the deliberate reorder handle owns the touch gesture. */
+.settings-order-handle {
+  touch-action: none;
+}
+
+/* Getting controls remain hold-only controls without affecting page rows. */
+#getting-items-list .collect-checkbox-button,
+#finish-shop-button,
+body:has(#getting-view:not([hidden])) .bottom-context-action {
+  touch-action: none;
+}
+
+
+/* ===== Guaranteed native page scroll: 202607091402 ===== */
+html,
+body {
+  overflow-y: auto !important;
+}
+
+body,
+main,
+section {
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Fixed overlays scroll themselves; the page remains a normal document. */
+#specific-product-panel {
+  touch-action: pan-y pinch-zoom;
+}

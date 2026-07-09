@@ -1006,11 +1006,12 @@ function addLongPressHandler(
   let pressTimer = null;
   let startX = 0;
   let startY = 0;
-  let longPressReady = false;
+  let pressReady = false;
+  let pressActive = false;
   let suppressClick = false;
-  let pointerIsDown = false;
-  let pointerDownEvent = null;
-  let activatedWhileHeld = false;
+  let activeTouchId = null;
+  let mouseIsDown = false;
+  let recentTouchUntil = 0;
 
   function shouldIgnore(event) {
     return Boolean(
@@ -1019,16 +1020,49 @@ function addLongPressHandler(
     );
   }
 
-  function resetPress() {
+  function clearPressState() {
     if (pressTimer) {
       clearTimeout(pressTimer);
       pressTimer = null;
     }
 
-    longPressReady = false;
-    pointerIsDown = false;
-    pointerDownEvent = null;
+    pressReady = false;
+    pressActive = false;
+    activeTouchId = null;
+    mouseIsDown = false;
     element.classList.remove("is-long-pressing");
+  }
+
+  function beginPress(x, y) {
+    clearPressState();
+    startX = x;
+    startY = y;
+    pressActive = true;
+    element.classList.add("is-long-pressing");
+
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+
+      if (pressActive) {
+        pressReady = true;
+      }
+    }, duration);
+  }
+
+  function movedTooFar(x, y) {
+    return Math.hypot(x - startX, y - startY) > moveTolerance;
+  }
+
+  async function finishPress(event) {
+    const shouldActivate = pressActive && pressReady;
+    clearPressState();
+
+    if (!shouldActivate) {
+      return;
+    }
+
+    suppressClick = true;
+    await handler(event);
   }
 
   element.classList.add("has-long-press");
@@ -1037,103 +1071,125 @@ function addLongPressHandler(
     element.classList.add("long-press-allows-scroll");
   }
 
-  element.addEventListener("pointerdown", (event) => {
-    if (element.disabled || shouldIgnore(event)) {
-      return;
-    }
-
-    if (!allowScroll) {
-      event.preventDefault();
-    }
-
-    resetPress();
-    suppressClick = false;
-    activatedWhileHeld = false;
-    pointerIsDown = true;
-    pointerDownEvent = event;
-    startX = event.clientX;
-    startY = event.clientY;
-    element.classList.add("is-long-pressing");
-
-    if (!allowScroll && element.setPointerCapture) {
-      try {
-        element.setPointerCapture(event.pointerId);
-      } catch (error) {
-        // Some browsers/elements do not allow pointer capture.
-      }
-    }
-
-    pressTimer = setTimeout(() => {
-      pressTimer = null;
-
-      if (!pointerIsDown) {
+  /*
+   * Touch tracking deliberately never calls preventDefault while the finger is
+   * down or moving. That leaves vertical scrolling entirely to the browser.
+   * A successful long press is actioned only when the finger is released.
+   */
+  element.addEventListener(
+    "touchstart",
+    (event) => {
+      if (
+        element.disabled ||
+        shouldIgnore(event) ||
+        event.touches.length !== 1
+      ) {
         return;
       }
 
-      longPressReady = true;
-
-      if (allowScroll) {
-        activatedWhileHeld = true;
-        suppressClick = true;
-        pointerIsDown = false;
-        element.classList.remove("is-long-pressing");
-        Promise.resolve(handler(pointerDownEvent)).catch((error) => {
-          console.error("Long-press action failed:", error);
-        });
-      }
-    }, duration);
-  });
-
-  element.addEventListener("pointermove", (event) => {
-    if (!pointerIsDown) {
-      return;
-    }
-
-    const movedDistance = Math.hypot(
-      event.clientX - startX,
-      event.clientY - startY
-    );
-
-    if (movedDistance > moveTolerance) {
-      resetPress();
-    }
-  });
-
-  element.addEventListener("pointerup", async (event) => {
-    if (activatedWhileHeld) {
-      activatedWhileHeld = false;
-      event.preventDefault();
-      return;
-    }
-
-    if (!pointerIsDown) {
-      return;
-    }
-
-    const shouldActivate = longPressReady;
-    resetPress();
-
-    if (!shouldActivate) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    suppressClick = true;
-    await handler(event);
-  });
-
-  element.addEventListener("pointercancel", resetPress);
-
-  ["contextmenu", "selectstart", "dragstart"].forEach(
-    (eventName) => {
-      element.addEventListener(eventName, (event) => {
-        if (!shouldIgnore(event)) {
-          event.preventDefault();
-        }
-      });
-    }
+      const touch = event.changedTouches[0];
+      recentTouchUntil = Date.now() + 800;
+      beginPress(touch.clientX, touch.clientY);
+      activeTouchId = touch.identifier;
+    },
+    { passive: true }
   );
+
+  element.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!pressActive || activeTouchId === null) {
+        return;
+      }
+
+      const touch = Array.from(event.changedTouches).find(
+        (candidate) => candidate.identifier === activeTouchId
+      );
+
+      if (touch && movedTooFar(touch.clientX, touch.clientY)) {
+        clearPressState();
+      }
+    },
+    { passive: true }
+  );
+
+  element.addEventListener(
+    "touchend",
+    async (event) => {
+      if (!pressActive || activeTouchId === null) {
+        return;
+      }
+
+      const touchEnded = Array.from(event.changedTouches).some(
+        (touch) => touch.identifier === activeTouchId
+      );
+
+      if (!touchEnded) {
+        return;
+      }
+
+      const shouldActivate = pressReady;
+
+      if (shouldActivate) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      await finishPress(event);
+    },
+    { passive: false }
+  );
+
+  element.addEventListener("touchcancel", clearPressState, {
+    passive: true
+  });
+
+  /* Mouse support is kept separate so synthetic mouse events after touch do
+   * not start a second press. */
+  element.addEventListener("mousedown", (event) => {
+    if (
+      Date.now() < recentTouchUntil ||
+      event.button !== 0 ||
+      element.disabled ||
+      shouldIgnore(event)
+    ) {
+      return;
+    }
+
+    beginPress(event.clientX, event.clientY);
+    mouseIsDown = true;
+  });
+
+  element.addEventListener("mousemove", (event) => {
+    if (mouseIsDown && movedTooFar(event.clientX, event.clientY)) {
+      clearPressState();
+    }
+  });
+
+  element.addEventListener("mouseup", async (event) => {
+    if (!mouseIsDown) {
+      return;
+    }
+
+    if (pressReady) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    await finishPress(event);
+  });
+
+  element.addEventListener("mouseleave", () => {
+    if (mouseIsDown) {
+      clearPressState();
+    }
+  });
+
+  element.addEventListener("contextmenu", (event) => {
+    if (!shouldIgnore(event)) {
+      event.preventDefault();
+    }
+  });
 
   element.addEventListener("click", (event) => {
     if (suppressClick) {

@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1431">
-  <script type="module" src="app.js?v=1431"></script>
+  <link rel="stylesheet" href="styles.css?v=1635">
+  <script type="module" src="app.js?v=1635"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -214,6 +214,80 @@
               </div>
             </div>
 
+          </form>
+        </section>
+
+        <section
+          id="one-off-item-panel"
+          class="new-item-panel settings-form"
+          hidden
+        >
+          <form id="add-one-off-item-form">
+            <div class="form-heading-row">
+              <h3>New one-off item</h3>
+
+              <div class="form-heading-actions">
+                <button
+                  type="button"
+                  id="cancel-one-off-item"
+                  aria-label="Cancel new one-off item"
+                  title="Cancel"
+                >
+                  ×
+                </button>
+
+                <button
+                  type="submit"
+                  aria-label="Add one-off item"
+                  title="Add"
+                >
+                  ✓
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-form-fields">
+              <label for="one-off-item-name">
+                Item
+              </label>
+
+              <input
+                type="text"
+                id="one-off-item-name"
+                required
+                maxlength="80"
+                autocomplete="off"
+              >
+
+              <label for="one-off-item-attributes">
+                Specific Attributes (optional)
+              </label>
+
+              <input
+                type="text"
+                id="one-off-item-attributes"
+                maxlength="100"
+                autocomplete="off"
+                placeholder="e.g. 2 L, gluten-free, fragrance-free"
+              >
+
+              <div class="settings-field-label">
+                Store types and stores (choose at least one)
+              </div>
+
+              <div
+                id="one-off-shopping-targets"
+                class="one-off-shopping-targets"
+              ></div>
+
+              <label for="one-off-item-room">
+                Room (optional)
+              </label>
+
+              <select id="one-off-item-room">
+                <option value="">No additional room</option>
+              </select>
+            </div>
           </form>
         </section>
 
@@ -793,6 +867,31 @@
     </form>
   </section>
 
+  <section
+    id="compact-select-panel"
+    class="compact-select-panel"
+    hidden
+  >
+    <div
+      class="compact-select-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="compact-select-title"
+    >
+      <div class="compact-select-heading">
+        <h3 id="compact-select-title">Choose</h3>
+        <button
+          type="button"
+          id="close-compact-select"
+          aria-label="Close selector"
+          title="Close"
+        >×</button>
+      </div>
+
+      <div id="compact-select-options"></div>
+    </div>
+  </section>
+
   <nav class="bottom-action-bar" aria-label="App actions">
     <button
       type="button"
@@ -805,7 +904,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607091431">V14.31</span>
+      <span id="app-build" title="Build 202607091635">V16.35</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

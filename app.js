@@ -226,6 +226,13 @@ const itemNameInput = document.querySelector("#item-name");
 const itemRoomLabel = document.querySelector("#item-room-label");
 const itemRoomSelect = document.querySelector("#item-room");
 const itemDefaultAmountInput = document.querySelector("#item-default-amount");
+const oneOffItemPanel = document.querySelector("#one-off-item-panel");
+const addOneOffItemForm = document.querySelector("#add-one-off-item-form");
+const oneOffItemNameInput = document.querySelector("#one-off-item-name");
+const oneOffItemAttributesInput = document.querySelector("#one-off-item-attributes");
+const oneOffShoppingTargets = document.querySelector("#one-off-shopping-targets");
+const oneOffItemRoomSelect = document.querySelector("#one-off-item-room");
+const cancelOneOffItemButton = document.querySelector("#cancel-one-off-item");
 const roomItemsList = document.querySelector("#room-items-list");
 const roomItemsSearch = document.querySelector("#room-items-search");
 const specificProductPanel = document.querySelector("#specific-product-panel");
@@ -254,6 +261,13 @@ const shoppingAtPanel = document.querySelector("#shopping-at-panel");
 const shoppingLocationOptions = document.querySelector("#shopping-location-options");
 const gettingItemsList = document.querySelector("#getting-items-list");
 const finishShopButton = document.querySelector("#finish-shop-button");
+
+/* Compact custom selectors */
+const compactSelectPanel = document.querySelector("#compact-select-panel");
+const compactSelectTitle = document.querySelector("#compact-select-title");
+const compactSelectOptions = document.querySelector("#compact-select-options");
+const closeCompactSelectButton = document.querySelector("#close-compact-select");
+let activeCompactSelect = null;
 
 const settingsSortables = new Map();
 
@@ -289,10 +303,15 @@ let lastNonSettingsView = "needing";
 let appHistoryDepth = 0;
 let suppressAppHistory = false;
 
+const ONE_OFF_ROOM_ID = "__one_off_stuff__";
 const REGULAR_ROOM_ID = "__regular_stuff__";
 const ALL_STUFF_ROOM_ID = "__all_stuff__";
 const SETTINGS_MENU_ORDER_KEY =
   `listsForTheShop.settingsMenuOrder.${HOUSEHOLD_ID}`;
+
+function isOneOffRoomSelected() {
+  return selectedRoomId === ONE_OFF_ROOM_ID;
+}
 
 function isRegularRoomSelected() {
   return selectedRoomId === REGULAR_ROOM_ID;
@@ -307,6 +326,10 @@ function itemIsRegular(item) {
 }
 
 function getSelectedRoomName() {
+  if (isOneOffRoomSelected()) {
+    return "One-off stuff";
+  }
+
   if (isRegularRoomSelected()) {
     return "Regular stuff";
   }
@@ -406,6 +429,11 @@ function closeFullNeededListToPreviousView() {
 }
 
 function handleAppBackButton() {
+  if (compactSelectPanel && !compactSelectPanel.hidden) {
+    closeCompactSelect();
+    return true;
+  }
+
   if (temporaryNotePanel && !temporaryNotePanel.hidden) {
     closeTemporaryNotePanel();
     return true;
@@ -413,6 +441,16 @@ function handleAppBackButton() {
 
   if (!specificProductPanel?.hidden) {
     closeSpecificProductQuickAdd();
+    return true;
+  }
+
+  if (oneOffItemPanel && !oneOffItemPanel.hidden) {
+    oneOffItemPanel.hidden = true;
+
+    if (newItemButton) {
+      newItemButton.hidden = false;
+    }
+
     return true;
   }
 
@@ -660,8 +698,8 @@ function updateBottomContextAction() {
           return false;
         }
 
-        return specificProductIsAvailableAtStore(
-          record.specificProduct,
+        return neededRecordIsAvailableAtStore(
+          record,
           selectedStore?.id
         );
       }
@@ -729,6 +767,8 @@ function openSettingsCategory(categoryName) {
 }
 
 function showView(viewName) {
+  closeCompactSelect();
+
   if (viewName !== "settings") {
     lastNonSettingsView = viewName;
   }
@@ -799,6 +839,10 @@ function resetNeedingToRoomList() {
     newItemPanel.hidden = true;
   }
 
+  if (oneOffItemPanel) {
+    oneOffItemPanel.hidden = true;
+  }
+
   if (newItemButton) {
     newItemButton.hidden = false;
   }
@@ -830,6 +874,38 @@ function openRoom(room) {
     newItemPanel.hidden = true;
   }
 
+  if (oneOffItemPanel) {
+    oneOffItemPanel.hidden = true;
+  }
+
+  if (newItemButton) {
+    newItemButton.hidden = false;
+    newItemButton.textContent = "New item";
+  }
+
+  renderRoomItems();
+  updateBottomContextAction();
+}
+
+function openOneOffRoom() {
+  selectedRoomId = ONE_OFF_ROOM_ID;
+  roomSelectorButton.hidden = false;
+  setRoomSelectorLabel("One-off stuff");
+  roomSelectorButton.setAttribute("aria-expanded", "false");
+  needingHome.hidden = true;
+  fullNeededView.hidden = true;
+  roomView.hidden = false;
+  roomViewTitle.textContent = "One-off stuff";
+  editingItemId = null;
+
+  if (newItemPanel) {
+    newItemPanel.hidden = true;
+  }
+
+  if (oneOffItemPanel) {
+    oneOffItemPanel.hidden = true;
+  }
+
   if (newItemButton) {
     newItemButton.hidden = false;
     newItemButton.textContent = "New item";
@@ -854,6 +930,10 @@ function openRegularRoom() {
     newItemPanel.hidden = true;
   }
 
+  if (oneOffItemPanel) {
+    oneOffItemPanel.hidden = true;
+  }
+
   if (newItemButton) {
     newItemButton.hidden = false;
     newItemButton.textContent = "Edit regulars";
@@ -876,6 +956,10 @@ function openAllStuff() {
 
   if (newItemPanel) {
     newItemPanel.hidden = true;
+  }
+
+  if (oneOffItemPanel) {
+    oneOffItemPanel.hidden = true;
   }
 
   if (newItemButton) {
@@ -938,26 +1022,43 @@ function sortBySavedOrderThenName(a, b) {
   return String(a.name ?? "").localeCompare(String(b.name ?? ""));
 }
 
+function storeTypeIdsForItem(item) {
+  const storeTypeIds = new Set(
+    (Array.isArray(item?.storeTypeIds) ? item.storeTypeIds : [])
+      .map((id) => String(id))
+  );
+
+  (Array.isArray(item?.storeIds) ? item.storeIds : []).forEach((storeId) => {
+    const store = currentStores.find(
+      (candidate) => String(candidate.id) === String(storeId)
+    );
+
+    if (store?.storeTypeId) {
+      storeTypeIds.add(String(store.storeTypeId));
+    }
+  });
+
+  const productType = currentProductTypes.find(
+    (candidate) => candidate.id === item?.productTypeId
+  );
+
+  if (productType) {
+    productTypeStoreTypeIds(productType).forEach((id) => {
+      storeTypeIds.add(String(id));
+    });
+  }
+
+  return Array.from(storeTypeIds);
+}
+
 function itemBelongsToStoreType(item, storeTypeId) {
   if (!storeTypeId) {
     return false;
   }
 
-  const productType = currentProductTypes.find(
-    (candidate) => candidate.id === item.productTypeId
+  return storeTypeIdsForItem(item).some(
+    (candidateId) => String(candidateId) === String(storeTypeId)
   );
-
-  if (productType) {
-    return productTypeBelongsToStoreType(productType, storeTypeId);
-  }
-
-  if (Array.isArray(item.storeTypeIds)) {
-    return item.storeTypeIds.some(
-      (itemStoreTypeId) => String(itemStoreTypeId) === String(storeTypeId)
-    );
-  }
-
-  return false;
 }
 
 function householdCollection(collectionName) {
@@ -1502,6 +1603,222 @@ function addDoubleTapHandler(
     event.preventDefault();
     event.stopPropagation();
     handler(event);
+  });
+}
+
+function compactControlLabelText(label) {
+  const clone = label.cloneNode(true);
+  clone
+    .querySelectorAll("select, input, textarea, button")
+    .forEach((control) => control.remove());
+
+  return clone.textContent
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compactSelectFieldLabel(select) {
+  if (select.id) {
+    const labelled = document.querySelector(
+      `label[for="${CSS.escape(select.id)}"]`
+    );
+
+    if (labelled) {
+      return compactControlLabelText(labelled) || "Choose";
+    }
+  }
+
+  const parentLabel = select.closest("label");
+
+  if (parentLabel) {
+    return compactControlLabelText(parentLabel) || "Choose";
+  }
+
+  return select.getAttribute("aria-label") || "Choose";
+}
+
+function selectedCompactOption(select) {
+  return Array.from(select.options).find(
+    (option) => option.value === select.value
+  ) ?? select.options[select.selectedIndex] ?? null;
+}
+
+function refreshCompactSelect(select) {
+  const button = select?._compactSelectButton;
+
+  if (!button) {
+    return;
+  }
+
+  const selectedOption = selectedCompactOption(select);
+  const text = selectedOption?.textContent?.trim() || "Choose";
+  button.textContent = text;
+  button.setAttribute(
+    "aria-label",
+    `${compactSelectFieldLabel(select)}: ${text}`
+  );
+  button.classList.toggle("is-placeholder", !select.value);
+  button.disabled = select.disabled;
+  button.hidden = select.hidden;
+  button.setAttribute("aria-expanded", String(activeCompactSelect === select));
+}
+
+function closeCompactSelect() {
+  if (activeCompactSelect) {
+    refreshCompactSelect(activeCompactSelect);
+  }
+
+  activeCompactSelect = null;
+  compactSelectPanel.hidden = true;
+  compactSelectOptions.innerHTML = "";
+}
+
+function appendCompactSelectOption(select, option, groupLabel = "") {
+  if (option.hidden) {
+    return;
+  }
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "compact-select-option";
+  button.disabled = option.disabled;
+  button.dataset.value = option.value;
+
+  if (groupLabel) {
+    button.dataset.groupLabel = groupLabel;
+  }
+
+  const text = document.createElement("span");
+  text.textContent = option.textContent.trim();
+
+  const marker = document.createElement("span");
+  marker.className = "compact-select-selected-marker";
+  marker.textContent = option.value === select.value ? "✓" : "";
+
+  if (option.value === select.value) {
+    button.classList.add("is-selected");
+  }
+
+  button.append(text, marker);
+  button.addEventListener("click", () => {
+    select.value = option.value;
+    select.dispatchEvent(new Event("input", { bubbles: true }));
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    refreshCompactSelect(select);
+    closeCompactSelect();
+    select._compactSelectButton?.focus({ preventScroll: true });
+  });
+
+  compactSelectOptions.append(button);
+}
+
+function openCompactSelect(select) {
+  if (!select || select.disabled) {
+    return;
+  }
+
+  activeCompactSelect = select;
+  compactSelectTitle.textContent = compactSelectFieldLabel(select);
+  compactSelectOptions.innerHTML = "";
+
+  Array.from(select.children).forEach((child) => {
+    if (child.tagName === "OPTGROUP") {
+      const heading = document.createElement("div");
+      heading.className = "compact-select-group-heading";
+      heading.textContent = child.label;
+      compactSelectOptions.append(heading);
+
+      Array.from(child.children).forEach((option) => {
+        appendCompactSelectOption(select, option, child.label);
+      });
+      return;
+    }
+
+    if (child.tagName === "OPTION") {
+      appendCompactSelectOption(select, child);
+    }
+  });
+
+  compactSelectPanel.hidden = false;
+  refreshCompactSelect(select);
+
+  requestAnimationFrame(() => {
+    const selectedButton = compactSelectOptions.querySelector(
+      ".compact-select-option.is-selected"
+    );
+    const focusButton = selectedButton ?? compactSelectOptions.querySelector(
+      ".compact-select-option:not(:disabled)"
+    );
+
+    selectedButton?.scrollIntoView({ block: "nearest" });
+    focusButton?.focus({ preventScroll: true });
+  });
+}
+
+function enhanceCompactSelect(select) {
+  if (!select || select.multiple || select.dataset.compactSelectEnhanced === "true") {
+    return;
+  }
+
+  select.dataset.compactSelectEnhanced = "true";
+  select.dataset.compactSelectRequired = String(select.required);
+  select.required = false;
+  select.classList.add("compact-select-source");
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "compact-select-button";
+  button.setAttribute("aria-haspopup", "dialog");
+  button.addEventListener("click", () => openCompactSelect(select));
+  select.insertAdjacentElement("afterend", button);
+  select._compactSelectButton = button;
+
+  const observer = new MutationObserver(() => refreshCompactSelect(select));
+  observer.observe(select, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["disabled", "hidden", "label"]
+  });
+
+  select.addEventListener("change", () => refreshCompactSelect(select));
+  refreshCompactSelect(select);
+}
+
+function enhanceCompactSelects(root = document) {
+  if (root.matches?.("select")) {
+    enhanceCompactSelect(root);
+  }
+
+  root.querySelectorAll?.("select").forEach(enhanceCompactSelect);
+}
+
+function setupCompactSelects() {
+  enhanceCompactSelects(document);
+
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          enhanceCompactSelects(node);
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  document.addEventListener("reset", (event) => {
+    requestAnimationFrame(() => {
+      event.target.querySelectorAll?.("select").forEach(refreshCompactSelect);
+    });
+  }, true);
+
+  closeCompactSelectButton?.addEventListener("click", closeCompactSelect);
+  compactSelectPanel?.addEventListener("click", (event) => {
+    if (event.target === compactSelectPanel) {
+      closeCompactSelect();
+    }
   });
 }
 
@@ -2173,9 +2490,19 @@ async function deactivateStoreType(storeType) {
     (productType) => productTypeBelongsToStoreType(productType, storeType.id)
   );
 
+  const matchingOneOffEntries = allNeededEntries().filter(
+    (entry) =>
+      entry.oneOff === true &&
+      Array.isArray(entry.storeTypeIds) &&
+      entry.storeTypeIds.some(
+        (storeTypeId) => String(storeTypeId) === String(storeType.id)
+      )
+  );
+
   if (
     matchingStores.length > 0 ||
-    matchingProductTypes.length > 0
+    matchingProductTypes.length > 0 ||
+    matchingOneOffEntries.length > 0
   ) {
     showDependencyBlock(storeType.name, [
       dependencyListLine(
@@ -2185,6 +2512,10 @@ async function deactivateStoreType(storeType) {
       dependencyListLine(
         "Product types using this store type",
         dependencyNames(matchingProductTypes, (productType) => productType.name)
+      ),
+      dependencyListLine(
+        "One-off items using this store type",
+        dependencyNames(matchingOneOffEntries, (entry) => entry.itemName)
       )
     ]);
     return;
@@ -2218,7 +2549,20 @@ async function deactivateStore(store) {
       )
   );
 
-  if (matchingItems.length > 0 || matchingSpecificProducts.length > 0) {
+  const matchingOneOffEntries = allNeededEntries().filter(
+    (entry) =>
+      entry.oneOff === true &&
+      Array.isArray(entry.storeIds) &&
+      entry.storeIds.some(
+        (storeId) => String(storeId) === String(store.id)
+      )
+  );
+
+  if (
+    matchingItems.length > 0 ||
+    matchingSpecificProducts.length > 0 ||
+    matchingOneOffEntries.length > 0
+  ) {
     showDependencyBlock(store.name, [
       dependencyListLine(
         "Items assigned to this store",
@@ -2238,6 +2582,10 @@ async function deactivateStore(store) {
               : product.name;
           }
         )
+      ),
+      dependencyListLine(
+        "One-off items assigned to this store",
+        dependencyNames(matchingOneOffEntries, (entry) => entry.itemName)
       )
     ]);
     return;
@@ -2841,6 +3189,137 @@ function createStoreTypeCheckboxList(container, selectedStoreTypeIds = []) {
   });
 }
 
+function populateOneOffRoomSelect() {
+  if (!oneOffItemRoomSelect) {
+    return;
+  }
+
+  const selectedValue = oneOffItemRoomSelect.value;
+  oneOffItemRoomSelect.innerHTML = '<option value="">No additional room</option>';
+
+  currentRooms.forEach((room) => {
+    const option = document.createElement("option");
+    option.value = room.id;
+    option.textContent = room.name;
+    oneOffItemRoomSelect.append(option);
+  });
+
+  if (currentRooms.some((room) => String(room.id) === String(selectedValue))) {
+    oneOffItemRoomSelect.value = selectedValue;
+  }
+
+  refreshCompactSelect(oneOffItemRoomSelect);
+}
+
+function renderOneOffShoppingTargets({ preserveSelection = true } = {}) {
+  if (!oneOffShoppingTargets) {
+    return;
+  }
+
+  const selectedValues = preserveSelection
+    ? new Set(
+        Array.from(
+          oneOffShoppingTargets.querySelectorAll(
+            "input[type='checkbox']:checked"
+          )
+        ).map((checkbox) => checkbox.value)
+      )
+    : new Set();
+
+  oneOffShoppingTargets.innerHTML = "";
+
+  if (currentStoreTypes.length === 0) {
+    oneOffShoppingTargets.innerHTML = "<p>No store types are available.</p>";
+    return;
+  }
+
+  currentStoreTypes.forEach((storeType) => {
+    const group = document.createElement("div");
+    group.className = "one-off-shopping-target-group";
+
+    const storeTypeChoice = createSettingsCheckboxOption({
+      value: `storeType:${storeType.id}`,
+      text: storeType.name,
+      checked: selectedValues.has(`storeType:${storeType.id}`)
+    });
+    storeTypeChoice.optionLabel.classList.add("one-off-shopping-target-option");
+    group.append(storeTypeChoice.optionLabel);
+
+    currentStores
+      .filter((store) => String(store.storeTypeId) === String(storeType.id))
+      .sort(sortBySavedOrderThenName)
+      .forEach((store) => {
+        const storeChoice = createSettingsCheckboxOption({
+          value: `store:${store.id}`,
+          text: store.name,
+          checked: selectedValues.has(`store:${store.id}`)
+        });
+        storeChoice.optionLabel.classList.add("one-off-shopping-target-option");
+        group.append(storeChoice.optionLabel);
+      });
+
+    oneOffShoppingTargets.append(group);
+  });
+}
+
+function selectedOneOffShoppingTargets() {
+  const storeTypeIds = [];
+  const storeIds = [];
+
+  oneOffShoppingTargets
+    .querySelectorAll("input[type='checkbox']:checked")
+    .forEach((checkbox) => {
+      const [kind, id] = checkbox.value.split(":");
+
+      if (kind === "storeType" && id) {
+        storeTypeIds.push(id);
+      }
+
+      if (kind === "store" && id) {
+        storeIds.push(id);
+      }
+    });
+
+  return { storeTypeIds, storeIds };
+}
+
+function resetOneOffItemForm() {
+  addOneOffItemForm?.reset();
+  renderOneOffShoppingTargets({ preserveSelection: false });
+  populateOneOffRoomSelect();
+}
+
+async function saveOneOffItem() {
+  const name = oneOffItemNameInput.value.trim();
+  const specificAttributes = oneOffItemAttributesInput.value.trim();
+  const roomId = oneOffItemRoomSelect.value || null;
+  const { storeTypeIds, storeIds } = selectedOneOffShoppingTargets();
+
+  if (!name) {
+    throw new Error("Please enter an item name.");
+  }
+
+  if (storeTypeIds.length === 0 && storeIds.length === 0) {
+    throw new Error("Please choose at least one store type or store.");
+  }
+
+  await addDoc(householdCollection("neededEntries"), {
+    oneOff: true,
+    itemName: name,
+    specificAttributes,
+    roomId,
+    storeTypeIds,
+    storeIds,
+    amount: 1,
+    unitId: null,
+    status: "needed",
+    addedAt: serverTimestamp(),
+    adjustedAt: serverTimestamp(),
+    statusChangedAt: serverTimestamp(),
+    collectedAt: null
+  });
+}
+
 async function saveSettingsOrder({
   listElement,
   collectionName
@@ -3160,6 +3639,7 @@ function renderSettingsLists() {
 function renderRooms(rooms) {
   currentRooms = rooms;
   populateSettingsItemRoomSelect();
+  populateOneOffRoomSelect();
 
   renderSettingsRows({
     settingsKey: "rooms",
@@ -3190,6 +3670,17 @@ function renderRooms(rooms) {
   });
 
   needingRoomsList.innerHTML = "";
+
+  const oneOffButton = document.createElement("button");
+  oneOffButton.type = "button";
+  oneOffButton.className =
+    "room-button shopping-location-option one-off-room-button";
+  oneOffButton.textContent = "One-off stuff";
+  oneOffButton.addEventListener("click", () => {
+    recordAppNavigation();
+    openOneOffRoom();
+  });
+  needingRoomsList.append(oneOffButton);
 
   const regularButton = document.createElement("button");
   regularButton.type = "button";
@@ -3299,6 +3790,7 @@ function renderStoreTypes(storeTypes) {
   renderStores(currentStores);
   renderProductTypes(currentProductTypes);
   renderShoppingLocations();
+  renderOneOffShoppingTargets();
 }
 
 function renderStores(stores) {
@@ -3351,6 +3843,7 @@ function renderStores(stores) {
   });
 
   renderShoppingLocations();
+  renderOneOffShoppingTargets();
   populateItemStoreSelect(
     itemStoreSelect,
     itemProductTypeSelect?.value,
@@ -4822,6 +5315,26 @@ function neededEntryDocumentIdFor(
 }
 
 function itemForNeededEntry(entry) {
+  if (entry?.oneOff === true) {
+    return {
+      id: `one-off-${entry.id}`,
+      name: entry.itemName ?? "One-off item",
+      specificAttributes: entry.specificAttributes ?? "",
+      storeTypeIds: Array.isArray(entry.storeTypeIds)
+        ? entry.storeTypeIds
+        : [],
+      storeIds: Array.isArray(entry.storeIds)
+        ? entry.storeIds
+        : [],
+      locationId: entry.roomId ?? null,
+      defaultAmount: 1,
+      increment: 1,
+      unitId: null,
+      active: true,
+      oneOff: true
+    };
+  }
+
   return currentItems.find(
     (item) => String(item.id) === String(entry.itemId ?? entry.id)
   ) ?? null;
@@ -4863,7 +5376,11 @@ function neededRecordMatchesSearch(record, searchText) {
     productType?.name,
     record.specificProduct?.name,
     specificProductDetailText(record.specificProduct ?? {}),
-    record.entry.temporaryNote
+    record.entry.temporaryNote,
+    storeTypeIdsForItem(record.item)
+      .map((id) => getStoreTypeName(id))
+      .join(" "),
+    recordedStoreNames(record.item.storeIds)
   ]
     .map((value) => String(value ?? '').toLowerCase())
     .some((value) => value.includes(searchText));
@@ -4907,6 +5424,30 @@ function specificProductIsAvailableAtStore(specificProduct, storeId) {
 function neededRecordIsAvailableAtStore(record, storeId) {
   if (!storeId) {
     return true;
+  }
+
+  const selectedStore = currentStores.find(
+    (store) => String(store.id) === String(storeId)
+  );
+
+  const itemStoreIds = Array.isArray(record.item.storeIds)
+    ? record.item.storeIds
+    : [];
+
+  if (record.item.oneOff) {
+    const explicitStoreTypeIds = Array.isArray(record.item.storeTypeIds)
+      ? record.item.storeTypeIds
+      : [];
+
+    return (
+      itemStoreIds.some(
+        (candidateId) => String(candidateId) === String(storeId)
+      ) ||
+      explicitStoreTypeIds.some(
+        (candidateId) =>
+          String(candidateId) === String(selectedStore?.storeTypeId)
+      )
+    );
   }
 
   const specificStoreIds = Array.isArray(record.specificProduct?.storeIds)
@@ -5071,6 +5612,73 @@ async function saveTemporaryNote() {
   });
 }
 
+function oneOffNeededRecordsForRoom() {
+  return currentNeededRecords()
+    .filter((record) => record.item.oneOff)
+    .filter((record) => {
+      if (isOneOffRoomSelected() || isAllStuffSelected()) {
+        return true;
+      }
+
+      if (isRegularRoomSelected()) {
+        return false;
+      }
+
+      return String(record.item.locationId ?? "") === String(selectedRoomId);
+    });
+}
+
+function appendOneOffNeededRow(record, targetList = roomItemsList) {
+  const { item, entry } = record;
+  const row = document.createElement("div");
+  row.className = "item-row room-item-row is-needed one-off-needed-row";
+
+  const details = document.createElement("div");
+  details.className = "item-row-details";
+  details.append(
+    createItemNameDisplay(item, null, {
+      temporaryNote: entry.temporaryNote
+    })
+  );
+
+  const amountDisplay = document.createElement("strong");
+  amountDisplay.className = "room-current-quantity";
+  amountDisplay.textContent = formatAmount(entry.amount, entry.unitId);
+  details.append(amountDisplay);
+
+  const controls = document.createElement("div");
+  controls.className = "room-item-controls";
+
+  const increaseButton = createIconButton({
+    className: "room-icon-button increase-needed-button",
+    icon: "+",
+    label: `Increase ${item.name}`,
+    onClick: async () => {
+      disableButtons([increaseButton, decreaseButton]);
+      await changeNeededAmount(item, entry, 1);
+    }
+  });
+
+  const decreaseButton = createIconButton({
+    className: "room-icon-button decrease-needed-button",
+    icon: "−",
+    label: `Decrease ${item.name}`,
+    onClick: async () => {
+      disableButtons([increaseButton, decreaseButton]);
+      await changeNeededAmount(item, entry, -1);
+    }
+  });
+
+  controls.append(increaseButton, decreaseButton);
+  row.append(details, controls);
+
+  addDoubleTapHandler(row, () => {
+    openTemporaryNotePanel(item, entry);
+  });
+
+  targetList.append(row);
+}
+
 function renderRoomItems() {
   roomItemsList.innerHTML = "";
 
@@ -5079,6 +5687,29 @@ function renderRoomItems() {
   }
 
   const roomSearchText = roomItemsSearch?.value.trim().toLowerCase() ?? "";
+  const allOneOffRecords = oneOffNeededRecordsForRoom();
+  const oneOffRecords = allOneOffRecords.filter((record) =>
+    neededRecordMatchesSearch(record, roomSearchText)
+  );
+
+  if (isOneOffRoomSelected()) {
+    if (allOneOffRecords.length === 0) {
+      roomItemsList.innerHTML =
+        "<p>No one-off items are currently needed.</p>";
+      return;
+    }
+
+    if (oneOffRecords.length === 0) {
+      roomItemsList.innerHTML =
+        "<p>No matching one-off items.</p>";
+      return;
+    }
+
+    oneOffRecords
+      .sort(compareNeededRecords)
+      .forEach((record) => appendOneOffNeededRow(record));
+    return;
+  }
 
   const allRoomItems = currentItems.filter((item) => {
     if (item.active === false) {
@@ -5118,17 +5749,21 @@ function renderRoomItems() {
       .includes(roomSearchText);
   });
 
-  if (allRoomItems.length === 0) {
+  if (allRoomItems.length === 0 && allOneOffRecords.length === 0) {
     roomItemsList.innerHTML = isAllStuffSelected()
       ? "<p>No items have been created yet.</p>"
       : "<p>No items have been created for this room yet.</p>";
     return;
   }
 
-  if (roomItems.length === 0) {
+  if (roomItems.length === 0 && oneOffRecords.length === 0) {
     roomItemsList.innerHTML = "<p>No matching room items.</p>";
     return;
   }
+
+  oneOffRecords
+    .sort(compareNeededRecords)
+    .forEach((record) => appendOneOffNeededRow(record));
 
   const renderedItemIds = new Set();
 
@@ -5617,9 +6252,11 @@ function appendFullNeededItemRow(record) {
   controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
 
-  addScrollableHoldHandler(row, () => {
-    openSpecificProductQuickAdd(item);
-  });
+  if (!item.oneOff) {
+    addScrollableHoldHandler(row, () => {
+      openSpecificProductQuickAdd(item);
+    });
+  }
 
   addDoubleTapHandler(row, () => {
     openTemporaryNotePanel(item, entry, specificProduct);
@@ -5662,14 +6299,9 @@ function renderFullNeededList() {
   let renderedAny = false;
 
   currentStoreTypes.forEach((storeType) => {
-    const storeTypeRecords = neededRecords.filter((record) => {
-      const productType = productTypeForItem(record.item);
-
-      return (
-        productType &&
-        productTypeBelongsToStoreType(productType, storeType.id)
-      );
-    });
+    const storeTypeRecords = neededRecords.filter((record) =>
+      itemBelongsToStoreType(record.item, storeType.id)
+    );
 
     if (storeTypeRecords.length === 0) {
       return;
@@ -5692,17 +6324,20 @@ function renderFullNeededList() {
           renderedAny = true;
         }
       });
+
+    storeTypeRecords
+      .filter((record) => record.item.oneOff)
+      .sort(compareNeededRecords)
+      .forEach((record) => {
+        appendFullNeededItemRow(record);
+        renderedAny = true;
+      });
   });
 
   const unassignedRecords = neededRecords
-    .filter((record) => {
-      const productType = productTypeForItem(record.item);
-
-      return (
-        !productType ||
-        productTypeStoreTypeIds(productType).length === 0
-      );
-    })
+    .filter((record) =>
+      storeTypeIdsForItem(record.item).length === 0
+    )
     .sort(compareNeededRecords);
 
   if (unassignedRecords.length > 0) {
@@ -6387,7 +7022,9 @@ async function changeNeededAmount(
     neededEntryId
   );
 
-  const itemRef = householdDocument("items", item.id);
+  const itemRef = item.oneOff
+    ? null
+    : householdDocument("items", item.id);
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -6412,14 +7049,16 @@ async function changeNeededAmount(
         });
       }
 
-      transaction.set(
-        itemRef,
-        {
-          lastAdjustedAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        },
-        { merge: true }
-      );
+      if (itemRef) {
+        transaction.set(
+          itemRef,
+          {
+            lastAdjustedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      }
     });
   } catch (error) {
     console.error("Could not change quantity:", error);
@@ -6637,6 +7276,23 @@ function wireNavigation() {
       return;
     }
 
+    if (isOneOffRoomSelected()) {
+      closeSpecificProductQuickAdd();
+      newItemPanel.hidden = true;
+      resetOneOffItemForm();
+      oneOffItemPanel.hidden = false;
+      newItemButton.hidden = true;
+
+      requestAnimationFrame(() => {
+        try {
+          oneOffItemNameInput.focus({ preventScroll: true });
+        } catch (_error) {
+          oneOffItemNameInput.focus();
+        }
+      });
+      return;
+    }
+
     closeSpecificProductQuickAdd();
 
     const chooseRoom = isAllStuffSelected();
@@ -6670,6 +7326,11 @@ function wireNavigation() {
 
   cancelNewItemButton.addEventListener("click", () => {
     newItemPanel.hidden = true;
+    newItemButton.hidden = false;
+  });
+
+  cancelOneOffItemButton?.addEventListener("click", () => {
+    oneOffItemPanel.hidden = true;
     newItemButton.hidden = false;
   });
 
@@ -7069,6 +7730,27 @@ function wireForms() {
     });
   }
 
+  addOneOffItemForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const submitButton = addOneOffItemForm.querySelector(
+      "button[type='submit']"
+    );
+    submitButton.disabled = true;
+
+    try {
+      await saveOneOffItem();
+      resetOneOffItemForm();
+      oneOffItemPanel.hidden = true;
+      newItemButton.hidden = false;
+    } catch (error) {
+      console.error("Could not add one-off item:", error);
+      alert(error.message || "The one-off item could not be added.");
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
   addItemForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -7160,6 +7842,7 @@ function startListeners() {
 
 wireNavigation();
 wireForms();
+setupCompactSelects();
 enableSettingsMenuOrdering();
 setupBrowserBackButton();
 setupAutoHidingHeader();

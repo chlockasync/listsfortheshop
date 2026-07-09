@@ -2993,3 +2993,264 @@ body:has(#temporary-note-panel:not([hidden])) {
 .has-long-press.has-double-tap {
   touch-action: manipulation !important;
 }
+
+
+/* ===== One-off room and compact selectors: 202607091622 ===== */
+.one-off-room-button {
+  font-weight: 600;
+}
+
+.one-off-needed-row .item-name {
+  font-weight: 400;
+}
+
+.one-off-shopping-targets {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.one-off-shopping-target-group {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #dedede;
+  border-radius: 0.55rem;
+  background: white;
+}
+
+.one-off-shopping-target-option.settings-checkbox-option {
+  min-height: 38px;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-bottom: 1px solid #ececec;
+  border-radius: 0;
+}
+
+.one-off-shopping-target-option.settings-checkbox-option:last-child {
+  border-bottom: 0;
+}
+
+/* Compact the shared checkbox choices instead of large radio-like blocks. */
+.settings-checkbox-list {
+  gap: 0.2rem;
+}
+
+.settings-checkbox-option {
+  min-height: 36px;
+  gap: 0.45rem;
+  padding: 0.25rem 0.45rem;
+}
+
+.settings-choice-box {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: 0.38rem;
+}
+
+.settings-choice-box .collect-checkbox-graphic {
+  width: 18px;
+  height: 18px;
+  border-radius: 0.28rem;
+  font-size: 0.9rem;
+}
+
+.compact-select-source {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.compact-select-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 42px;
+  padding: 0.55rem 2.2rem 0.55rem 0.7rem;
+  border: 1px solid #cfcfcf;
+  border-radius: 0.45rem;
+  background: white;
+  color: #1f1f1f;
+  text-align: left;
+  font: inherit;
+  line-height: 1.2;
+}
+
+.compact-select-button::after {
+  position: absolute;
+  right: 0.75rem;
+  content: "⌄";
+  color: rgb(0 0 0 / 55%);
+  font-size: 1.1rem;
+}
+
+.compact-select-button.is-placeholder {
+  color: rgb(0 0 0 / 55%);
+}
+
+.compact-select-button:disabled {
+  opacity: 0.55;
+}
+
+.compact-select-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: rgb(0 0 0 / 26%);
+}
+
+.compact-select-panel[hidden] {
+  display: none;
+}
+
+.compact-select-dialog {
+  width: min(430px, 100%);
+  max-height: min(72dvh, 620px);
+  overflow: hidden;
+  border-radius: 0.8rem 0.8rem 0 0;
+  background: white;
+  box-shadow: 0 -8px 28px rgb(0 0 0 / 22%);
+}
+
+.compact-select-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0.4rem 0.65rem 0.4rem 0.9rem;
+  border-bottom: 1px solid #dedede;
+}
+
+.compact-select-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.compact-select-heading button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f2f2f2;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+#compact-select-options {
+  max-height: calc(min(72dvh, 620px) - 49px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.compact-select-group-heading {
+  padding: 0.55rem 0.8rem 0.3rem;
+  border-top: 6px solid #f4f4f4;
+  color: rgb(0 0 0 / 58%);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.compact-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  border: 0;
+  border-bottom: 1px solid #ececec;
+  border-radius: 0;
+  background: white;
+  color: #1f1f1f;
+  text-align: left;
+  font: inherit;
+  line-height: 1.2;
+}
+
+.compact-select-option.is-selected {
+  background: #f1f5f1;
+  font-weight: 600;
+}
+
+.compact-select-selected-marker {
+  flex: 0 0 auto;
+  min-width: 1rem;
+  color: #245d35;
+  text-align: center;
+  font-weight: 700;
+}
+
+
+/* Tighten selector-style lists without shrinking ordinary item rows. */
+#rooms-list .shopping-location-option,
+#shopping-location-options .shopping-location-option,
+#settings-home .shopping-location-option {
+  min-height: 42px;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+
+.specific-product-choice-row {
+  min-height: 42px;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+
+#one-off-item-panel {
+  position: fixed;
+  left: 50%;
+  bottom: var(--bottom-bar-height);
+  z-index: 28;
+  width: min(430px, 100%);
+  max-height: min(72dvh, 560px);
+  margin: 0;
+  overflow-y: auto;
+  transform: translateX(-50%);
+  border-top: 1px solid #cfcfcf;
+  border-radius: 0;
+  background: var(--space-panel) !important;
+  box-shadow: 0 -8px 22px rgb(0 0 0 / 14%);
+  touch-action: pan-y pinch-zoom;
+}
+
+#one-off-item-panel[hidden] {
+  display: none !important;
+}
+
+#one-off-item-panel h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+#one-off-item-panel .form-heading-row {
+  position: static;
+  top: auto;
+  margin-top: 0;
+}
+
+#one-off-item-panel .settings-form-fields {
+  margin-top: 0;
+}

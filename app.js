@@ -223,6 +223,8 @@ const itemUnitSelect = document.querySelector("#item-unit");
 const itemIncrementInput = document.querySelector("#item-increment");
 const addItemForm = document.querySelector("#add-item-form");
 const itemNameInput = document.querySelector("#item-name");
+const itemRoomLabel = document.querySelector("#item-room-label");
+const itemRoomSelect = document.querySelector("#item-room");
 const itemDefaultAmountInput = document.querySelector("#item-default-amount");
 const roomItemsList = document.querySelector("#room-items-list");
 const roomItemsSearch = document.querySelector("#room-items-search");
@@ -239,6 +241,12 @@ const backFromNeededListButton = document.querySelector("#back-from-needed-list"
 const editItemsFromNeededListButton = document.querySelector("#edit-items-from-needed-list");
 const neededListSearch = document.querySelector("#needed-list-search");
 const fullNeededItems = document.querySelector("#full-needed-items");
+const temporaryNoteDialog = document.querySelector("#temporary-note-dialog");
+const temporaryNoteForm = document.querySelector("#temporary-note-form");
+const temporaryNoteItemName = document.querySelector("#temporary-note-item-name");
+const temporaryNoteText = document.querySelector("#temporary-note-text");
+const cancelTemporaryNoteButton = document.querySelector("#cancel-temporary-note");
+const clearTemporaryNoteButton = document.querySelector("#clear-temporary-note");
 
 /* Getting view */
 const shoppingAtButton = document.querySelector("#shopping-at-button");
@@ -276,6 +284,7 @@ let currentItems = [];
 let currentSpecificProducts = [];
 let currentNeededEntries = new Map();
 let quickSpecificProductItemId = null;
+let temporaryNoteEntryId = null;
 let lastNonSettingsView = "needing";
 let appHistoryDepth = 0;
 let suppressAppHistory = false;
@@ -590,12 +599,21 @@ function updateBottomContextAction() {
   }
 
   if (!views.needing.hidden) {
-    bottomContextAction.textContent = "Full list";
+    const allStuffRoomIsOpen =
+      isAllStuffSelected() &&
+      roomView &&
+      !roomView.hidden;
+
+    bottomContextAction.textContent = allStuffRoomIsOpen
+      ? "Edit items"
+      : "Full list";
     bottomContextAction.disabled = false;
     bottomContextAction.hidden = false;
     bottomContextAction.setAttribute(
       "aria-label",
-      "Open full needed list"
+      allStuffRoomIsOpen
+        ? "Open Items and Specific Products settings"
+        : "Open full needed list"
     );
     return;
   }
@@ -764,6 +782,8 @@ function showNeedingHome() {
   if (newItemButton) {
     newItemButton.textContent = "New item";
   }
+
+  updateBottomContextAction();
 }
 
 function resetNeedingToRoomList() {
@@ -811,6 +831,7 @@ function openRoom(room) {
   }
 
   renderRoomItems();
+  updateBottomContextAction();
 }
 
 function openRegularRoom() {
@@ -834,6 +855,7 @@ function openRegularRoom() {
   }
 
   renderRoomItems();
+  updateBottomContextAction();
 }
 
 function openAllStuff() {
@@ -853,10 +875,11 @@ function openAllStuff() {
 
   if (newItemButton) {
     newItemButton.hidden = false;
-    newItemButton.textContent = "Edit items";
+    newItemButton.textContent = "New item";
   }
 
   renderRoomItems();
+  updateBottomContextAction();
 }
 
 function setContextButtonLabel(button, label) {
@@ -890,9 +913,7 @@ function updateSelectedRoomLabel() {
   if (newItemButton) {
     newItemButton.textContent = isRegularRoomSelected()
       ? "Edit regulars"
-      : isAllStuffSelected()
-        ? "Edit items"
-        : "New item";
+      : "New item";
   }
 }
 
@@ -977,7 +998,9 @@ function addLongPressHandler(
   handler,
   {
     duration = 350,
-    ignoreSelector = null
+    ignoreSelector = null,
+    allowScroll = false,
+    moveTolerance = 28
   } = {}
 ) {
   let pressTimer = null;
@@ -986,6 +1009,8 @@ function addLongPressHandler(
   let longPressReady = false;
   let suppressClick = false;
   let pointerIsDown = false;
+  let pointerDownEvent = null;
+  let activatedWhileHeld = false;
 
   function shouldIgnore(event) {
     return Boolean(
@@ -1002,7 +1027,14 @@ function addLongPressHandler(
 
     longPressReady = false;
     pointerIsDown = false;
+    pointerDownEvent = null;
     element.classList.remove("is-long-pressing");
+  }
+
+  element.classList.add("has-long-press");
+
+  if (allowScroll) {
+    element.classList.add("long-press-allows-scroll");
   }
 
   element.addEventListener("pointerdown", (event) => {
@@ -1010,15 +1042,20 @@ function addLongPressHandler(
       return;
     }
 
-    event.preventDefault();
+    if (!allowScroll) {
+      event.preventDefault();
+    }
+
     resetPress();
     suppressClick = false;
+    activatedWhileHeld = false;
     pointerIsDown = true;
+    pointerDownEvent = event;
     startX = event.clientX;
     startY = event.clientY;
     element.classList.add("is-long-pressing");
 
-    if (element.setPointerCapture) {
+    if (!allowScroll && element.setPointerCapture) {
       try {
         element.setPointerCapture(event.pointerId);
       } catch (error) {
@@ -1029,8 +1066,20 @@ function addLongPressHandler(
     pressTimer = setTimeout(() => {
       pressTimer = null;
 
-      if (pointerIsDown) {
-        longPressReady = true;
+      if (!pointerIsDown) {
+        return;
+      }
+
+      longPressReady = true;
+
+      if (allowScroll) {
+        activatedWhileHeld = true;
+        suppressClick = true;
+        pointerIsDown = false;
+        element.classList.remove("is-long-pressing");
+        Promise.resolve(handler(pointerDownEvent)).catch((error) => {
+          console.error("Long-press action failed:", error);
+        });
       }
     }, duration);
   });
@@ -1045,12 +1094,18 @@ function addLongPressHandler(
       event.clientY - startY
     );
 
-    if (movedDistance > 28) {
+    if (movedDistance > moveTolerance) {
       resetPress();
     }
   });
 
   element.addEventListener("pointerup", async (event) => {
+    if (activatedWhileHeld) {
+      activatedWhileHeld = false;
+      event.preventDefault();
+      return;
+    }
+
     if (!pointerIsDown) {
       return;
     }
@@ -1086,6 +1141,83 @@ function addLongPressHandler(
       event.stopPropagation();
       suppressClick = false;
     }
+  });
+}
+
+function addDoubleTapHandler(
+  element,
+  handler,
+  {
+    maxDelay = 360,
+    moveTolerance = 14,
+    ignoreSelector = "button, input, select, textarea, a"
+  } = {}
+) {
+  let lastTapTime = 0;
+  let lastTapX = 0;
+  let lastTapY = 0;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+  let pointerMoved = false;
+
+  function shouldIgnore(event) {
+    return Boolean(
+      ignoreSelector &&
+      event.target?.closest?.(ignoreSelector)
+    );
+  }
+
+  element.classList.add("has-double-tap");
+
+  element.addEventListener("pointerdown", (event) => {
+    if (shouldIgnore(event)) {
+      return;
+    }
+
+    pointerStartX = event.clientX;
+    pointerStartY = event.clientY;
+    pointerMoved = false;
+  });
+
+  element.addEventListener("pointermove", (event) => {
+    if (
+      Math.hypot(
+        event.clientX - pointerStartX,
+        event.clientY - pointerStartY
+      ) > moveTolerance
+    ) {
+      pointerMoved = true;
+    }
+  });
+
+  element.addEventListener("pointerup", (event) => {
+    if (shouldIgnore(event) || pointerMoved) {
+      lastTapTime = 0;
+      return;
+    }
+
+    const now = performance.now();
+    const closeEnough =
+      Math.hypot(
+        event.clientX - lastTapX,
+        event.clientY - lastTapY
+      ) <= 36;
+
+    if (
+      lastTapTime > 0 &&
+      now - lastTapTime <= maxDelay &&
+      closeEnough
+    ) {
+      lastTapTime = 0;
+      event.preventDefault();
+      event.stopPropagation();
+      handler(event);
+      return;
+    }
+
+    lastTapTime = now;
+    lastTapX = event.clientX;
+    lastTapY = event.clientY;
   });
 }
 
@@ -3357,8 +3489,10 @@ function createSettingsItemRow(item) {
       openSpecificProductQuickAdd(item);
     },
     {
-      duration: 320,
-      ignoreSelector: "button, input, select, textarea"
+      duration: 360,
+      ignoreSelector: "button, input, select, textarea",
+      allowScroll: true,
+      moveTolerance: 12
     }
   );
 
@@ -4414,7 +4548,8 @@ function neededRecordMatchesSearch(record, searchText) {
     record.item.specificAttributes,
     productType?.name,
     record.specificProduct?.name,
-    specificProductDetailText(record.specificProduct ?? {})
+    specificProductDetailText(record.specificProduct ?? {}),
+    record.entry.temporaryNote
   ]
     .map((value) => String(value ?? '').toLowerCase())
     .some((value) => value.includes(searchText));
@@ -4507,7 +4642,10 @@ async function migrateLegacySpecificEntryBeforeGenericAdd(item) {
 function createItemNameDisplay(
   item,
   specificProduct = null,
-  { includeParentName = false } = {}
+  {
+    includeParentName = false,
+    temporaryNote = ""
+  } = {}
 ) {
   const wrapper = document.createElement("span");
   wrapper.className = "item-name-display";
@@ -4536,7 +4674,69 @@ function createItemNameDisplay(
     wrapper.append(detail);
   }
 
+  const noteText = String(temporaryNote ?? "").trim();
+
+  if (noteText) {
+    const note = document.createElement("span");
+    note.className = "item-temporary-note";
+    note.textContent = noteText;
+    wrapper.append(note);
+  }
+
   return wrapper;
+}
+
+function temporaryNoteItemLabel(item, specificProduct = null) {
+  return specificProduct
+    ? `${item.name} ${specificProduct.name}`
+    : item.name;
+}
+
+function closeTemporaryNoteDialog() {
+  temporaryNoteEntryId = null;
+
+  if (temporaryNoteDialog?.open) {
+    temporaryNoteDialog.close();
+  }
+}
+
+function openTemporaryNoteDialog(item, neededEntry, specificProduct = null) {
+  if (!temporaryNoteDialog || !neededEntry?.id) {
+    return;
+  }
+
+  temporaryNoteEntryId = neededEntry.id;
+  temporaryNoteItemName.textContent = temporaryNoteItemLabel(
+    item,
+    specificProduct
+  );
+  temporaryNoteText.value = neededEntry.temporaryNote ?? "";
+  temporaryNoteDialog.showModal();
+
+  requestAnimationFrame(() => {
+    temporaryNoteText.focus();
+    temporaryNoteText.setSelectionRange(
+      temporaryNoteText.value.length,
+      temporaryNoteText.value.length
+    );
+  });
+}
+
+async function saveTemporaryNote() {
+  if (!temporaryNoteEntryId) {
+    return;
+  }
+
+  const entryRef = householdDocument(
+    "neededEntries",
+    temporaryNoteEntryId
+  );
+  const note = temporaryNoteText.value.trim();
+
+  await updateDoc(entryRef, {
+    temporaryNote: note || deleteField(),
+    adjustedAt: serverTimestamp()
+  });
 }
 
 function renderRoomItems() {
@@ -4675,7 +4875,11 @@ function renderRoomItems() {
 
       const details = document.createElement("div");
       details.className = "item-row-details";
-      details.append(createItemNameDisplay(item, product));
+      details.append(
+        createItemNameDisplay(item, product, {
+          temporaryNote: neededEntry?.temporaryNote
+        })
+      );
 
       const controls = document.createElement("div");
       controls.className = "room-item-controls";
@@ -4704,6 +4908,13 @@ function renderRoomItems() {
       }
 
       row.append(details, controls);
+
+      if (isNeeded) {
+        addDoubleTapHandler(row, () => {
+          openTemporaryNoteDialog(item, neededEntry, product);
+        });
+      }
+
       roomItemsList.append(row);
     });
   }
@@ -4716,20 +4927,13 @@ function renderRoomItems() {
     row.className = "item-row room-item-row";
     row.classList.add(isNeeded ? "is-needed" : "is-available");
 
-    addLongPressHandler(
-      row,
-      () => {
-        openSpecificProductQuickAdd(item);
-      },
-      {
-        duration: 320,
-        ignoreSelector: "button, input, select, textarea"
-      }
-    );
-
     const details = document.createElement("div");
     details.className = "item-row-details";
-    details.append(createItemNameDisplay(item));
+    details.append(
+      createItemNameDisplay(item, null, {
+        temporaryNote: neededEntry?.temporaryNote
+      })
+    );
 
     const controls = document.createElement("div");
     controls.className = "room-item-controls";
@@ -4758,6 +4962,13 @@ function renderRoomItems() {
     }
 
     row.append(details, controls);
+
+    if (isNeeded) {
+      addDoubleTapHandler(row, () => {
+        openTemporaryNoteDialog(item, neededEntry);
+      });
+    }
+
     roomItemsList.append(row);
     appendSpecificProductRows(item);
     renderedItemIds.add(item.id);
@@ -5000,22 +5211,12 @@ function appendFullNeededItemRow(record) {
     row.classList.add("specific-product-needed-row");
   }
 
-  addLongPressHandler(
-    row,
-    () => {
-      openSpecificProductQuickAdd(item);
-    },
-    {
-      duration: 320,
-      ignoreSelector: "button, input, select, textarea"
-    }
-  );
-
   const details = document.createElement("div");
   details.className = "item-row-details";
   details.append(
     createItemNameDisplay(item, specificProduct, {
-      includeParentName: Boolean(specificProduct)
+      includeParentName: Boolean(specificProduct),
+      temporaryNote: entry.temporaryNote
     })
   );
 
@@ -5065,6 +5266,9 @@ function appendFullNeededItemRow(record) {
 
   controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
+  addDoubleTapHandler(row, () => {
+    openTemporaryNoteDialog(item, entry, specificProduct);
+  });
   fullNeededItems.append(row);
 }
 
@@ -5320,7 +5524,8 @@ function renderGettingItems() {
     details.className = "item-row-details";
     details.append(
       createItemNameDisplay(item, specificProduct, {
-        includeParentName: true
+        includeParentName: true,
+        temporaryNote: entry.temporaryNote
       })
     );
 
@@ -5985,7 +6190,17 @@ function wireNavigation() {
     bottomContextAction.addEventListener("click", () => {
       if (!views.needing.hidden) {
         recordAppNavigation();
-        openFullNeededList();
+
+        if (
+          isAllStuffSelected() &&
+          roomView &&
+          !roomView.hidden
+        ) {
+          openSettingsItemsFromShortcut();
+        } else {
+          openFullNeededList();
+        }
+
         return;
       }
 
@@ -6047,12 +6262,25 @@ function wireNavigation() {
   newItemButton.addEventListener("click", () => {
     recordAppNavigation();
 
-    if (isRegularRoomSelected() || isAllStuffSelected()) {
+    if (isRegularRoomSelected()) {
       openSettingsItemsFromShortcut();
       return;
     }
 
     closeSpecificProductQuickAdd();
+
+    const chooseRoom = isAllStuffSelected();
+    itemRoomLabel.hidden = !chooseRoom;
+    itemRoomSelect.hidden = !chooseRoom;
+    itemRoomSelect.required = chooseRoom;
+    itemRoomSelect.innerHTML = '<option value="">Choose a room</option>';
+
+    currentRooms.forEach((room) => {
+      const option = document.createElement("option");
+      option.value = room.id;
+      option.textContent = room.name;
+      itemRoomSelect.append(option);
+    });
     populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
     populateItemStoreSelect(
       itemStoreSelect,
@@ -6080,6 +6308,46 @@ function wireNavigation() {
       closeSpecificProductQuickAdd();
     });
   }
+
+  cancelTemporaryNoteButton?.addEventListener(
+    "click",
+    closeTemporaryNoteDialog
+  );
+
+  clearTemporaryNoteButton?.addEventListener("click", async () => {
+    temporaryNoteText.value = "";
+
+    try {
+      await saveTemporaryNote();
+      closeTemporaryNoteDialog();
+    } catch (error) {
+      console.error("Could not clear temporary note:", error);
+      alert("The temporary note could not be cleared.");
+    }
+  });
+
+  temporaryNoteDialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeTemporaryNoteDialog();
+  });
+
+  temporaryNoteForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submitButton = temporaryNoteForm.querySelector(
+      'button[type="submit"]'
+    );
+    submitButton.disabled = true;
+
+    try {
+      await saveTemporaryNote();
+      closeTemporaryNoteDialog();
+    } catch (error) {
+      console.error("Could not save temporary note:", error);
+      alert("The temporary note could not be saved.");
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
 
   shoppingAtButton.addEventListener("click", () => {
     recordAppNavigation();
@@ -6440,6 +6708,9 @@ function wireForms() {
     event.preventDefault();
 
     const itemName = itemNameInput.value.trim();
+    const locationId = isAllStuffSelected()
+      ? itemRoomSelect.value
+      : selectedRoomId;
     const productTypeId = itemProductTypeSelect.value;
     const storeId = itemStoreSelect?.value ?? "";
     const specificAttributes = itemSpecificAttributesInput?.value.trim() ?? "";
@@ -6456,8 +6727,7 @@ function wireForms() {
       : [];
 
     if (
-      !selectedRoomId ||
-      isAllStuffSelected() ||
+      !locationId ||
       isRegularRoomSelected() ||
       !itemName ||
       !productTypeId ||
@@ -6486,7 +6756,7 @@ function wireForms() {
       await addDoc(householdCollection("items"), {
         name: itemName,
         active: true,
-        locationId: selectedRoomId,
+        locationId,
         productTypeId,
         storeId: storeId || null,
         specificAttributes,

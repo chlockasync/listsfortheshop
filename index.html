@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1313">
-  <script type="module" src="app.js?v=1313"></script>
+  <link rel="stylesheet" href="styles.css?v=1349">
+  <script type="module" src="app.js?v=1349"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -141,6 +141,14 @@
                 maxlength="80"
                 autocomplete="off"
               >
+
+              <label for="item-room" id="item-room-label" hidden>
+                Room
+              </label>
+
+              <select id="item-room" hidden>
+                <option value="">Choose a room</option>
+              </select>
 
               <label for="item-product-type">
                 Product type
@@ -723,6 +731,48 @@
     </section>
   </main>
 
+  <dialog id="temporary-note-dialog" class="temporary-note-dialog">
+    <form id="temporary-note-form">
+      <div class="temporary-note-heading">
+        <h3>Temporary note</h3>
+        <button
+          type="button"
+          id="cancel-temporary-note"
+          aria-label="Close temporary note"
+          title="Close"
+        >
+          ×
+        </button>
+      </div>
+
+      <p id="temporary-note-item-name" class="temporary-note-item-name"></p>
+
+      <label for="temporary-note-text">
+        Note
+      </label>
+
+      <textarea
+        id="temporary-note-text"
+        maxlength="300"
+        rows="4"
+        autocomplete="off"
+      ></textarea>
+
+      <p class="temporary-note-warning">
+        This note will be deleted when the item is removed from the needed list.
+      </p>
+
+      <div class="temporary-note-actions">
+        <button type="button" id="clear-temporary-note">
+          Clear note
+        </button>
+        <button type="submit">
+          Save note
+        </button>
+      </div>
+    </form>
+  </dialog>
+
   <nav class="bottom-action-bar" aria-label="App actions">
     <button
       type="button"
@@ -735,7 +785,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607091313">V13.13</span>
+      <span id="app-build" title="Build 202607091349">V13.49</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

@@ -2743,3 +2743,129 @@ body.settings-sort-active {
   -webkit-user-select: auto;
   -webkit-touch-callout: default;
 }
+
+/* ===== Scroll repair, All stuff item entry, and temporary notes: 202607091349 ===== */
+html {
+  overscroll-behavior-y: none;
+}
+
+body {
+  overscroll-behavior-y: contain;
+}
+
+#new-item-panel .form-heading-row {
+  position: static;
+  top: auto;
+  margin-top: 0;
+}
+
+.has-long-press {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.has-long-press.long-press-allows-scroll {
+  touch-action: pan-y;
+}
+
+.has-double-tap {
+  touch-action: manipulation;
+}
+
+.item-temporary-note {
+  display: block;
+  margin-top: 0.18rem;
+  padding-left: 0.55rem;
+  border-left: 2px solid rgb(0 0 0 / 20%);
+  color: rgb(0 0 0 / 72%);
+  font-size: 0.88rem;
+  font-weight: 400;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.temporary-note-dialog {
+  width: min(390px, calc(100vw - 2rem));
+  max-width: 100%;
+  margin: auto;
+  padding: 1rem;
+  border: 1px solid rgb(0 0 0 / 20%);
+  border-radius: 0.6rem;
+  background: white;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 24%);
+}
+
+.temporary-note-dialog::backdrop {
+  background: rgb(0 0 0 / 38%);
+}
+
+.temporary-note-dialog form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.temporary-note-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.temporary-note-heading h3 {
+  margin: 0;
+}
+
+.temporary-note-heading button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 18%);
+  border-radius: 0.45rem;
+  background: #eeeeee;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.temporary-note-item-name {
+  margin: -0.25rem 0 0;
+  font-weight: 600;
+}
+
+.temporary-note-dialog label {
+  margin-bottom: -0.45rem;
+  font-weight: 600;
+}
+
+.temporary-note-dialog textarea {
+  width: 100%;
+  min-height: 7rem;
+  padding: 0.7rem;
+  border: 1px solid #b8b8b8;
+  border-radius: 0.35rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.temporary-note-warning {
+  margin: 0;
+  color: rgb(0 0 0 / 66%);
+  font-size: 0.86rem;
+  line-height: 1.3;
+}
+
+.temporary-note-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.temporary-note-actions button {
+  border: 1px solid rgb(0 0 0 / 18%);
+  background: #eeeeee;
+}

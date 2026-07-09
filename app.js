@@ -4299,6 +4299,17 @@ function itemEditFields(items) {
       value: () => items.find((item) => item.id === editingSettingsId)?.productTypeId ?? ""
     },
     {
+      key: "specificAttributes",
+      label: "Specific Attributes (optional)",
+      required: false,
+      maxLength: 100,
+      placeholder: "e.g. 2 L, gluten-free, fragrance-free",
+      value: () =>
+        items.find(
+          (item) => item.id === editingSettingsId
+        )?.specificAttributes ?? ""
+    },
+    {
       key: "storeId",
       label: "Store (optional)",
       type: "select",
@@ -4312,17 +4323,6 @@ function itemEditFields(items) {
         return itemStoreOptions(item?.productTypeId ?? "");
       },
       value: () => items.find((item) => item.id === editingSettingsId)?.storeId ?? ""
-    },
-    {
-      key: "specificAttributes",
-      label: "Specific Attributes (optional)",
-      required: false,
-      maxLength: 100,
-      placeholder: "e.g. 2 L, gluten-free, fragrance-free",
-      value: () =>
-        items.find(
-          (item) => item.id === editingSettingsId
-        )?.specificAttributes ?? ""
     },
     {
       key: "defaultAmount",
@@ -4932,6 +4932,10 @@ function resetSettingsItemAddForm() {
   if (settingsItemNameInput) {
     settingsItemNameInput.value = "";
   }
+
+  if (settingsItemSpecificAttributesInput) {
+    settingsItemSpecificAttributesInput.value = "";
+  }
 }
 
 function createStoreCheckboxList(
@@ -5039,6 +5043,11 @@ function openSpecificProductQuickAdd(item) {
 
 function closeSpecificProductQuickAdd() {
   quickSpecificProductItemId = null;
+  addSpecificProductForm?.reset();
+
+  if (specificProductStoresContainer) {
+    specificProductStoresContainer.innerHTML = "";
+  }
 
   if (specificProductPanel) {
     specificProductPanel.hidden = true;
@@ -7281,6 +7290,7 @@ function wireNavigation() {
       newItemPanel.hidden = true;
       resetOneOffItemForm();
       oneOffItemPanel.hidden = false;
+      oneOffItemPanel.scrollTop = 0;
       newItemButton.hidden = true;
 
       requestAnimationFrame(() => {
@@ -7818,6 +7828,9 @@ function wireForms() {
       });
 
       itemNameInput.value = "";
+      if (itemSpecificAttributesInput) {
+        itemSpecificAttributesInput.value = "";
+      }
       newItemPanel.hidden = true;
       newItemButton.hidden = false;
     } catch (error) {

@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1635">
-  <script type="module" src="app.js?v=1635"></script>
+  <link rel="stylesheet" href="styles.css?v=1946">
+  <script type="module" src="app.js?v=1946"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -160,16 +160,6 @@
                 </option>
               </select>
 
-              <label for="item-store">
-                Store (optional)
-              </label>
-
-              <select id="item-store">
-                <option value="">
-                  Any matching store
-                </option>
-              </select>
-
               <label for="item-specific-attributes">
                 Specific Attributes (optional)
               </label>
@@ -181,6 +171,16 @@
                 autocomplete="off"
                 placeholder="e.g. 2 L, gluten-free, fragrance-free"
               >
+
+              <label for="item-store">
+                Store (optional)
+              </label>
+
+              <select id="item-store">
+                <option value="">
+                  Any matching store
+                </option>
+              </select>
 
               <div class="amount-unit-step-row">
                 <label for="item-default-amount">
@@ -590,16 +590,6 @@
                 </option>
               </select>
 
-              <label for="settings-item-store">
-                Store (optional)
-              </label>
-
-              <select id="settings-item-store">
-                <option value="">
-                  Any matching store
-                </option>
-              </select>
-
               <label for="settings-item-specific-attributes">
                 Specific Attributes (optional)
               </label>
@@ -611,6 +601,16 @@
                 autocomplete="off"
                 placeholder="e.g. 2 L, gluten-free, fragrance-free"
               >
+
+              <label for="settings-item-store">
+                Store (optional)
+              </label>
+
+              <select id="settings-item-store">
+                <option value="">
+                  Any matching store
+                </option>
+              </select>
 
               <div class="amount-unit-step-row">
                 <label for="settings-item-default-amount">
@@ -845,12 +845,12 @@
           Note
         </label>
 
-        <textarea
+        <input
+          type="text"
           id="temporary-note-text"
           maxlength="300"
-          rows="6"
           autocomplete="off"
-        ></textarea>
+        >
 
         <p class="temporary-note-warning">
           This note will be deleted when the item is removed from the needed list.
@@ -904,7 +904,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607091635">V16.35</span>
+      <span id="app-build" title="Build 202607091946">V19.46</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

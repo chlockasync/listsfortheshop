@@ -3254,3 +3254,39 @@ body:has(#temporary-note-panel:not([hidden])) {
 #one-off-item-panel .settings-form-fields {
   margin-top: 0;
 }
+
+
+/* ===== Form field order and full-screen one-off entry: 202607091946 ===== */
+#one-off-item-panel {
+  top: 0 !important;
+  right: max(0px, calc((100vw - 430px) / 2)) !important;
+  bottom: 0 !important;
+  left: max(0px, calc((100vw - 430px) / 2)) !important;
+  width: auto !important;
+  max-height: none !important;
+  height: 100dvh;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: calc(
+    var(--bottom-bar-height) +
+    max(1rem, env(safe-area-inset-bottom))
+  );
+  overflow-y: auto;
+  transform: none !important;
+  border-top: 0 !important;
+  box-shadow: none;
+  overscroll-behavior: contain;
+}
+
+body:has(#one-off-item-panel:not([hidden])) {
+  overflow: hidden !important;
+}
+
+#one-off-item-panel .form-heading-row {
+  position: static;
+  top: auto;
+  margin-top: 0;
+}
+
+#temporary-note-panel input#temporary-note-text {
+  width: 100%;
+}

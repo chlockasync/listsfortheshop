@@ -13,8 +13,8 @@
   <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png?v=1651">
 
-  <link rel="stylesheet" href="styles.css?v=1909">
-  <script type="module" src="app.js?v=1909"></script>
+  <link rel="stylesheet" href="styles.css?v=1313">
+  <script type="module" src="app.js?v=1313"></script>
 
   <title>Lists for the Shop</title>
 </head>
@@ -105,9 +105,30 @@
           class="new-item-panel settings-form"
           hidden
         >
-          <h3>New item</h3>
-
           <form id="add-item-form">
+            <div class="form-heading-row">
+              <h3>New item</h3>
+
+              <div class="form-heading-actions">
+                <button
+                  type="button"
+                  id="cancel-new-item"
+                  aria-label="Cancel new item"
+                  title="Cancel"
+                >
+                  ×
+                </button>
+
+                <button
+                  type="submit"
+                  aria-label="Save new item"
+                  title="Save"
+                >
+                  ✓
+                </button>
+              </div>
+            </div>
+
             <div class="settings-form-fields">
               <label for="item-name">
                 Item name
@@ -185,18 +206,6 @@
               </div>
             </div>
 
-            <div class="split-actions">
-              <button
-                type="button"
-                id="cancel-new-item"
-              >
-                Cancel
-              </button>
-
-              <button type="submit">
-                Save item
-              </button>
-            </div>
           </form>
         </section>
 
@@ -208,11 +217,32 @@
           class="specific-product-panel settings-form"
           hidden
         >
-          <h3 id="specific-product-panel-title">
-            Add specific product
-          </h3>
-
           <form id="add-specific-product-form">
+            <div class="form-heading-row">
+              <h3 id="specific-product-panel-title">
+                Add specific product
+              </h3>
+
+              <div class="form-heading-actions">
+                <button
+                  type="button"
+                  id="cancel-specific-product"
+                  aria-label="Cancel specific product"
+                  title="Cancel"
+                >
+                  ×
+                </button>
+
+                <button
+                  type="submit"
+                  aria-label="Save specific product"
+                  title="Save"
+                >
+                  ✓
+                </button>
+              </div>
+            </div>
+
             <div class="settings-form-fields">
               <label for="specific-product-name">
                 Product name
@@ -249,18 +279,6 @@
               </div>
             </div>
 
-            <div class="split-actions">
-              <button
-                type="button"
-                id="cancel-specific-product"
-              >
-                Cancel
-              </button>
-
-              <button type="submit">
-                Save product
-              </button>
-            </div>
           </form>
         </section>
     </section>
@@ -299,50 +317,56 @@
       <div id="settings-home">
         <button
           type="button"
-          class="settings-category-option shopping-location-option"
+          class="settings-category-option shopping-location-option settings-menu-order-row"
           data-settings-category="stores"
         >
-          Stores
+          <span class="settings-order-handle" aria-hidden="true">☰</span>
+          <span class="settings-menu-option-label">Stores</span>
         </button>
 
         <button
           type="button"
-          class="settings-category-option shopping-location-option"
+          class="settings-category-option shopping-location-option settings-menu-order-row"
           data-settings-category="store-types"
         >
-          Store types
+          <span class="settings-order-handle" aria-hidden="true">☰</span>
+          <span class="settings-menu-option-label">Store types</span>
         </button>
 
         <button
           type="button"
-          class="settings-category-option shopping-location-option"
+          class="settings-category-option shopping-location-option settings-menu-order-row"
           data-settings-category="product-types"
         >
-          Product types
+          <span class="settings-order-handle" aria-hidden="true">☰</span>
+          <span class="settings-menu-option-label">Product types</span>
         </button>
 
         <button
           type="button"
-          class="settings-category-option shopping-location-option"
+          class="settings-category-option shopping-location-option settings-menu-order-row"
           data-settings-category="items"
         >
-          Items and Specific Products
+          <span class="settings-order-handle" aria-hidden="true">☰</span>
+          <span class="settings-menu-option-label">Items and Specific Products</span>
         </button>
 
         <button
           type="button"
-          class="settings-category-option shopping-location-option"
+          class="settings-category-option shopping-location-option settings-menu-order-row"
           data-settings-category="rooms"
         >
-          Rooms
+          <span class="settings-order-handle" aria-hidden="true">☰</span>
+          <span class="settings-menu-option-label">Rooms</span>
         </button>
 
         <button
           type="button"
-          class="settings-category-option shopping-location-option"
+          class="settings-category-option shopping-location-option settings-menu-order-row"
           data-settings-category="units"
         >
-          Units
+          <span class="settings-order-handle" aria-hidden="true">☰</span>
+          <span class="settings-menu-option-label">Units</span>
         </button>
       </div>
 
@@ -711,7 +735,7 @@
     </button>
 
     <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607081909">V19.09</span>
+      <span id="app-build" title="Build 202607091313">V13.13</span>
       <span id="connection-status">Connecting…</span>
     </div>
 

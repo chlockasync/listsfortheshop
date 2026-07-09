@@ -281,9 +281,16 @@ let appHistoryDepth = 0;
 let suppressAppHistory = false;
 
 const REGULAR_ROOM_ID = "__regular_stuff__";
+const ALL_STUFF_ROOM_ID = "__all_stuff__";
+const SETTINGS_MENU_ORDER_KEY =
+  `listsForTheShop.settingsMenuOrder.${HOUSEHOLD_ID}`;
 
 function isRegularRoomSelected() {
   return selectedRoomId === REGULAR_ROOM_ID;
+}
+
+function isAllStuffSelected() {
+  return selectedRoomId === ALL_STUFF_ROOM_ID;
 }
 
 function itemIsRegular(item) {
@@ -293,6 +300,10 @@ function itemIsRegular(item) {
 function getSelectedRoomName() {
   if (isRegularRoomSelected()) {
     return "Regular stuff";
+  }
+
+  if (isAllStuffSelected()) {
+    return "All stuff";
   }
 
   return currentRooms.find(
@@ -825,6 +836,29 @@ function openRegularRoom() {
   renderRoomItems();
 }
 
+function openAllStuff() {
+  selectedRoomId = ALL_STUFF_ROOM_ID;
+  roomSelectorButton.hidden = false;
+  setRoomSelectorLabel("All stuff");
+  roomSelectorButton.setAttribute("aria-expanded", "false");
+  needingHome.hidden = true;
+  fullNeededView.hidden = true;
+  roomView.hidden = false;
+  roomViewTitle.textContent = "All stuff";
+  editingItemId = null;
+
+  if (newItemPanel) {
+    newItemPanel.hidden = true;
+  }
+
+  if (newItemButton) {
+    newItemButton.hidden = false;
+    newItemButton.textContent = "Edit items";
+  }
+
+  renderRoomItems();
+}
+
 function setContextButtonLabel(button, label) {
   button.innerHTML = "";
 
@@ -856,7 +890,9 @@ function updateSelectedRoomLabel() {
   if (newItemButton) {
     newItemButton.textContent = isRegularRoomSelected()
       ? "Edit regulars"
-      : "New item";
+      : isAllStuffSelected()
+        ? "Edit items"
+        : "New item";
   }
 }
 
@@ -1311,6 +1347,36 @@ function appendSettingsEditPanel({
   panel.className = "settings-inline-edit-panel settings-form";
 
   const form = document.createElement("form");
+
+  const headingRow = document.createElement("div");
+  headingRow.className = "form-heading-row";
+
+  const heading = document.createElement("h3");
+  const itemHeading = String(
+    item.name ?? item.symbol ?? "item"
+  ).trim();
+  heading.textContent = itemHeading
+    ? `Edit ${itemHeading}`
+    : "Edit item";
+
+  const actions = document.createElement("div");
+  actions.className = "form-heading-actions";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "×";
+  cancelButton.setAttribute("aria-label", "Cancel editing");
+  cancelButton.title = "Cancel";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.textContent = "✓";
+  saveButton.setAttribute("aria-label", "Save changes");
+  saveButton.title = "Save";
+
+  actions.append(cancelButton, saveButton);
+  headingRow.append(heading, actions);
+
   const fieldContainer = document.createElement("div");
   fieldContainer.className = "settings-form-fields";
 
@@ -1332,19 +1398,6 @@ function appendSettingsEditPanel({
       fieldContainer.append(extraElement);
     }
   }
-
-  const actions = document.createElement("div");
-  actions.className = "settings-inline-edit-actions";
-
-  const cancelButton = document.createElement("button");
-  cancelButton.type = "button";
-  cancelButton.textContent = "Cancel";
-
-  const saveButton = document.createElement("button");
-  saveButton.type = "submit";
-  saveButton.textContent = "Save";
-
-  actions.append(cancelButton, saveButton);
 
   cancelButton.addEventListener("click", () => {
     editingSettingsKey = null;
@@ -1388,7 +1441,7 @@ function appendSettingsEditPanel({
     }
   });
 
-  form.append(fieldContainer, actions);
+  form.append(headingRow, fieldContainer);
   panel.dataset.settingsEditKey = settingsKey;
   panel.dataset.settingsEditId = String(item.id);
   panel.dataset.settingsEditContextId = String(contextId ?? "");
@@ -2310,9 +2363,11 @@ function enableStoreProductTypeOrdering(groupList, store) {
     animation: 150,
     draggable: ".settings-order-row",
     handle: ".settings-order-handle",
-    delay: 160,
+    delay: 220,
     delayOnTouchOnly: true,
-    touchStartThreshold: 4,
+    touchStartThreshold: 8,
+    forceFallback: true,
+    fallbackTolerance: 5,
     ghostClass: "settings-sort-ghost",
     chosenClass: "settings-sort-chosen",
     onEnd: async (event) => {
@@ -2436,6 +2491,92 @@ function restoreScrollPosition(scrollY) {
   });
 }
 
+function applySavedSettingsMenuOrder() {
+  if (!settingsHome) {
+    return;
+  }
+
+  let savedOrder = [];
+
+  try {
+    const storedValue = localStorage.getItem(
+      SETTINGS_MENU_ORDER_KEY
+    );
+    savedOrder = storedValue ? JSON.parse(storedValue) : [];
+  } catch (error) {
+    console.warn("Could not read Settings menu order:", error);
+  }
+
+  const optionsByKey = new Map(
+    Array.from(
+      settingsHome.querySelectorAll(
+        ".settings-menu-order-row[data-settings-category]"
+      )
+    ).map((option) => [option.dataset.settingsCategory, option])
+  );
+
+  savedOrder.forEach((categoryName) => {
+    const option = optionsByKey.get(categoryName);
+
+    if (option) {
+      settingsHome.append(option);
+      optionsByKey.delete(categoryName);
+    }
+  });
+
+  optionsByKey.forEach((option) => {
+    settingsHome.append(option);
+  });
+}
+
+function saveSettingsMenuOrder() {
+  const order = Array.from(
+    settingsHome.querySelectorAll(
+      ".settings-menu-order-row[data-settings-category]"
+    )
+  ).map((option) => option.dataset.settingsCategory);
+
+  try {
+    localStorage.setItem(
+      SETTINGS_MENU_ORDER_KEY,
+      JSON.stringify(order)
+    );
+  } catch (error) {
+    console.warn("Could not save Settings menu order:", error);
+  }
+}
+
+function enableSettingsMenuOrdering() {
+  if (!settingsHome) {
+    return;
+  }
+
+  const sortableKey = "settings-menu";
+
+  if (settingsSortables.has(sortableKey)) {
+    settingsSortables.get(sortableKey).destroy();
+    settingsSortables.delete(sortableKey);
+  }
+
+  applySavedSettingsMenuOrder();
+
+  const sortable = Sortable.create(settingsHome, {
+    animation: 150,
+    draggable: ".settings-menu-order-row",
+    handle: ".settings-order-handle",
+    delay: 220,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 8,
+    forceFallback: true,
+    fallbackTolerance: 5,
+    ghostClass: "settings-sort-ghost",
+    chosenClass: "settings-sort-chosen",
+    onEnd: saveSettingsMenuOrder
+  });
+
+  settingsSortables.set(sortableKey, sortable);
+}
+
 function enableProductTypeGroupOrdering(groupList, storeTypeId) {
   const sortableKey = `product-types::${storeTypeId}`;
 
@@ -2454,9 +2595,11 @@ function enableProductTypeGroupOrdering(groupList, storeTypeId) {
     animation: 150,
     draggable: ".settings-order-row",
     handle: ".settings-order-handle",
-    delay: 160,
+    delay: 220,
     delayOnTouchOnly: true,
-    touchStartThreshold: 4,
+    touchStartThreshold: 8,
+    forceFallback: true,
+    fallbackTolerance: 5,
     ghostClass: "settings-sort-ghost",
     chosenClass: "settings-sort-chosen",
     onEnd: async (event) => {
@@ -2497,9 +2640,11 @@ function enableSettingsOrdering({
     animation: 150,
     draggable: ".settings-order-row",
     handle: ".settings-order-handle",
-    delay: 160,
+    delay: 220,
     delayOnTouchOnly: true,
-    touchStartThreshold: 4,
+    touchStartThreshold: 8,
+    forceFallback: true,
+    fallbackTolerance: 5,
     ghostClass: "settings-sort-ghost",
     chosenClass: "settings-sort-chosen",
     onEnd: async (event) => {
@@ -2640,10 +2785,6 @@ function renderRooms(rooms) {
   });
   needingRoomsList.append(regularButton);
 
-  if (rooms.length === 0) {
-    return;
-  }
-
   rooms.forEach((room) => {
     const roomButton = document.createElement("button");
     roomButton.type = "button";
@@ -2655,6 +2796,17 @@ function renderRooms(rooms) {
     });
     needingRoomsList.append(roomButton);
   });
+
+  const allStuffButton = document.createElement("button");
+  allStuffButton.type = "button";
+  allStuffButton.className =
+    "room-button shopping-location-option all-stuff-room-button";
+  allStuffButton.textContent = "All stuff";
+  allStuffButton.addEventListener("click", () => {
+    recordAppNavigation();
+    openAllStuff();
+  });
+  needingRoomsList.append(allStuffButton);
 
   updateSelectedRoomLabel();
   renderSettingsItems();
@@ -3198,6 +3350,17 @@ function createSettingsItemRow(item) {
 
   actions.append(regularButton, editButton, deleteButton);
   row.append(text, actions);
+
+  addLongPressHandler(
+    row,
+    () => {
+      openSpecificProductQuickAdd(item);
+    },
+    {
+      duration: 320,
+      ignoreSelector: "button, input, select, textarea"
+    }
+  );
 
   return row;
 }
@@ -4394,6 +4557,10 @@ function renderRoomItems() {
       return itemIsRegular(item);
     }
 
+    if (isAllStuffSelected()) {
+      return true;
+    }
+
     return item.locationId === selectedRoomId;
   });
 
@@ -4420,8 +4587,9 @@ function renderRoomItems() {
   });
 
   if (allRoomItems.length === 0) {
-    roomItemsList.innerHTML =
-      "<p>No items have been created for this room yet.</p>";
+    roomItemsList.innerHTML = isAllStuffSelected()
+      ? "<p>No items have been created yet.</p>"
+      : "<p>No items have been created for this room yet.</p>";
     return;
   }
 
@@ -4630,6 +4798,31 @@ function appendRoomItemEditPanel(item) {
   panel.className = "room-item-edit-panel settings-form";
 
   const form = document.createElement("form");
+
+  const headingRow = document.createElement("div");
+  headingRow.className = "form-heading-row";
+
+  const heading = document.createElement("h3");
+  heading.textContent = `Edit ${item.name}`;
+
+  const actions = document.createElement("div");
+  actions.className = "form-heading-actions";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "×";
+  cancelButton.setAttribute("aria-label", "Cancel editing");
+  cancelButton.title = "Cancel";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.textContent = "✓";
+  saveButton.setAttribute("aria-label", "Save changes");
+  saveButton.title = "Save";
+
+  actions.append(cancelButton, saveButton);
+  headingRow.append(heading, actions);
+
   const fields = document.createElement("div");
   fields.className = "settings-form-fields";
 
@@ -4707,19 +4900,6 @@ function appendRoomItemEditPanel(item) {
   amountRow.append(amountLabel, unitLabel, incrementLabel);
   fields.append(nameLabel, productTypeLabel, amountRow);
 
-  const actions = document.createElement("div");
-  actions.className = "split-actions";
-
-  const cancelButton = document.createElement("button");
-  cancelButton.type = "button";
-  cancelButton.textContent = "Cancel";
-
-  const saveButton = document.createElement("button");
-  saveButton.type = "submit";
-  saveButton.textContent = "Save";
-
-  actions.append(cancelButton, saveButton);
-
   cancelButton.addEventListener("click", () => {
     editingItemId = null;
     renderRoomItems();
@@ -4783,7 +4963,7 @@ function appendRoomItemEditPanel(item) {
     }
   });
 
-  form.append(fields, actions);
+  form.append(headingRow, fields);
   panel.append(form);
   roomItemsList.append(panel);
   scrollEditFormToTop(panel);
@@ -5000,7 +5180,7 @@ function renderShoppingLocations() {
     storeTypeButton.className = "shopping-location-option";
     storeTypeButton.textContent = storeType.name.trim();
 
-    addLongPressHandler(storeTypeButton, () => {
+    storeTypeButton.addEventListener("click", () => {
       recordAppNavigation();
       selectedShoppingTarget = {
         kind: "storeType",
@@ -5034,7 +5214,7 @@ function renderShoppingLocations() {
       storeButton.className = "shopping-location-option";
       storeButton.textContent = store.name.trim();
 
-      addLongPressHandler(storeButton, () => {
+      storeButton.addEventListener("click", () => {
         recordAppNavigation();
         selectedShoppingTarget = {
           kind: "store",
@@ -5867,7 +6047,7 @@ function wireNavigation() {
   newItemButton.addEventListener("click", () => {
     recordAppNavigation();
 
-    if (isRegularRoomSelected()) {
+    if (isRegularRoomSelected() || isAllStuffSelected()) {
       openSettingsItemsFromShortcut();
       return;
     }
@@ -5901,7 +6081,7 @@ function wireNavigation() {
     });
   }
 
-  addLongPressHandler(shoppingAtButton, () => {
+  shoppingAtButton.addEventListener("click", () => {
     recordAppNavigation();
     const willOpen = shoppingAtPanel.hidden;
     shoppingAtPanel.hidden = !willOpen;
@@ -6277,6 +6457,8 @@ function wireForms() {
 
     if (
       !selectedRoomId ||
+      isAllStuffSelected() ||
+      isRegularRoomSelected() ||
       !itemName ||
       !productTypeId ||
       !unitId ||
@@ -6343,6 +6525,7 @@ function startListeners() {
 
 wireNavigation();
 wireForms();
+enableSettingsMenuOrdering();
 setupBrowserBackButton();
 setupAutoHidingHeader();
 

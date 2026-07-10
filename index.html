@@ -1,919 +1,786 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#ffffff">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Lists">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="mobile-web-app-capable" content="yes">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Lists" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
 
-  <link rel="manifest" href="manifest.webmanifest?v=1651">
-  <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon-192.png?v=1651">
+    <link rel="manifest" href="manifest.webmanifest?v=1651" />
+    <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-192.png?v=1651" />
 
-  <link rel="stylesheet" href="styles.css?v=1946">
-  <script type="module" src="app.js?v=1946"></script>
+    <link rel="stylesheet" href="styles.css?v=202607101326" />
+    <script type="module" src="app.js?v=202607101326"></script>
 
-  <title>Lists for the Shop</title>
-</head>
+    <title>Lists for the Shop</title>
+  </head>
 
-<body>
-  <header class="app-header">
-    <nav class="main-tabs" aria-label="Main navigation">
-      <button type="button" data-view="needing">
-        Needing
-      </button>
+  <body>
+    <header class="app-header">
+      <nav class="main-tabs" aria-label="Main navigation">
+        <button type="button" data-view="needing">Needing</button>
 
-      <button type="button" data-view="getting">
-        Getting
-      </button>
-    </nav>
-  </header>
+        <button type="button" data-view="getting">Getting</button>
+      </nav>
+    </header>
 
-  <main id="app">
-    <section id="needing-view">
-      <button
-        type="button"
-        id="room-selector-button"
-        aria-expanded="true"
-      >
-        Choose a room
-      </button>
-
-      <div id="needing-home">
-        <div id="rooms-list"></div>
-
-        <button type="button" id="view-needed-list">
-          View full needed list
+    <main id="app">
+      <section id="needing-view">
+        <button type="button" id="room-selector-button" aria-expanded="true">
+          Choose a room
         </button>
-      </div>
 
-      <div id="full-needed-view" hidden>
-        <div class="full-needed-header-actions">
-          <button type="button" id="back-from-needed-list">
-            ← Rooms
-          </button>
+        <div id="needing-home">
+          <div id="rooms-list"></div>
 
-          <button type="button" id="edit-items-from-needed-list">
-            Edit items
+          <button type="button" id="view-needed-list">
+            View full needed list
           </button>
         </div>
 
-        <h2>Full needed list</h2>
+        <div id="full-needed-view" hidden>
+          <div class="full-needed-header-actions">
+            <button type="button" id="back-from-needed-list">← Rooms</button>
 
-        <input
-          type="search"
-          id="needed-list-search"
-          placeholder="Search needed items"
-          autocomplete="off"
-        >
+            <button type="button" id="edit-items-from-needed-list">
+              Edit items
+            </button>
+          </div>
 
-        <div id="full-needed-items">
-          <p>No items are currently needed.</p>
+          <h2>Full needed list</h2>
+
+          <input
+            type="search"
+            id="needed-list-search"
+            placeholder="Search needed items"
+            autocomplete="off"
+          />
+
+          <div id="full-needed-items">
+            <p>No items are currently needed.</p>
+          </div>
         </div>
-      </div>
 
-      <div id="room-view" hidden>
-        <button
-          type="button"
-          id="back-to-rooms"
-          hidden
-  >
-          ← Back to rooms
+        <div id="room-view" hidden>
+          <button type="button" id="back-to-rooms" hidden>
+            ← Back to rooms
+          </button>
+
+          <h2 id="room-view-title" hidden>Room</h2>
+
+          <input
+            type="search"
+            id="room-items-search"
+            class="list-search-input"
+            placeholder="Search room items"
+            autocomplete="off"
+          />
+
+          <div id="room-items-list"></div>
+
+          <button type="button" id="new-item-button">New item</button>
+
+          <section
+            id="new-item-panel"
+            class="new-item-panel settings-form"
+            hidden
+          >
+            <form id="add-item-form">
+              <div class="form-heading-row">
+                <h3>New item</h3>
+
+                <div class="form-heading-actions">
+                  <button
+                    type="button"
+                    id="cancel-new-item"
+                    aria-label="Cancel new item"
+                    title="Cancel"
+                  >
+                    ×
+                  </button>
+
+                  <button type="submit" aria-label="Save new item" title="Save">
+                    ✓
+                  </button>
+                </div>
+              </div>
+
+              <div class="settings-form-fields">
+                <label for="item-name"> Item name </label>
+
+                <input
+                  type="text"
+                  id="item-name"
+                  required
+                  maxlength="80"
+                  autocomplete="off"
+                />
+
+                <label for="item-room" id="item-room-label" hidden>
+                  Room
+                </label>
+
+                <select id="item-room" hidden>
+                  <option value="">Choose a room</option>
+                </select>
+
+                <label for="item-product-type"> Product type </label>
+
+                <select id="item-product-type" required>
+                  <option value="">Choose a product type</option>
+                </select>
+
+                <label for="item-specific-attributes">
+                  Specific Attributes (optional)
+                </label>
+
+                <input
+                  type="text"
+                  id="item-specific-attributes"
+                  maxlength="100"
+                  autocomplete="off"
+                  placeholder="e.g. 2 L, gluten-free, fragrance-free"
+                />
+
+                <label for="item-store"> Store (optional) </label>
+
+                <select id="item-store">
+                  <option value="">Any matching store</option>
+                </select>
+
+                <div class="amount-unit-step-row">
+                  <label for="item-default-amount">
+                    Amount
+                    <input
+                      type="number"
+                      id="item-default-amount"
+                      required
+                      min="0"
+                      step="any"
+                      value="1"
+                    />
+                  </label>
+
+                  <label for="item-unit">
+                    Unit
+                    <select id="item-unit" required></select>
+                  </label>
+
+                  <label for="item-increment">
+                    Step
+                    <input
+                      type="number"
+                      id="item-increment"
+                      required
+                      min="0.01"
+                      step="any"
+                      value="1"
+                    />
+                  </label>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <section
+            id="one-off-item-panel"
+            class="new-item-panel settings-form"
+            hidden
+          >
+            <form id="add-one-off-item-form">
+              <div class="form-heading-row">
+                <h3>New one-off item</h3>
+
+                <div class="form-heading-actions">
+                  <button
+                    type="button"
+                    id="cancel-one-off-item"
+                    aria-label="Cancel new one-off item"
+                    title="Cancel"
+                  >
+                    ×
+                  </button>
+
+                  <button
+                    type="submit"
+                    aria-label="Add one-off item"
+                    title="Add"
+                  >
+                    ✓
+                  </button>
+                </div>
+              </div>
+
+              <div class="settings-form-fields">
+                <label for="one-off-item-name"> Item </label>
+
+                <input
+                  type="text"
+                  id="one-off-item-name"
+                  required
+                  maxlength="80"
+                  autocomplete="off"
+                />
+
+                <label for="one-off-item-attributes">
+                  Specific Attributes (optional)
+                </label>
+
+                <input
+                  type="text"
+                  id="one-off-item-attributes"
+                  maxlength="100"
+                  autocomplete="off"
+                  placeholder="e.g. 2 L, gluten-free, fragrance-free"
+                />
+
+                <div class="settings-field-label">
+                  Store types and stores (choose at least one)
+                </div>
+
+                <div
+                  id="one-off-shopping-targets"
+                  class="one-off-shopping-targets"
+                ></div>
+
+                <label for="one-off-item-room"> Room (optional) </label>
+
+                <select id="one-off-item-room">
+                  <option value="">No additional room</option>
+                </select>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section id="getting-view" hidden>
+        <button type="button" id="shopping-at-button" aria-expanded="true">
+          Shopping at
         </button>
 
-        <h2 id="room-view-title" hidden>Room</h2>
+        <div id="shopping-at-panel">
+          <div id="shopping-location-options"></div>
+        </div>
 
-        <input
-          type="search"
-          id="room-items-search"
-          class="list-search-input"
-          placeholder="Search room items"
-          autocomplete="off"
-        >
+        <div id="getting-items-list"></div>
 
-        <div id="room-items-list"></div>
-
-        <button type="button" id="new-item-button">
-          New item
+        <button type="button" id="finish-shop-button" hidden>
+          Finish shop
         </button>
+      </section>
 
-        <section
-          id="new-item-panel"
-          class="new-item-panel settings-form"
-          hidden
-  >
-          <form id="add-item-form">
-            <div class="form-heading-row">
-              <h3>New item</h3>
+      <section id="settings-view" hidden>
+        <button type="button" id="settings-category-button" hidden></button>
 
-              <div class="form-heading-actions">
-                <button
-                  type="button"
-                  id="cancel-new-item"
-                  aria-label="Cancel new item"
-                  title="Cancel"
-                >
-                  ×
-                </button>
+        <div id="settings-home">
+          <button
+            type="button"
+            class="settings-category-option shopping-location-option settings-menu-order-row"
+            data-settings-category="stores"
+          >
+            <span class="settings-order-handle" aria-hidden="true">☰</span>
+            <span class="settings-menu-option-label">Stores</span>
+          </button>
 
-                <button
-                  type="submit"
-                  aria-label="Save new item"
-                  title="Save"
-                >
-                  ✓
-                </button>
-              </div>
+          <button
+            type="button"
+            class="settings-category-option shopping-location-option settings-menu-order-row"
+            data-settings-category="store-types"
+          >
+            <span class="settings-order-handle" aria-hidden="true">☰</span>
+            <span class="settings-menu-option-label">Store types</span>
+          </button>
+
+          <button
+            type="button"
+            class="settings-category-option shopping-location-option settings-menu-order-row"
+            data-settings-category="product-types"
+          >
+            <span class="settings-order-handle" aria-hidden="true">☰</span>
+            <span class="settings-menu-option-label">Product types</span>
+          </button>
+
+          <button
+            type="button"
+            class="settings-category-option shopping-location-option settings-menu-order-row"
+            data-settings-category="items"
+          >
+            <span class="settings-order-handle" aria-hidden="true">☰</span>
+            <span class="settings-menu-option-label"
+              >Items and Specific Products</span
+            >
+          </button>
+
+          <button
+            type="button"
+            class="settings-category-option shopping-location-option settings-menu-order-row"
+            data-settings-category="rooms"
+          >
+            <span class="settings-order-handle" aria-hidden="true">☰</span>
+            <span class="settings-menu-option-label">Rooms</span>
+          </button>
+
+          <button
+            type="button"
+            class="settings-category-option shopping-location-option settings-menu-order-row"
+            data-settings-category="units"
+          >
+            <span class="settings-order-handle" aria-hidden="true">☰</span>
+            <span class="settings-menu-option-label">Units</span>
+          </button>
+        </div>
+
+        <div id="settings-category-panels">
+          <section
+            id="settings-stores-panel"
+            class="settings-category-panel"
+            hidden
+          >
+            <div id="settings-stores-list" class="settings-orderable-list">
+              <p>No stores have been created yet.</p>
             </div>
 
-            <div class="settings-form-fields">
-              <label for="item-name">
-                Item name
-              </label>
+            <form
+              id="add-store-form"
+              class="settings-form settings-add-form"
+              hidden
+            >
+              <div class="settings-form-fields">
+                <label for="store-name"> Store name </label>
 
+                <input
+                  type="text"
+                  id="store-name"
+                  required
+                  maxlength="80"
+                  placeholder="New World Miramar"
+                  autocomplete="off"
+                />
+
+                <label for="store-type-select"> Store type </label>
+
+                <select id="store-type-select" required>
+                  <option value="">Choose a store type</option>
+                </select>
+              </div>
+
+              <button type="submit" class="settings-add-button">
+                Add store
+              </button>
+            </form>
+          </section>
+
+          <section
+            id="settings-store-types-panel"
+            class="settings-category-panel"
+            hidden
+          >
+            <div id="settings-store-types-list" class="settings-orderable-list">
+              <p>No store types have been created yet.</p>
+            </div>
+
+            <form
+              id="add-store-type-form"
+              class="settings-form settings-add-form"
+              hidden
+            >
+              <div class="settings-form-fields">
+                <label for="store-type-name"> New store type </label>
+
+                <input
+                  type="text"
+                  id="store-type-name"
+                  required
+                  maxlength="50"
+                  placeholder="Supermarket"
+                  autocomplete="off"
+                />
+              </div>
+
+              <button type="submit" class="settings-add-button">
+                Add store type
+              </button>
+            </form>
+          </section>
+
+          <section
+            id="settings-product-types-panel"
+            class="settings-category-panel"
+            hidden
+          >
+            <div
+              id="settings-product-types-list"
+              class="settings-orderable-list"
+            >
+              <p>No product types have been created yet.</p>
+            </div>
+
+            <form
+              id="add-product-type-form"
+              class="settings-form settings-add-form"
+              hidden
+            >
+              <div class="settings-form-fields">
+                <label for="product-type-name"> New product type </label>
+
+                <input
+                  type="text"
+                  id="product-type-name"
+                  required
+                  maxlength="50"
+                  placeholder="Dairy"
+                  autocomplete="off"
+                />
+
+                <div class="settings-field-label">Store types</div>
+
+                <div
+                  id="product-type-store-types"
+                  class="settings-checkbox-list"
+                >
+                  <p>No store types are available.</p>
+                </div>
+              </div>
+
+              <button type="submit" class="settings-add-button">
+                Add product type
+              </button>
+            </form>
+          </section>
+
+          <section
+            id="settings-items-panel"
+            class="settings-category-panel"
+            hidden
+          >
+            <div class="settings-search-block">
               <input
-                type="text"
-                id="item-name"
-                required
-                maxlength="80"
+                type="search"
+                id="settings-items-search"
+                placeholder="Search items and specific products"
                 autocomplete="off"
-              >
+              />
+            </div>
 
-              <label for="item-room" id="item-room-label" hidden>
-                Room
-              </label>
+            <div
+              id="settings-items-list"
+              class="settings-orderable-list settings-items-list"
+            >
+              <p>No items have been created yet.</p>
+            </div>
 
-              <select id="item-room" hidden>
-                <option value="">Choose a room</option>
-              </select>
+            <form
+              id="add-settings-item-form"
+              class="settings-form settings-add-form"
+              hidden
+            >
+              <div class="settings-form-fields">
+                <label for="settings-item-name"> Item name </label>
 
-              <label for="item-product-type">
-                Product type
-              </label>
+                <input
+                  type="text"
+                  id="settings-item-name"
+                  required
+                  maxlength="80"
+                  autocomplete="off"
+                />
 
-              <select id="item-product-type" required>
-                <option value="">
-                  Choose a product type
-                </option>
-              </select>
+                <label for="settings-item-room"> Room </label>
 
-              <label for="item-specific-attributes">
-                Specific Attributes (optional)
-              </label>
+                <select id="settings-item-room" required>
+                  <option value="">Choose a room</option>
+                </select>
 
-              <input
-                type="text"
-                id="item-specific-attributes"
-                maxlength="100"
-                autocomplete="off"
-                placeholder="e.g. 2 L, gluten-free, fragrance-free"
-              >
+                <label for="settings-item-product-type"> Product type </label>
 
-              <label for="item-store">
-                Store (optional)
-              </label>
+                <select id="settings-item-product-type" required>
+                  <option value="">Choose a product type</option>
+                </select>
 
-              <select id="item-store">
-                <option value="">
-                  Any matching store
-                </option>
-              </select>
-
-              <div class="amount-unit-step-row">
-                <label for="item-default-amount">
-                  Amount
-                  <input
-                    type="number"
-                    id="item-default-amount"
-                    required
-                    min="0"
-                    step="any"
-                    value="1"
-                  >
+                <label for="settings-item-specific-attributes">
+                  Specific Attributes (optional)
                 </label>
 
-                <label for="item-unit">
-                  Unit
-                  <select id="item-unit" required></select>
-                </label>
+                <input
+                  type="text"
+                  id="settings-item-specific-attributes"
+                  maxlength="100"
+                  autocomplete="off"
+                  placeholder="e.g. 2 L, gluten-free, fragrance-free"
+                />
 
-                <label for="item-increment">
-                  Step
-                  <input
-                    type="number"
-                    id="item-increment"
-                    required
-                    min="0.01"
-                    step="any"
-                    value="1"
-                  >
-                </label>
-              </div>
-            </div>
+                <label for="settings-item-store"> Store (optional) </label>
 
-          </form>
-        </section>
+                <select id="settings-item-store">
+                  <option value="">Any matching store</option>
+                </select>
 
-        <section
-          id="one-off-item-panel"
-          class="new-item-panel settings-form"
-          hidden
-        >
-          <form id="add-one-off-item-form">
-            <div class="form-heading-row">
-              <h3>New one-off item</h3>
+                <div class="amount-unit-step-row">
+                  <label for="settings-item-default-amount">
+                    Amount
+                    <input
+                      type="number"
+                      id="settings-item-default-amount"
+                      required
+                      min="0"
+                      step="any"
+                      value="1"
+                    />
+                  </label>
 
-              <div class="form-heading-actions">
-                <button
-                  type="button"
-                  id="cancel-one-off-item"
-                  aria-label="Cancel new one-off item"
-                  title="Cancel"
-                >
-                  ×
-                </button>
+                  <label for="settings-item-unit">
+                    Unit
+                    <select id="settings-item-unit" required></select>
+                  </label>
 
-                <button
-                  type="submit"
-                  aria-label="Add one-off item"
-                  title="Add"
-                >
-                  ✓
-                </button>
-              </div>
-            </div>
-
-            <div class="settings-form-fields">
-              <label for="one-off-item-name">
-                Item
-              </label>
-
-              <input
-                type="text"
-                id="one-off-item-name"
-                required
-                maxlength="80"
-                autocomplete="off"
-              >
-
-              <label for="one-off-item-attributes">
-                Specific Attributes (optional)
-              </label>
-
-              <input
-                type="text"
-                id="one-off-item-attributes"
-                maxlength="100"
-                autocomplete="off"
-                placeholder="e.g. 2 L, gluten-free, fragrance-free"
-              >
-
-              <div class="settings-field-label">
-                Store types and stores (choose at least one)
+                  <label for="settings-item-increment">
+                    Step
+                    <input
+                      type="number"
+                      id="settings-item-increment"
+                      required
+                      min="0.01"
+                      step="any"
+                      value="1"
+                    />
+                  </label>
+                </div>
               </div>
 
-              <div
-                id="one-off-shopping-targets"
-                class="one-off-shopping-targets"
-              ></div>
+              <button type="submit" class="settings-add-button">
+                Add item
+              </button>
+            </form>
+          </section>
 
-              <label for="one-off-item-room">
-                Room (optional)
-              </label>
+          <section
+            id="settings-rooms-panel"
+            class="settings-category-panel"
+            hidden
+          >
+            <div id="settings-rooms-list" class="settings-orderable-list"></div>
 
-              <select id="one-off-item-room">
-                <option value="">No additional room</option>
-              </select>
+            <form
+              id="add-room-form"
+              class="settings-form settings-add-form"
+              hidden
+            >
+              <div class="settings-form-fields">
+                <label for="room-name"> New room name </label>
+
+                <input
+                  type="text"
+                  id="room-name"
+                  name="roomName"
+                  required
+                  maxlength="50"
+                  autocomplete="off"
+                />
+              </div>
+
+              <button type="submit" class="settings-add-button">
+                Add room
+              </button>
+            </form>
+          </section>
+
+          <section
+            id="settings-units-panel"
+            class="settings-category-panel"
+            hidden
+          >
+            <div id="settings-units-list" class="settings-orderable-list">
+              <p>No units have been created yet.</p>
             </div>
-          </form>
-        </section>
 
+            <form
+              id="add-unit-form"
+              class="settings-form settings-add-form"
+              hidden
+            >
+              <div class="settings-form-fields">
+                <label for="unit-symbol"> Unit symbol </label>
 
-      </div>
+                <input
+                  type="text"
+                  id="unit-symbol"
+                  required
+                  maxlength="10"
+                  placeholder="L"
+                  autocomplete="off"
+                />
+              </div>
 
+              <button type="submit" class="settings-add-button">
+                Add unit
+              </button>
+            </form>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <section
+      id="specific-product-panel"
+      class="specific-product-panel settings-form"
+      hidden
+    >
+      <form id="add-specific-product-form">
+        <div class="form-heading-row">
+          <h3 id="specific-product-panel-title">Add specific product</h3>
+
+          <div class="form-heading-actions">
+            <button
+              type="button"
+              id="cancel-specific-product"
+              aria-label="Cancel specific product"
+              title="Cancel"
+            >
+              ×
+            </button>
+
+            <button
+              type="submit"
+              aria-label="Save specific product"
+              title="Save"
+            >
+              ✓
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-form-fields">
+          <label for="specific-product-name"> Product name </label>
+
+          <input
+            type="text"
+            id="specific-product-name"
+            required
+            maxlength="100"
+            autocomplete="off"
+          />
+
+          <label for="specific-product-attributes"> Specific Attributes </label>
+
+          <input
+            type="text"
+            id="specific-product-attributes"
+            maxlength="100"
+            autocomplete="off"
+          />
+
+          <div class="settings-field-label">Stores</div>
+
+          <div id="specific-product-stores" class="settings-checkbox-list">
+            <p>No stores are available.</p>
+          </div>
+        </div>
+      </form>
     </section>
 
-    <section id="getting-view" hidden>
-      <button
-        type="button"
-        id="shopping-at-button"
-        aria-expanded="true"
-      >
-        Shopping at
-      </button>
+    <section
+      id="temporary-note-panel"
+      class="temporary-note-panel settings-form"
+      hidden
+    >
+      <form id="temporary-note-form">
+        <div class="form-heading-row">
+          <h3>Temporary note</h3>
 
-      <div id="shopping-at-panel">
-        <div id="shopping-location-options"></div>
-      </div>
+          <div class="form-heading-actions">
+            <button
+              type="button"
+              id="cancel-temporary-note"
+              aria-label="Cancel temporary note"
+              title="Cancel"
+            >
+              ×
+            </button>
 
-      <div id="getting-items-list"></div>
+            <button type="submit" aria-label="Save temporary note" title="Save">
+              ✓
+            </button>
+          </div>
+        </div>
 
-      <button
-        type="button"
-        id="finish-shop-button"
-        hidden
-      >
-        Finish shop
-      </button>
+        <div class="settings-form-fields">
+          <p id="temporary-note-item-name" class="temporary-note-item-name"></p>
+
+          <label for="temporary-note-text"> Note </label>
+
+          <input
+            type="text"
+            id="temporary-note-text"
+            maxlength="300"
+            autocomplete="off"
+          />
+
+          <p class="temporary-note-warning">
+            This note will be deleted when the item is removed from the needed
+            list.
+          </p>
+
+          <button
+            type="button"
+            id="clear-temporary-note"
+            class="settings-add-button temporary-note-clear-button"
+          >
+            Clear note
+          </button>
+        </div>
+      </form>
     </section>
 
-    <section id="settings-view" hidden>
+    <section id="compact-select-panel" class="compact-select-panel" hidden>
+      <div
+        class="compact-select-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="compact-select-title"
+      >
+        <div class="compact-select-heading">
+          <h3 id="compact-select-title">Choose</h3>
+          <button
+            type="button"
+            id="close-compact-select"
+            aria-label="Close selector"
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div id="compact-select-options"></div>
+      </div>
+    </section>
+
+    <nav class="bottom-action-bar" aria-label="App actions">
       <button
         type="button"
-        id="settings-category-button"
-        hidden
+        class="bottom-bar-button settings-shortcut"
+        data-view="settings"
+        aria-label="Open settings"
+        title="Settings"
+      >
+        Settings
+      </button>
+
+      <div class="bottom-bar-status">
+        <span id="app-build" title="Build 202607101326">V13.26</span>
+        <span id="connection-status">Connecting…</span>
+      </div>
+
+      <button
+        type="button"
+        id="bottom-context-action"
+        class="bottom-bar-button bottom-context-action"
+        disabled
       ></button>
-
-      <div id="settings-home">
-        <button
-          type="button"
-          class="settings-category-option shopping-location-option settings-menu-order-row"
-          data-settings-category="stores"
-        >
-          <span class="settings-order-handle" aria-hidden="true">☰</span>
-          <span class="settings-menu-option-label">Stores</span>
-        </button>
-
-        <button
-          type="button"
-          class="settings-category-option shopping-location-option settings-menu-order-row"
-          data-settings-category="store-types"
-        >
-          <span class="settings-order-handle" aria-hidden="true">☰</span>
-          <span class="settings-menu-option-label">Store types</span>
-        </button>
-
-        <button
-          type="button"
-          class="settings-category-option shopping-location-option settings-menu-order-row"
-          data-settings-category="product-types"
-        >
-          <span class="settings-order-handle" aria-hidden="true">☰</span>
-          <span class="settings-menu-option-label">Product types</span>
-        </button>
-
-        <button
-          type="button"
-          class="settings-category-option shopping-location-option settings-menu-order-row"
-          data-settings-category="items"
-        >
-          <span class="settings-order-handle" aria-hidden="true">☰</span>
-          <span class="settings-menu-option-label">Items and Specific Products</span>
-        </button>
-
-        <button
-          type="button"
-          class="settings-category-option shopping-location-option settings-menu-order-row"
-          data-settings-category="rooms"
-        >
-          <span class="settings-order-handle" aria-hidden="true">☰</span>
-          <span class="settings-menu-option-label">Rooms</span>
-        </button>
-
-        <button
-          type="button"
-          class="settings-category-option shopping-location-option settings-menu-order-row"
-          data-settings-category="units"
-        >
-          <span class="settings-order-handle" aria-hidden="true">☰</span>
-          <span class="settings-menu-option-label">Units</span>
-        </button>
-      </div>
-
-      <div id="settings-category-panels">
-        <section
-          id="settings-stores-panel"
-          class="settings-category-panel"
-          hidden
-  >
-          <div
-            id="settings-stores-list"
-            class="settings-orderable-list"
-          >
-            <p>No stores have been created yet.</p>
-          </div>
-
-          <form
-            id="add-store-form"
-            class="settings-form settings-add-form"
-            hidden
-          >
-            <div class="settings-form-fields">
-              <label for="store-name">
-                Store name
-              </label>
-
-              <input
-                type="text"
-                id="store-name"
-                required
-                maxlength="80"
-                placeholder="New World Miramar"
-                autocomplete="off"
-              >
-
-              <label for="store-type-select">
-                Store type
-              </label>
-
-              <select
-                id="store-type-select"
-                required
-              >
-                <option value="">
-                  Choose a store type
-                </option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              class="settings-add-button"
-            >
-              Add store
-            </button>
-          </form>
-        </section>
-
-        <section
-          id="settings-store-types-panel"
-          class="settings-category-panel"
-          hidden
-  >
-          <div
-            id="settings-store-types-list"
-            class="settings-orderable-list"
-          >
-            <p>No store types have been created yet.</p>
-          </div>
-
-          <form
-            id="add-store-type-form"
-            class="settings-form settings-add-form"
-            hidden
-          >
-            <div class="settings-form-fields">
-              <label for="store-type-name">
-                New store type
-              </label>
-
-              <input
-                type="text"
-                id="store-type-name"
-                required
-                maxlength="50"
-                placeholder="Supermarket"
-                autocomplete="off"
-              >
-            </div>
-
-            <button
-              type="submit"
-              class="settings-add-button"
-            >
-              Add store type
-            </button>
-          </form>
-        </section>
-
-        <section
-          id="settings-product-types-panel"
-          class="settings-category-panel"
-          hidden
-  >
-          <div
-            id="settings-product-types-list"
-            class="settings-orderable-list"
-          >
-            <p>No product types have been created yet.</p>
-          </div>
-
-          <form
-            id="add-product-type-form"
-            class="settings-form settings-add-form"
-            hidden
-          >
-            <div class="settings-form-fields">
-              <label for="product-type-name">
-                New product type
-              </label>
-
-              <input
-                type="text"
-                id="product-type-name"
-                required
-                maxlength="50"
-                placeholder="Dairy"
-                autocomplete="off"
-              >
-
-              <div class="settings-field-label">
-                Store types
-              </div>
-
-              <div
-                id="product-type-store-types"
-                class="settings-checkbox-list"
-              >
-                <p>No store types are available.</p>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              class="settings-add-button"
-            >
-              Add product type
-            </button>
-          </form>
-        </section>
-
-        <section
-          id="settings-items-panel"
-          class="settings-category-panel"
-          hidden
-  >
-          <div class="settings-search-block">
-            <input
-              type="search"
-              id="settings-items-search"
-              placeholder="Search items and specific products"
-              autocomplete="off"
-            >
-          </div>
-
-          <div
-            id="settings-items-list"
-            class="settings-orderable-list settings-items-list"
-          >
-            <p>No items have been created yet.</p>
-          </div>
-
-          <form
-            id="add-settings-item-form"
-            class="settings-form settings-add-form"
-            hidden
-          >
-            <div class="settings-form-fields">
-              <label for="settings-item-name">
-                Item name
-              </label>
-
-              <input
-                type="text"
-                id="settings-item-name"
-                required
-                maxlength="80"
-                autocomplete="off"
-              >
-
-              <label for="settings-item-room">
-                Room
-              </label>
-
-              <select id="settings-item-room" required>
-                <option value="">
-                  Choose a room
-                </option>
-              </select>
-
-              <label for="settings-item-product-type">
-                Product type
-              </label>
-
-              <select id="settings-item-product-type" required>
-                <option value="">
-                  Choose a product type
-                </option>
-              </select>
-
-              <label for="settings-item-specific-attributes">
-                Specific Attributes (optional)
-              </label>
-
-              <input
-                type="text"
-                id="settings-item-specific-attributes"
-                maxlength="100"
-                autocomplete="off"
-                placeholder="e.g. 2 L, gluten-free, fragrance-free"
-              >
-
-              <label for="settings-item-store">
-                Store (optional)
-              </label>
-
-              <select id="settings-item-store">
-                <option value="">
-                  Any matching store
-                </option>
-              </select>
-
-              <div class="amount-unit-step-row">
-                <label for="settings-item-default-amount">
-                  Amount
-                  <input
-                    type="number"
-                    id="settings-item-default-amount"
-                    required
-                    min="0"
-                    step="any"
-                    value="1"
-                  >
-                </label>
-
-                <label for="settings-item-unit">
-                  Unit
-                  <select id="settings-item-unit" required></select>
-                </label>
-
-                <label for="settings-item-increment">
-                  Step
-                  <input
-                    type="number"
-                    id="settings-item-increment"
-                    required
-                    min="0.01"
-                    step="any"
-                    value="1"
-                  >
-                </label>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              class="settings-add-button"
-            >
-              Add item
-            </button>
-          </form>
-        </section>
-
-        <section
-          id="settings-rooms-panel"
-          class="settings-category-panel"
-          hidden
-  >
-          <div
-            id="settings-rooms-list"
-            class="settings-orderable-list"
-          ></div>
-
-          <form
-            id="add-room-form"
-            class="settings-form settings-add-form"
-            hidden
-          >
-            <div class="settings-form-fields">
-              <label for="room-name">
-                New room name
-              </label>
-
-              <input
-                type="text"
-                id="room-name"
-                name="roomName"
-                required
-                maxlength="50"
-                autocomplete="off"
-              >
-            </div>
-
-            <button
-              type="submit"
-              class="settings-add-button"
-            >
-              Add room
-            </button>
-          </form>
-        </section>
-
-        <section
-          id="settings-units-panel"
-          class="settings-category-panel"
-          hidden
-  >
-          <div
-            id="settings-units-list"
-            class="settings-orderable-list"
-          >
-            <p>No units have been created yet.</p>
-          </div>
-
-          <form
-            id="add-unit-form"
-            class="settings-form settings-add-form"
-            hidden
-          >
-            <div class="settings-form-fields">
-              <label for="unit-symbol">
-                Unit symbol
-              </label>
-
-              <input
-                type="text"
-                id="unit-symbol"
-                required
-                maxlength="10"
-                placeholder="L"
-                autocomplete="off"
-              >
-            </div>
-
-            <button
-              type="submit"
-              class="settings-add-button"
-            >
-              Add unit
-            </button>
-          </form>
-        </section>
-      </div>
-    </section>
-  </main>
-
-  <section
-    id="specific-product-panel"
-    class="specific-product-panel settings-form"
-    hidden
-  >
-    <form id="add-specific-product-form">
-      <div class="form-heading-row">
-        <h3 id="specific-product-panel-title">
-          Add specific product
-        </h3>
-
-        <div class="form-heading-actions">
-          <button
-            type="button"
-            id="cancel-specific-product"
-            aria-label="Cancel specific product"
-            title="Cancel"
-          >
-            ×
-          </button>
-
-          <button
-            type="submit"
-            aria-label="Save specific product"
-            title="Save"
-          >
-            ✓
-          </button>
-        </div>
-      </div>
-
-      <div class="settings-form-fields">
-        <label for="specific-product-name">
-          Product name
-        </label>
-
-        <input
-          type="text"
-          id="specific-product-name"
-          required
-          maxlength="100"
-          autocomplete="off"
-        >
-
-        <label for="specific-product-attributes">
-          Specific Attributes
-        </label>
-
-        <input
-          type="text"
-          id="specific-product-attributes"
-          maxlength="100"
-          autocomplete="off"
-        >
-
-        <div class="settings-field-label">
-          Stores
-        </div>
-
-        <div
-          id="specific-product-stores"
-          class="settings-checkbox-list"
-        >
-          <p>No stores are available.</p>
-        </div>
-      </div>
-
-    </form>
-  </section>
-
-  <section
-    id="temporary-note-panel"
-    class="temporary-note-panel settings-form"
-    hidden
-  >
-    <form id="temporary-note-form">
-      <div class="form-heading-row">
-        <h3>Temporary note</h3>
-
-        <div class="form-heading-actions">
-          <button
-            type="button"
-            id="cancel-temporary-note"
-            aria-label="Cancel temporary note"
-            title="Cancel"
-          >
-            ×
-          </button>
-
-          <button
-            type="submit"
-            aria-label="Save temporary note"
-            title="Save"
-          >
-            ✓
-          </button>
-        </div>
-      </div>
-
-      <div class="settings-form-fields">
-        <p
-          id="temporary-note-item-name"
-          class="temporary-note-item-name"
-        ></p>
-
-        <label for="temporary-note-text">
-          Note
-        </label>
-
-        <input
-          type="text"
-          id="temporary-note-text"
-          maxlength="300"
-          autocomplete="off"
-        >
-
-        <p class="temporary-note-warning">
-          This note will be deleted when the item is removed from the needed list.
-        </p>
-
-        <button
-          type="button"
-          id="clear-temporary-note"
-          class="settings-add-button temporary-note-clear-button"
-        >
-          Clear note
-        </button>
-      </div>
-    </form>
-  </section>
-
-  <section
-    id="compact-select-panel"
-    class="compact-select-panel"
-    hidden
-  >
-    <div
-      class="compact-select-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="compact-select-title"
-    >
-      <div class="compact-select-heading">
-        <h3 id="compact-select-title">Choose</h3>
-        <button
-          type="button"
-          id="close-compact-select"
-          aria-label="Close selector"
-          title="Close"
-        >×</button>
-      </div>
-
-      <div id="compact-select-options"></div>
-    </div>
-  </section>
-
-  <nav class="bottom-action-bar" aria-label="App actions">
-    <button
-      type="button"
-      class="bottom-bar-button settings-shortcut"
-      data-view="settings"
-      aria-label="Open settings"
-      title="Settings"
-    >
-      Settings
-    </button>
-
-    <div class="bottom-bar-status">
-      <span id="app-build" title="Build 202607091946">V19.46</span>
-      <span id="connection-status">Connecting…</span>
-    </div>
-
-    <button
-      type="button"
-      id="bottom-context-action"
-      class="bottom-bar-button bottom-context-action"
-      disabled
-    ></button>
-  </nav>
-</body>
+    </nav>
+  </body>
 </html>

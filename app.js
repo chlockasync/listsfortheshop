@@ -1,15 +1,8 @@
-import Sortable from
-  "https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/modular/sortable.core.esm.js";
+import Sortable from "https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/modular/sortable.core.esm.js";
 
-import {
-  auth,
-  db,
-  HOUSEHOLD_ID
-} from "./firebase.js";
+import { auth, db, HOUSEHOLD_ID } from "./firebase.js";
 
-import {
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
 import {
   addDoc,
@@ -23,75 +16,79 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  writeBatch
+  writeBatch,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
-function ensureSpecificAttributesField({
-  formSelector,
-  afterSelector,
-  inputId
-}) {
-  if (document.querySelector(`#${inputId}`)) {
-    return;
-  }
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) =>
+  Array.from(root.querySelectorAll(selector));
 
-  const form = document.querySelector(formSelector);
-  const afterElement = form?.querySelector(afterSelector);
-
-  if (!form || !afterElement) {
-    return;
-  }
-
-  const label = document.createElement("label");
-  label.htmlFor = inputId;
-  label.textContent = "Specific Attributes (optional)";
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.id = inputId;
-  input.maxLength = 100;
-  input.autocomplete = "off";
-  input.placeholder = "e.g. 2 L, gluten-free, fragrance-free";
-
-  afterElement.insertAdjacentElement("afterend", input);
-  input.insertAdjacentElement("beforebegin", label);
+function submitButtonFor(form) {
+  return form?.querySelector('button[type="submit"]') ?? null;
 }
 
-ensureSpecificAttributesField({
-  formSelector: "#add-item-form",
-  afterSelector: "#item-store",
-  inputId: "item-specific-attributes"
-});
+async function withDisabledSubmit(form, operation) {
+  const submitButton = submitButtonFor(form);
 
-ensureSpecificAttributesField({
-  formSelector: "#add-settings-item-form",
-  afterSelector: "#settings-item-store",
-  inputId: "settings-item-specific-attributes"
-});
+  if (submitButton) {
+    submitButton.disabled = true;
+  }
 
-const navigationButtons = document.querySelectorAll("[data-view]");
+  try {
+    return await operation();
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+    }
+  }
+}
+
+function wireAsyncForm(form, handler, { errorLabel, errorMessage }) {
+  if (!form) {
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    try {
+      await withDisabledSubmit(form, () => handler(event));
+    } catch (error) {
+      console.error(`${errorLabel}:`, error);
+
+      const message =
+        typeof errorMessage === "function" ? errorMessage(error) : errorMessage;
+
+      if (message) {
+        alert(message);
+      }
+    }
+  });
+}
+
+const navigationButtons = $$("[data-view]");
 
 const views = {
-  needing: document.querySelector("#needing-view"),
-  getting: document.querySelector("#getting-view"),
-  settings: document.querySelector("#settings-view")
+  needing: $("#needing-view"),
+  getting: $("#getting-view"),
+  settings: $("#settings-view"),
 };
 
-const connectionStatus = document.querySelector("#connection-status");
-const bottomContextAction = document.querySelector("#bottom-context-action");
+const connectionStatus = $("#connection-status");
+const bottomContextAction = $("#bottom-context-action");
 
 /* Settings navigation */
-const settingsHome = document.querySelector("#settings-home");
-const settingsCategoryButton = document.querySelector("#settings-category-button");
-const settingsCategoryOptions = document.querySelectorAll(".settings-category-option");
-const settingsCategoryPanels = document.querySelectorAll(".settings-category-panel");
+const settingsHome = $("#settings-home");
+const settingsCategoryButton = $("#settings-category-button");
+const settingsCategoryOptions = $$(".settings-category-option");
+const settingsCategoryPanels = $$(".settings-category-panel");
 const settingsPanels = {
-  stores: document.querySelector("#settings-stores-panel"),
-  "store-types": document.querySelector("#settings-store-types-panel"),
-  "product-types": document.querySelector("#settings-product-types-panel"),
-  items: document.querySelector("#settings-items-panel"),
-  rooms: document.querySelector("#settings-rooms-panel"),
-  units: document.querySelector("#settings-units-panel")
+  stores: $("#settings-stores-panel"),
+  "store-types": $("#settings-store-types-panel"),
+  "product-types": $("#settings-product-types-panel"),
+  items: $("#settings-items-panel"),
+  rooms: $("#settings-rooms-panel"),
+  units: $("#settings-units-panel"),
 };
 const settingsCategoryNames = {
   stores: "Stores",
@@ -99,7 +96,7 @@ const settingsCategoryNames = {
   "product-types": "Product types",
   items: "Items and Specific Products",
   rooms: "Rooms",
-  units: "Units"
+  units: "Units",
 };
 
 function getVisibleSettingsCategory() {
@@ -108,34 +105,22 @@ function getVisibleSettingsCategory() {
   }
 
   const visiblePanel = Array.from(settingsCategoryPanels).find(
-    (panel) => !panel.hidden
+    (panel) => !panel.hidden,
   );
 
-  return Object.entries(settingsPanels).find(
-    ([, panel]) => panel === visiblePanel
-  )?.[0] ?? null;
+  return (
+    Object.entries(settingsPanels).find(
+      ([, panel]) => panel === visiblePanel,
+    )?.[0] ?? null
+  );
 }
 
 function getSettingsAddForm(categoryName) {
-  return {
-    stores: addStoreForm,
-    "store-types": addStoreTypeForm,
-    "product-types": addProductTypeForm,
-    items: addSettingsItemForm,
-    rooms: addRoomForm,
-    units: addUnitForm
-  }[categoryName] ?? null;
+  return settingsCategoryConfig[categoryName]?.addForm ?? null;
 }
 
 function closeSettingsAddForms({ except = null } = {}) {
-  [
-    addStoreForm,
-    addStoreTypeForm,
-    addProductTypeForm,
-    addSettingsItemForm,
-    addRoomForm,
-    addUnitForm
-  ].forEach((form) => {
+  Object.values(settingsAddForms).forEach((form) => {
     if (!form || form === except) {
       return;
     }
@@ -166,108 +151,158 @@ function toggleCurrentSettingsAddForm() {
 }
 
 /* Rooms */
-const addRoomForm = document.querySelector("#add-room-form");
-const roomNameInput = document.querySelector("#room-name");
-const settingsRoomsList = document.querySelector("#settings-rooms-list");
-const needingRoomsList = document.querySelector("#rooms-list");
+const addRoomForm = $("#add-room-form");
+const roomNameInput = $("#room-name");
+const settingsRoomsList = $("#settings-rooms-list");
+const needingRoomsList = $("#rooms-list");
 
 /* Units */
-const addUnitForm = document.querySelector("#add-unit-form");
-const unitNameInput = document.querySelector("#unit-name");
-const unitSymbolInput = document.querySelector("#unit-symbol");
-const settingsUnitsList = document.querySelector("#settings-units-list");
+const addUnitForm = $("#add-unit-form");
+const unitSymbolInput = $("#unit-symbol");
+const settingsUnitsList = $("#settings-units-list");
 
 /* Store types */
-const addStoreTypeForm = document.querySelector("#add-store-type-form");
-const storeTypeNameInput = document.querySelector("#store-type-name");
-const settingsStoreTypesList = document.querySelector("#settings-store-types-list");
-const storeTypeSelect = document.querySelector("#store-type-select");
+const addStoreTypeForm = $("#add-store-type-form");
+const storeTypeNameInput = $("#store-type-name");
+const settingsStoreTypesList = $("#settings-store-types-list");
+const storeTypeSelect = $("#store-type-select");
 
 /* Stores */
-const addStoreForm = document.querySelector("#add-store-form");
-const storeNameInput = document.querySelector("#store-name");
-const settingsStoresList = document.querySelector("#settings-stores-list");
+const addStoreForm = $("#add-store-form");
+const storeNameInput = $("#store-name");
+const settingsStoresList = $("#settings-stores-list");
 
 /* Product types */
-const addProductTypeForm = document.querySelector("#add-product-type-form");
-const productTypeNameInput = document.querySelector("#product-type-name");
-const productTypeStoreTypesContainer = document.querySelector("#product-type-store-types");
-const settingsProductTypesList = document.querySelector("#settings-product-types-list");
+const addProductTypeForm = $("#add-product-type-form");
+const productTypeNameInput = $("#product-type-name");
+const productTypeStoreTypesContainer = $("#product-type-store-types");
+const settingsProductTypesList = $("#settings-product-types-list");
 
 /* Items */
-const settingsItemsList = document.querySelector("#settings-items-list");
-const settingsItemsSearch = document.querySelector("#settings-items-search");
-const addSettingsItemForm = document.querySelector("#add-settings-item-form");
-const settingsItemNameInput = document.querySelector("#settings-item-name");
-const settingsItemRoomSelect = document.querySelector("#settings-item-room");
-const settingsItemProductTypeSelect = document.querySelector("#settings-item-product-type");
-const settingsItemStoreSelect = document.querySelector("#settings-item-store");
-const settingsItemSpecificAttributesInput = document.querySelector("#settings-item-specific-attributes");
-const settingsItemDefaultAmountInput = document.querySelector("#settings-item-default-amount");
-const settingsItemUnitSelect = document.querySelector("#settings-item-unit");
-const settingsItemIncrementInput = document.querySelector("#settings-item-increment");
+const settingsItemsList = $("#settings-items-list");
+const settingsItemsSearch = $("#settings-items-search");
+const addSettingsItemForm = $("#add-settings-item-form");
+const settingsItemNameInput = $("#settings-item-name");
+const settingsItemRoomSelect = $("#settings-item-room");
+const settingsItemProductTypeSelect = $("#settings-item-product-type");
+const settingsItemStoreSelect = $("#settings-item-store");
+const settingsItemSpecificAttributesInput = $(
+  "#settings-item-specific-attributes",
+);
+const settingsItemDefaultAmountInput = $("#settings-item-default-amount");
+const settingsItemUnitSelect = $("#settings-item-unit");
+const settingsItemIncrementInput = $("#settings-item-increment");
+
+const settingsAddForms = {
+  stores: addStoreForm,
+  "store-types": addStoreTypeForm,
+  "product-types": addProductTypeForm,
+  items: addSettingsItemForm,
+  rooms: addRoomForm,
+  units: addUnitForm,
+};
+
+const settingsCategoryConfig = Object.fromEntries(
+  Object.keys(settingsPanels).map((categoryName) => [
+    categoryName,
+    {
+      name: settingsCategoryNames[categoryName],
+      panel: settingsPanels[categoryName],
+      addForm: settingsAddForms[categoryName],
+    },
+  ]),
+);
 
 /* Needing room view */
-const roomSelectorButton = document.querySelector("#room-selector-button");
-const needingHome = document.querySelector("#needing-home");
-const roomView = document.querySelector("#room-view");
-const roomViewTitle = document.querySelector("#room-view-title");
-const backToRoomsButton = document.querySelector("#back-to-rooms");
-const newItemButton = document.querySelector("#new-item-button");
-const newItemPanel = document.querySelector("#new-item-panel");
-const cancelNewItemButton = document.querySelector("#cancel-new-item");
-const itemProductTypeSelect = document.querySelector("#item-product-type");
-const itemStoreSelect = document.querySelector("#item-store");
-const itemSpecificAttributesInput = document.querySelector("#item-specific-attributes");
-const itemUnitSelect = document.querySelector("#item-unit");
-const itemIncrementInput = document.querySelector("#item-increment");
-const addItemForm = document.querySelector("#add-item-form");
-const itemNameInput = document.querySelector("#item-name");
-const itemRoomLabel = document.querySelector("#item-room-label");
-const itemRoomSelect = document.querySelector("#item-room");
-const itemDefaultAmountInput = document.querySelector("#item-default-amount");
-const oneOffItemPanel = document.querySelector("#one-off-item-panel");
-const addOneOffItemForm = document.querySelector("#add-one-off-item-form");
-const oneOffItemNameInput = document.querySelector("#one-off-item-name");
-const oneOffItemAttributesInput = document.querySelector("#one-off-item-attributes");
-const oneOffShoppingTargets = document.querySelector("#one-off-shopping-targets");
-const oneOffItemRoomSelect = document.querySelector("#one-off-item-room");
-const cancelOneOffItemButton = document.querySelector("#cancel-one-off-item");
-const roomItemsList = document.querySelector("#room-items-list");
-const roomItemsSearch = document.querySelector("#room-items-search");
-const specificProductPanel = document.querySelector("#specific-product-panel");
-const specificProductPanelTitle = document.querySelector("#specific-product-panel-title");
-const addSpecificProductForm = document.querySelector("#add-specific-product-form");
-const specificProductNameInput = document.querySelector("#specific-product-name");
-const specificProductAttributesInput = document.querySelector("#specific-product-attributes");
-const specificProductStoresContainer = document.querySelector("#specific-product-stores");
-const cancelSpecificProductButton = document.querySelector("#cancel-specific-product");
-const viewNeededListButton = document.querySelector("#view-needed-list");
-const fullNeededView = document.querySelector("#full-needed-view");
-const backFromNeededListButton = document.querySelector("#back-from-needed-list");
-const editItemsFromNeededListButton = document.querySelector("#edit-items-from-needed-list");
-const neededListSearch = document.querySelector("#needed-list-search");
-const fullNeededItems = document.querySelector("#full-needed-items");
-const temporaryNotePanel = document.querySelector("#temporary-note-panel");
-const temporaryNoteForm = document.querySelector("#temporary-note-form");
-const temporaryNoteItemName = document.querySelector("#temporary-note-item-name");
-const temporaryNoteText = document.querySelector("#temporary-note-text");
-const cancelTemporaryNoteButton = document.querySelector("#cancel-temporary-note");
-const clearTemporaryNoteButton = document.querySelector("#clear-temporary-note");
+const roomSelectorButton = $("#room-selector-button");
+const needingHome = $("#needing-home");
+const roomView = $("#room-view");
+const roomViewTitle = $("#room-view-title");
+const backToRoomsButton = $("#back-to-rooms");
+const newItemButton = $("#new-item-button");
+const newItemPanel = $("#new-item-panel");
+const cancelNewItemButton = $("#cancel-new-item");
+const itemProductTypeSelect = $("#item-product-type");
+const itemStoreSelect = $("#item-store");
+const itemSpecificAttributesInput = $("#item-specific-attributes");
+const itemUnitSelect = $("#item-unit");
+const itemIncrementInput = $("#item-increment");
+const addItemForm = $("#add-item-form");
+const itemNameInput = $("#item-name");
+const itemRoomLabel = $("#item-room-label");
+const itemRoomSelect = $("#item-room");
+const itemDefaultAmountInput = $("#item-default-amount");
+const oneOffItemPanel = $("#one-off-item-panel");
+const addOneOffItemForm = $("#add-one-off-item-form");
+const oneOffItemNameInput = $("#one-off-item-name");
+const oneOffItemAttributesInput = $("#one-off-item-attributes");
+const oneOffShoppingTargets = $("#one-off-shopping-targets");
+const oneOffItemRoomSelect = $("#one-off-item-room");
+const cancelOneOffItemButton = $("#cancel-one-off-item");
+const roomItemsList = $("#room-items-list");
+const roomItemsSearch = $("#room-items-search");
+const specificProductPanel = $("#specific-product-panel");
+const specificProductPanelTitle = $("#specific-product-panel-title");
+const addSpecificProductForm = $("#add-specific-product-form");
+const specificProductNameInput = $("#specific-product-name");
+const specificProductAttributesInput = $("#specific-product-attributes");
+const specificProductStoresContainer = $("#specific-product-stores");
+const cancelSpecificProductButton = $("#cancel-specific-product");
+const viewNeededListButton = $("#view-needed-list");
+const fullNeededView = $("#full-needed-view");
+const backFromNeededListButton = $("#back-from-needed-list");
+const editItemsFromNeededListButton = $("#edit-items-from-needed-list");
+const neededListSearch = $("#needed-list-search");
+const fullNeededItems = $("#full-needed-items");
+const temporaryNotePanel = $("#temporary-note-panel");
+const temporaryNoteForm = $("#temporary-note-form");
+const temporaryNoteItemName = $("#temporary-note-item-name");
+const temporaryNoteText = $("#temporary-note-text");
+const cancelTemporaryNoteButton = $("#cancel-temporary-note");
+const clearTemporaryNoteButton = $("#clear-temporary-note");
 
 /* Getting view */
-const shoppingAtButton = document.querySelector("#shopping-at-button");
-const shoppingAtPanel = document.querySelector("#shopping-at-panel");
-const shoppingLocationOptions = document.querySelector("#shopping-location-options");
-const gettingItemsList = document.querySelector("#getting-items-list");
-const finishShopButton = document.querySelector("#finish-shop-button");
+const shoppingAtButton = $("#shopping-at-button");
+const shoppingAtPanel = $("#shopping-at-panel");
+const shoppingLocationOptions = $("#shopping-location-options");
+const gettingItemsList = $("#getting-items-list");
+const finishShopButton = $("#finish-shop-button");
 
 /* Compact custom selectors */
-const compactSelectPanel = document.querySelector("#compact-select-panel");
-const compactSelectTitle = document.querySelector("#compact-select-title");
-const compactSelectOptions = document.querySelector("#compact-select-options");
-const closeCompactSelectButton = document.querySelector("#close-compact-select");
+const compactSelectPanel = $("#compact-select-panel");
+const compactSelectTitle = $("#compact-select-title");
+const compactSelectOptions = $("#compact-select-options");
+const closeCompactSelectButton = $("#close-compact-select");
 let activeCompactSelect = null;
+
+const itemFormContexts = {
+  room: {
+    form: addItemForm,
+    fields: {
+      nameInput: itemNameInput,
+      roomSelect: itemRoomSelect,
+      productTypeSelect: itemProductTypeSelect,
+      storeSelect: itemStoreSelect,
+      attributesInput: itemSpecificAttributesInput,
+      amountInput: itemDefaultAmountInput,
+      unitSelect: itemUnitSelect,
+      incrementInput: itemIncrementInput,
+    },
+  },
+  settings: {
+    form: addSettingsItemForm,
+    fields: {
+      nameInput: settingsItemNameInput,
+      roomSelect: settingsItemRoomSelect,
+      productTypeSelect: settingsItemProductTypeSelect,
+      storeSelect: settingsItemStoreSelect,
+      attributesInput: settingsItemSpecificAttributesInput,
+      amountInput: settingsItemDefaultAmountInput,
+      unitSelect: settingsItemUnitSelect,
+      incrementInput: settingsItemIncrementInput,
+    },
+  },
+};
 
 const settingsSortables = new Map();
 
@@ -280,14 +315,7 @@ let editingSettingsId = null;
 let editingSettingsContextId = null;
 let ignoreHeaderAutoHideUntil = 0;
 
-let roomsListenerStarted = false;
-let unitsListenerStarted = false;
-let storeTypesListenerStarted = false;
-let storesListenerStarted = false;
-let productTypesListenerStarted = false;
-let itemsListenerStarted = false;
-let neededEntriesListenerStarted = false;
-let specificProductsListenerStarted = false;
+const startedListeners = new Set();
 
 let currentRooms = [];
 let currentUnits = [];
@@ -306,8 +334,9 @@ let suppressAppHistory = false;
 const ONE_OFF_ROOM_ID = "__one_off_stuff__";
 const REGULAR_ROOM_ID = "__regular_stuff__";
 const ALL_STUFF_ROOM_ID = "__all_stuff__";
-const SETTINGS_MENU_ORDER_KEY =
-  `listsForTheShop.settingsMenuOrder.${HOUSEHOLD_ID}`;
+const SETTINGS_MENU_ORDER_KEY = `listsForTheShop.settingsMenuOrder.${HOUSEHOLD_ID}`;
+
+/* ===== Navigation and view state ===== */
 
 function isOneOffRoomSelected() {
   return selectedRoomId === ONE_OFF_ROOM_ID;
@@ -338,11 +367,10 @@ function getSelectedRoomName() {
     return "All stuff";
   }
 
-  return currentRooms.find(
-    (room) => room.id === selectedRoomId
-  )?.name ?? "Room";
+  return (
+    currentRooms.find((room) => room.id === selectedRoomId)?.name ?? "Room"
+  );
 }
-
 
 function recordAppNavigation() {
   if (suppressAppHistory || !window.history?.pushState) {
@@ -354,10 +382,10 @@ function recordAppNavigation() {
   window.history.pushState(
     {
       listsForTheShop: true,
-      depth: appHistoryDepth
+      depth: appHistoryDepth,
     },
     "",
-    window.location.href
+    window.location.href,
   );
 }
 
@@ -372,14 +400,9 @@ function runWithoutHistory(callback) {
 }
 
 function getOpenSettingsAddForm() {
-  return [
-    addStoreForm,
-    addStoreTypeForm,
-    addProductTypeForm,
-    addSettingsItemForm,
-    addRoomForm,
-    addUnitForm
-  ].find((form) => form && !form.hidden) ?? null;
+  return (
+    Object.values(settingsAddForms).find((form) => form && !form.hidden) ?? null
+  );
 }
 
 function closeOpenSettingsEditPanel() {
@@ -512,7 +535,7 @@ function handleAppBackButton() {
 }
 
 function setupAutoHidingHeader() {
-  const header = document.querySelector(".app-header");
+  const header = $(".app-header");
 
   if (!header) {
     return;
@@ -552,7 +575,7 @@ function setupAutoHidingHeader() {
         ticking = true;
       }
     },
-    { passive: true }
+    { passive: true },
   );
 }
 
@@ -564,10 +587,10 @@ function setupBrowserBackButton() {
   window.history.replaceState(
     {
       listsForTheShop: true,
-      depth: appHistoryDepth
+      depth: appHistoryDepth,
     },
     "",
-    window.location.href
+    window.location.href,
   );
 
   window.addEventListener("popstate", () => {
@@ -603,7 +626,7 @@ function scrollAppToTop() {
     window.scrollTo({
       top: 0,
       left: 0,
-      behavior: "auto"
+      behavior: "auto",
     });
   });
 }
@@ -643,9 +666,7 @@ function updateBottomContextAction() {
 
   if (!views.needing.hidden) {
     const allStuffRoomIsOpen =
-      isAllStuffSelected() &&
-      roomView &&
-      !roomView.hidden;
+      isAllStuffSelected() && roomView && !roomView.hidden;
 
     bottomContextAction.textContent = allStuffRoomIsOpen
       ? "Edit items"
@@ -656,7 +677,7 @@ function updateBottomContextAction() {
       "aria-label",
       allStuffRoomIsOpen
         ? "Open Items and Specific Products settings"
-        : "Open full needed list"
+        : "Open full needed list",
     );
     return;
   }
@@ -673,9 +694,7 @@ function updateBottomContextAction() {
 
     const selectedStore =
       selectedShoppingTarget.kind === "store"
-        ? currentStores.find(
-            (store) => store.id === selectedShoppingTarget.id
-          )
+        ? currentStores.find((store) => store.id === selectedShoppingTarget.id)
         : null;
 
     const selectedStoreTypeId =
@@ -683,27 +702,17 @@ function updateBottomContextAction() {
         ? selectedShoppingTarget.storeTypeId
         : selectedShoppingTarget.id;
 
-    const hasCollectedVisibleItems = currentNeededRecords().some(
-      (record) => {
-        if (record.entry.status !== "collected") {
-          return false;
-        }
-
-        if (
-          !itemBelongsToStoreType(
-            record.item,
-            selectedStoreTypeId
-          )
-        ) {
-          return false;
-        }
-
-        return neededRecordIsAvailableAtStore(
-          record,
-          selectedStore?.id
-        );
+    const hasCollectedVisibleItems = currentNeededRecords().some((record) => {
+      if (record.entry.status !== "collected") {
+        return false;
       }
-    );
+
+      if (!itemBelongsToStoreType(record.item, selectedStoreTypeId)) {
+        return false;
+      }
+
+      return neededRecordIsAvailableAtStore(record, selectedStore?.id);
+    });
 
     bottomContextAction.disabled = !hasCollectedVisibleItems;
     return;
@@ -722,7 +731,7 @@ function updateBottomContextAction() {
         "aria-label",
         categoryName === "items"
           ? "New item"
-          : `New ${settingsCategoryNames[categoryName]}`
+          : `New ${settingsCategoryNames[categoryName]}`,
       );
     } else {
       bottomContextAction.removeAttribute("aria-label");
@@ -750,7 +759,7 @@ function openSettingsCategory(categoryName) {
   settingsHome.hidden = true;
   setContextButtonLabel(
     settingsCategoryButton,
-    settingsCategoryNames[categoryName]
+    settingsCategoryNames[categoryName],
   );
   settingsCategoryButton.hidden = false;
 
@@ -859,16 +868,18 @@ function resetGettingToShoppingList() {
   updateBottomContextAction();
 }
 
-function openRoom(room) {
-  selectedRoomId = room.id;
+function openRoomView({ id, name, newItemLabel = "New item" }) {
+  selectedRoomId = id;
+  editingItemId = null;
+
   roomSelectorButton.hidden = false;
-  setRoomSelectorLabel(room.name);
+  setRoomSelectorLabel(name);
   roomSelectorButton.setAttribute("aria-expanded", "false");
+
   needingHome.hidden = true;
   fullNeededView.hidden = true;
   roomView.hidden = false;
-  roomViewTitle.textContent = room.name;
-  editingItemId = null;
+  roomViewTitle.textContent = name;
 
   if (newItemPanel) {
     newItemPanel.hidden = true;
@@ -880,95 +891,37 @@ function openRoom(room) {
 
   if (newItemButton) {
     newItemButton.hidden = false;
-    newItemButton.textContent = "New item";
+    newItemButton.textContent = newItemLabel;
   }
 
   renderRoomItems();
   updateBottomContextAction();
+}
+
+function openRoom(room) {
+  openRoomView({ id: room.id, name: room.name });
 }
 
 function openOneOffRoom() {
-  selectedRoomId = ONE_OFF_ROOM_ID;
-  roomSelectorButton.hidden = false;
-  setRoomSelectorLabel("One-off stuff");
-  roomSelectorButton.setAttribute("aria-expanded", "false");
-  needingHome.hidden = true;
-  fullNeededView.hidden = true;
-  roomView.hidden = false;
-  roomViewTitle.textContent = "One-off stuff";
-  editingItemId = null;
-
-  if (newItemPanel) {
-    newItemPanel.hidden = true;
-  }
-
-  if (oneOffItemPanel) {
-    oneOffItemPanel.hidden = true;
-  }
-
-  if (newItemButton) {
-    newItemButton.hidden = false;
-    newItemButton.textContent = "New item";
-  }
-
-  renderRoomItems();
-  updateBottomContextAction();
+  openRoomView({
+    id: ONE_OFF_ROOM_ID,
+    name: "One-off stuff",
+  });
 }
 
 function openRegularRoom() {
-  selectedRoomId = REGULAR_ROOM_ID;
-  roomSelectorButton.hidden = false;
-  setRoomSelectorLabel("Regular stuff");
-  roomSelectorButton.setAttribute("aria-expanded", "false");
-  needingHome.hidden = true;
-  fullNeededView.hidden = true;
-  roomView.hidden = false;
-  roomViewTitle.textContent = "Regular stuff";
-  editingItemId = null;
-
-  if (newItemPanel) {
-    newItemPanel.hidden = true;
-  }
-
-  if (oneOffItemPanel) {
-    oneOffItemPanel.hidden = true;
-  }
-
-  if (newItemButton) {
-    newItemButton.hidden = false;
-    newItemButton.textContent = "Edit regulars";
-  }
-
-  renderRoomItems();
-  updateBottomContextAction();
+  openRoomView({
+    id: REGULAR_ROOM_ID,
+    name: "Regular stuff",
+    newItemLabel: "Edit regulars",
+  });
 }
 
 function openAllStuff() {
-  selectedRoomId = ALL_STUFF_ROOM_ID;
-  roomSelectorButton.hidden = false;
-  setRoomSelectorLabel("All stuff");
-  roomSelectorButton.setAttribute("aria-expanded", "false");
-  needingHome.hidden = true;
-  fullNeededView.hidden = true;
-  roomView.hidden = false;
-  roomViewTitle.textContent = "All stuff";
-  editingItemId = null;
-
-  if (newItemPanel) {
-    newItemPanel.hidden = true;
-  }
-
-  if (oneOffItemPanel) {
-    oneOffItemPanel.hidden = true;
-  }
-
-  if (newItemButton) {
-    newItemButton.hidden = false;
-    newItemButton.textContent = "New item";
-  }
-
-  renderRoomItems();
-  updateBottomContextAction();
+  openRoomView({
+    id: ALL_STUFF_ROOM_ID,
+    name: "All stuff",
+  });
 }
 
 function setContextButtonLabel(button, label) {
@@ -1024,13 +977,14 @@ function sortBySavedOrderThenName(a, b) {
 
 function storeTypeIdsForItem(item) {
   const storeTypeIds = new Set(
-    (Array.isArray(item?.storeTypeIds) ? item.storeTypeIds : [])
-      .map((id) => String(id))
+    (Array.isArray(item?.storeTypeIds) ? item.storeTypeIds : []).map((id) =>
+      String(id),
+    ),
   );
 
   (Array.isArray(item?.storeIds) ? item.storeIds : []).forEach((storeId) => {
     const store = currentStores.find(
-      (candidate) => String(candidate.id) === String(storeId)
+      (candidate) => String(candidate.id) === String(storeId),
     );
 
     if (store?.storeTypeId) {
@@ -1039,7 +993,7 @@ function storeTypeIdsForItem(item) {
   });
 
   const productType = currentProductTypes.find(
-    (candidate) => candidate.id === item?.productTypeId
+    (candidate) => candidate.id === item?.productTypeId,
   );
 
   if (productType) {
@@ -1057,35 +1011,21 @@ function itemBelongsToStoreType(item, storeTypeId) {
   }
 
   return storeTypeIdsForItem(item).some(
-    (candidateId) => String(candidateId) === String(storeTypeId)
+    (candidateId) => String(candidateId) === String(storeTypeId),
   );
 }
 
 function householdCollection(collectionName) {
-  return collection(
-    db,
-    "households",
-    HOUSEHOLD_ID,
-    collectionName
-  );
+  return collection(db, "households", HOUSEHOLD_ID, collectionName);
 }
 
 function householdDocument(collectionName, id) {
-  return doc(
-    db,
-    "households",
-    HOUSEHOLD_ID,
-    collectionName,
-    id
-  );
+  return doc(db, "households", HOUSEHOLD_ID, collectionName, id);
 }
 
-function createIconButton({
-  className = "",
-  icon,
-  label,
-  onClick
-}) {
+/* ===== Shared UI helpers ===== */
+
+function createIconButton({ className = "", icon, label, onClick }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = className;
@@ -1099,6 +1039,8 @@ function createIconButton({
   return button;
 }
 
+/* ===== Pointer and gesture helpers ===== */
+
 function addLongPressHandler(
   element,
   handler,
@@ -1106,8 +1048,8 @@ function addLongPressHandler(
     duration = 350,
     ignoreSelector = null,
     allowScroll = false,
-    moveTolerance = 28
-  } = {}
+    moveTolerance = 28,
+  } = {},
 ) {
   let pressTimer = null;
   let startX = 0;
@@ -1120,10 +1062,7 @@ function addLongPressHandler(
   let recentTouchUntil = 0;
 
   function shouldIgnore(event) {
-    return Boolean(
-      ignoreSelector &&
-      event.target?.closest?.(ignoreSelector)
-    );
+    return Boolean(ignoreSelector && event.target?.closest?.(ignoreSelector));
   }
 
   function clearPressState() {
@@ -1198,7 +1137,7 @@ function addLongPressHandler(
       beginPress(touch.clientX, touch.clientY);
       activeTouchId = touch.identifier;
     },
-    { passive: true }
+    { passive: true },
   );
 
   element.addEventListener(
@@ -1209,14 +1148,14 @@ function addLongPressHandler(
       }
 
       const touch = Array.from(event.changedTouches).find(
-        (candidate) => candidate.identifier === activeTouchId
+        (candidate) => candidate.identifier === activeTouchId,
       );
 
       if (touch && movedTooFar(touch.clientX, touch.clientY)) {
         clearPressState();
       }
     },
-    { passive: true }
+    { passive: true },
   );
 
   element.addEventListener(
@@ -1227,7 +1166,7 @@ function addLongPressHandler(
       }
 
       const touchEnded = Array.from(event.changedTouches).some(
-        (touch) => touch.identifier === activeTouchId
+        (touch) => touch.identifier === activeTouchId,
       );
 
       if (!touchEnded) {
@@ -1243,11 +1182,11 @@ function addLongPressHandler(
 
       await finishPress(event);
     },
-    { passive: false }
+    { passive: false },
   );
 
   element.addEventListener("touchcancel", clearPressState, {
-    passive: true
+    passive: true,
   });
 
   /* Mouse support is kept separate so synthetic mouse events after touch do
@@ -1312,8 +1251,8 @@ function addScrollableHoldHandler(
   {
     duration = 450,
     moveTolerance = 20,
-    ignoreSelector = "button, input, select, textarea, a"
-  } = {}
+    ignoreSelector = "button, input, select, textarea, a",
+  } = {},
 ) {
   let timer = null;
   let active = false;
@@ -1325,10 +1264,7 @@ function addScrollableHoldHandler(
   let recentTouchUntil = 0;
 
   function shouldIgnore(event) {
-    return Boolean(
-      ignoreSelector &&
-      event.target?.closest?.(ignoreSelector)
-    );
+    return Boolean(ignoreSelector && event.target?.closest?.(ignoreSelector));
   }
 
   function cancelHold() {
@@ -1368,10 +1304,7 @@ function addScrollableHoldHandler(
     return Math.hypot(x - startX, y - startY) > moveTolerance;
   }
 
-  element.classList.add(
-    "has-long-press",
-    "long-press-allows-scroll"
-  );
+  element.classList.add("has-long-press", "long-press-allows-scroll");
 
   element.addEventListener(
     "touchstart",
@@ -1390,7 +1323,7 @@ function addScrollableHoldHandler(
       beginHold(touch.clientX, touch.clientY);
       activeTouchId = touch.identifier;
     },
-    { passive: true }
+    { passive: true },
   );
 
   element.addEventListener(
@@ -1401,21 +1334,21 @@ function addScrollableHoldHandler(
       }
 
       const touch = Array.from(event.changedTouches).find(
-        (candidate) => candidate.identifier === activeTouchId
+        (candidate) => candidate.identifier === activeTouchId,
       );
 
       if (touch && movedTooFar(touch.clientX, touch.clientY)) {
         cancelHold();
       }
     },
-    { passive: true }
+    { passive: true },
   );
 
   element.addEventListener("touchend", cancelHold, {
-    passive: true
+    passive: true,
   });
   element.addEventListener("touchcancel", cancelHold, {
-    passive: true
+    passive: true,
   });
 
   element.addEventListener("mousedown", (event) => {
@@ -1463,8 +1396,8 @@ function addDoubleTapHandler(
   {
     maxDelay = 440,
     moveTolerance = 18,
-    ignoreSelector = "button, input, select, textarea, a"
-  } = {}
+    ignoreSelector = "button, input, select, textarea, a",
+  } = {},
 ) {
   let lastTapTime = 0;
   let lastTapX = 0;
@@ -1476,10 +1409,7 @@ function addDoubleTapHandler(
   let recentTouchUntil = 0;
 
   function shouldIgnore(event) {
-    return Boolean(
-      ignoreSelector &&
-      event.target?.closest?.(ignoreSelector)
-    );
+    return Boolean(ignoreSelector && event.target?.closest?.(ignoreSelector));
   }
 
   function resetCurrentTouch() {
@@ -1489,16 +1419,9 @@ function addDoubleTapHandler(
 
   function registerTap(event, x, y) {
     const now = Date.now();
-    const closeEnough = Math.hypot(
-      x - lastTapX,
-      y - lastTapY
-    ) <= 48;
+    const closeEnough = Math.hypot(x - lastTapX, y - lastTapY) <= 48;
 
-    if (
-      lastTapTime > 0 &&
-      now - lastTapTime <= maxDelay &&
-      closeEnough
-    ) {
+    if (lastTapTime > 0 && now - lastTapTime <= maxDelay && closeEnough) {
       lastTapTime = 0;
       event.preventDefault();
       event.stopPropagation();
@@ -1516,10 +1439,7 @@ function addDoubleTapHandler(
   element.addEventListener(
     "touchstart",
     (event) => {
-      if (
-        shouldIgnore(event) ||
-        event.touches.length !== 1
-      ) {
+      if (shouldIgnore(event) || event.touches.length !== 1) {
         resetCurrentTouch();
         return;
       }
@@ -1531,7 +1451,7 @@ function addDoubleTapHandler(
       touchMoved = false;
       recentTouchUntil = Date.now() + 800;
     },
-    { passive: true }
+    { passive: true },
   );
 
   element.addEventListener(
@@ -1542,21 +1462,19 @@ function addDoubleTapHandler(
       }
 
       const touch = Array.from(event.changedTouches).find(
-        (candidate) => candidate.identifier === activeTouchId
+        (candidate) => candidate.identifier === activeTouchId,
       );
 
       if (
         touch &&
-        Math.hypot(
-          touch.clientX - touchStartX,
-          touch.clientY - touchStartY
-        ) > moveTolerance
+        Math.hypot(touch.clientX - touchStartX, touch.clientY - touchStartY) >
+          moveTolerance
       ) {
         touchMoved = true;
         lastTapTime = 0;
       }
     },
-    { passive: true }
+    { passive: true },
   );
 
   element.addEventListener(
@@ -1567,7 +1485,7 @@ function addDoubleTapHandler(
       }
 
       const touch = Array.from(event.changedTouches).find(
-        (candidate) => candidate.identifier === activeTouchId
+        (candidate) => candidate.identifier === activeTouchId,
       );
 
       if (!touch) {
@@ -1584,19 +1502,20 @@ function addDoubleTapHandler(
 
       registerTap(event, touch.clientX, touch.clientY);
     },
-    { passive: false }
+    { passive: false },
   );
 
-  element.addEventListener("touchcancel", () => {
-    resetCurrentTouch();
-    lastTapTime = 0;
-  }, { passive: true });
+  element.addEventListener(
+    "touchcancel",
+    () => {
+      resetCurrentTouch();
+      lastTapTime = 0;
+    },
+    { passive: true },
+  );
 
   element.addEventListener("dblclick", (event) => {
-    if (
-      Date.now() < recentTouchUntil ||
-      shouldIgnore(event)
-    ) {
+    if (Date.now() < recentTouchUntil || shouldIgnore(event)) {
       return;
     }
 
@@ -1606,22 +1525,20 @@ function addDoubleTapHandler(
   });
 }
 
+/* ===== Compact select controls ===== */
+
 function compactControlLabelText(label) {
   const clone = label.cloneNode(true);
   clone
     .querySelectorAll("select, input, textarea, button")
     .forEach((control) => control.remove());
 
-  return clone.textContent
-    .replace(/\s+/g, " ")
-    .trim();
+  return clone.textContent.replace(/\s+/g, " ").trim();
 }
 
 function compactSelectFieldLabel(select) {
   if (select.id) {
-    const labelled = document.querySelector(
-      `label[for="${CSS.escape(select.id)}"]`
-    );
+    const labelled = $(`label[for="${CSS.escape(select.id)}"]`);
 
     if (labelled) {
       return compactControlLabelText(labelled) || "Choose";
@@ -1638,9 +1555,13 @@ function compactSelectFieldLabel(select) {
 }
 
 function selectedCompactOption(select) {
-  return Array.from(select.options).find(
-    (option) => option.value === select.value
-  ) ?? select.options[select.selectedIndex] ?? null;
+  return (
+    Array.from(select.options).find(
+      (option) => option.value === select.value,
+    ) ??
+    select.options[select.selectedIndex] ??
+    null
+  );
 }
 
 function refreshCompactSelect(select) {
@@ -1655,7 +1576,7 @@ function refreshCompactSelect(select) {
   button.textContent = text;
   button.setAttribute(
     "aria-label",
-    `${compactSelectFieldLabel(select)}: ${text}`
+    `${compactSelectFieldLabel(select)}: ${text}`,
   );
   button.classList.toggle("is-placeholder", !select.value);
   button.disabled = select.disabled;
@@ -1744,11 +1665,13 @@ function openCompactSelect(select) {
 
   requestAnimationFrame(() => {
     const selectedButton = compactSelectOptions.querySelector(
-      ".compact-select-option.is-selected"
+      ".compact-select-option.is-selected",
     );
-    const focusButton = selectedButton ?? compactSelectOptions.querySelector(
-      ".compact-select-option:not(:disabled)"
-    );
+    const focusButton =
+      selectedButton ??
+      compactSelectOptions.querySelector(
+        ".compact-select-option:not(:disabled)",
+      );
 
     selectedButton?.scrollIntoView({ block: "nearest" });
     focusButton?.focus({ preventScroll: true });
@@ -1756,7 +1679,11 @@ function openCompactSelect(select) {
 }
 
 function enhanceCompactSelect(select) {
-  if (!select || select.multiple || select.dataset.compactSelectEnhanced === "true") {
+  if (
+    !select ||
+    select.multiple ||
+    select.dataset.compactSelectEnhanced === "true"
+  ) {
     return;
   }
 
@@ -1778,7 +1705,7 @@ function enhanceCompactSelect(select) {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["disabled", "hidden", "label"]
+    attributeFilter: ["disabled", "hidden", "label"],
   });
 
   select.addEventListener("change", () => refreshCompactSelect(select));
@@ -1808,11 +1735,15 @@ function setupCompactSelects() {
 
   observer.observe(document.body, { childList: true, subtree: true });
 
-  document.addEventListener("reset", (event) => {
-    requestAnimationFrame(() => {
-      event.target.querySelectorAll?.("select").forEach(refreshCompactSelect);
-    });
-  }, true);
+  document.addEventListener(
+    "reset",
+    (event) => {
+      requestAnimationFrame(() => {
+        event.target.querySelectorAll?.("select").forEach(refreshCompactSelect);
+      });
+    },
+    true,
+  );
 
   closeCompactSelectButton?.addEventListener("click", closeCompactSelect);
   compactSelectPanel?.addEventListener("click", (event) => {
@@ -1822,6 +1753,8 @@ function setupCompactSelects() {
   });
 }
 
+/* ===== Shared settings components ===== */
+
 function createSettingsRow({
   id,
   label,
@@ -1829,7 +1762,7 @@ function createSettingsRow({
   editLabel,
   deleteLabel,
   onEdit,
-  onDelete
+  onDelete,
 }) {
   const row = document.createElement("div");
   row.className = "settings-list-item settings-order-row";
@@ -1866,7 +1799,7 @@ function createSettingsRow({
       event.stopPropagation();
       recordAppNavigation();
       onEdit();
-    }
+    },
   });
 
   const deleteButton = createIconButton({
@@ -1876,7 +1809,7 @@ function createSettingsRow({
     onClick: async (event) => {
       event.stopPropagation();
       await onDelete();
-    }
+    },
   });
 
   actions.append(editButton, deleteButton);
@@ -1890,11 +1823,7 @@ function updateSettingsChoiceVisual(checkbox, box, graphic) {
   graphic.textContent = checkbox.checked ? "✓" : "";
 }
 
-function createSettingsCheckboxOption({
-  value,
-  text,
-  checked = false
-}) {
+function createSettingsCheckboxOption({ value, text, checked = false }) {
   const optionLabel = document.createElement("label");
   optionLabel.className = "settings-checkbox-option";
 
@@ -1926,7 +1855,7 @@ function createSettingsCheckboxOption({
 
   return {
     optionLabel,
-    checkbox
+    checkbox,
   };
 }
 
@@ -1942,7 +1871,7 @@ function createCheckboxField(field) {
   list.className = "settings-checkbox-list";
 
   const selectedValues = new Set(
-    (field.value() ?? []).map((value) => String(value))
+    (field.value() ?? []).map((value) => String(value)),
   );
 
   const inputs = [];
@@ -1951,7 +1880,7 @@ function createCheckboxField(field) {
     const { optionLabel, checkbox } = createSettingsCheckboxOption({
       value: optionData.value,
       text: optionData.text,
-      checked: selectedValues.has(String(optionData.value))
+      checked: selectedValues.has(String(optionData.value)),
     });
 
     list.append(optionLabel);
@@ -1962,7 +1891,7 @@ function createCheckboxField(field) {
 
   return {
     label: fieldset,
-    input: inputs
+    input: inputs,
   };
 }
 
@@ -1989,7 +1918,7 @@ function createFormField(field) {
 
     const selectedValue = field.value();
     const selectedState = {
-      hasSelected: false
+      hasSelected: false,
     };
 
     function appendOption(optionData, parentElement) {
@@ -2052,7 +1981,7 @@ function createFormField(field) {
 
   return {
     label,
-    input
+    input,
   };
 }
 
@@ -2064,7 +1993,7 @@ function appendSettingsEditPanel({
   item,
   fields,
   onSave,
-  extraContent = null
+  extraContent = null,
 }) {
   if (
     editingSettingsKey !== settingsKey ||
@@ -2085,12 +2014,8 @@ function appendSettingsEditPanel({
   headingRow.className = "form-heading-row";
 
   const heading = document.createElement("h3");
-  const itemHeading = String(
-    item.name ?? item.symbol ?? "item"
-  ).trim();
-  heading.textContent = itemHeading
-    ? `Edit ${itemHeading}`
-    : "Edit item";
+  const itemHeading = String(item.name ?? item.symbol ?? "item").trim();
+  heading.textContent = itemHeading ? `Edit ${itemHeading}` : "Edit item";
 
   const actions = document.createElement("div");
   actions.className = "form-heading-actions";
@@ -2119,7 +2044,7 @@ function appendSettingsEditPanel({
     const { label, input } = createFormField(field);
     inputMap.set(field.key, {
       input,
-      field
+      field,
     });
     fieldContainer.append(label);
   });
@@ -2191,13 +2116,13 @@ function placeElementAtTop(element, focusElement = null) {
   }
 
   requestAnimationFrame(() => {
-    const header = document.querySelector(".app-header");
+    const header = $(".app-header");
     header?.classList.remove("is-hidden");
 
     element.scrollIntoView({
       block: "start",
       inline: "nearest",
-      behavior: "auto"
+      behavior: "auto",
     });
 
     requestAnimationFrame(() => {
@@ -2209,7 +2134,7 @@ function placeElementAtTop(element, focusElement = null) {
         window.scrollBy({
           top: adjustment,
           left: 0,
-          behavior: "auto"
+          behavior: "auto",
         });
       }
 
@@ -2229,9 +2154,7 @@ function scrollEditFormToTop(panel) {
 }
 
 function clearSettingsEditScrollSpace() {
-  document
-    .querySelectorAll(".settings-edit-scroll-space")
-    .forEach((element) => element.remove());
+  $$(".settings-edit-scroll-space").forEach((element) => element.remove());
 }
 
 function scrollOpenSettingsEditToTop() {
@@ -2240,9 +2163,7 @@ function scrollOpenSettingsEditToTop() {
   function alignEditedRow() {
     attempts += 1;
 
-    const editedRow = document.querySelector(
-      ".settings-list-item.is-editing"
-    );
+    const editedRow = $(".settings-list-item.is-editing");
 
     if (!editedRow) {
       if (attempts < 8) {
@@ -2252,10 +2173,8 @@ function scrollOpenSettingsEditToTop() {
       return;
     }
 
-    const categoryPanel = editedRow.closest(
-      ".settings-category-panel"
-    );
-    const header = document.querySelector(".app-header");
+    const categoryPanel = editedRow.closest(".settings-category-panel");
+    const header = $(".app-header");
 
     if (!categoryPanel) {
       return;
@@ -2278,16 +2197,12 @@ function scrollOpenSettingsEditToTop() {
         window.visualViewport?.height ?? window.innerHeight;
       const rowDocumentTop =
         window.scrollY + editedRow.getBoundingClientRect().top;
-      const targetScrollTop = Math.max(
-        0,
-        rowDocumentTop - headerHeight
-      );
+      const targetScrollTop = Math.max(0, rowDocumentTop - headerHeight);
       const scrollRoot = document.scrollingElement;
-      const requiredDocumentHeight =
-        targetScrollTop + viewportHeight;
+      const requiredDocumentHeight = targetScrollTop + viewportHeight;
       const missingHeight = Math.max(
         0,
-        requiredDocumentHeight - (scrollRoot?.scrollHeight ?? 0)
+        requiredDocumentHeight - (scrollRoot?.scrollHeight ?? 0),
       );
 
       scrollSpace.style.height = `${missingHeight + 1}px`;
@@ -2297,7 +2212,7 @@ function scrollOpenSettingsEditToTop() {
         window.scrollTo({
           top: targetScrollTop,
           left: 0,
-          behavior: "auto"
+          behavior: "auto",
         });
       });
     });
@@ -2337,8 +2252,7 @@ function setEditingProductType(id, storeTypeId) {
   const isClosing =
     editingSettingsKey === "product-types" &&
     editingSettingsId === id &&
-    String(editingSettingsContextId) ===
-      String(storeTypeId);
+    String(editingSettingsContextId) === String(storeTypeId);
 
   if (isClosing) {
     editingSettingsKey = null;
@@ -2357,6 +2271,8 @@ function setEditingProductType(id, storeTypeId) {
   }
 }
 
+/* ===== Catalogue relationships and dependencies ===== */
+
 function pluralize(count, singular, plural = `${singular}s`) {
   return count === 1 ? singular : plural;
 }
@@ -2372,7 +2288,7 @@ function displayRecordName(record, fallback = "Unnamed record") {
 
 function itemNameForId(itemId) {
   const item = currentItems.find(
-    (candidate) => String(candidate.id) === String(itemId)
+    (candidate) => String(candidate.id) === String(itemId),
   );
 
   return displayRecordName(item, `Item ${itemId}`);
@@ -2411,7 +2327,7 @@ function confirmSettingsDelete(label, detail = "") {
   return window.confirm(
     `Delete ${label}?
 
-This will permanently remove it from the app.${detail ? `\n\n${detail}` : ""}`
+This will permanently remove it from the app.${detail ? `\n\n${detail}` : ""}`,
   );
 }
 
@@ -2421,15 +2337,15 @@ async function deleteSettingsDocument(collectionName, id) {
 
 async function deactivateRoom(room) {
   const matchingItems = activeItems().filter(
-    (item) => item.locationId === room.id
+    (item) => item.locationId === room.id,
   );
 
   if (matchingItems.length > 0) {
     showDependencyBlock(room.name, [
       dependencyListLine(
         "Items in this room",
-        dependencyNames(matchingItems, (item) => item.name)
-      )
+        dependencyNames(matchingItems, (item) => item.name),
+      ),
     ]);
     return;
   }
@@ -2446,30 +2362,24 @@ async function deactivateRoom(room) {
 }
 
 async function deactivateUnit(unit) {
-  const matchingItems = activeItems().filter(
-    (item) => item.unitId === unit.id
-  );
+  const matchingItems = activeItems().filter((item) => item.unitId === unit.id);
 
   const matchingNeededEntries = Array.from(
-    currentNeededEntries.values()
+    currentNeededEntries.values(),
   ).filter((entry) => entry.unitId === unit.id);
 
-  if (
-    matchingItems.length > 0 ||
-    matchingNeededEntries.length > 0
-  ) {
+  if (matchingItems.length > 0 || matchingNeededEntries.length > 0) {
     showDependencyBlock(unit.name, [
       dependencyListLine(
         "Items using this unit",
-        dependencyNames(matchingItems, (item) => item.name)
+        dependencyNames(matchingItems, (item) => item.name),
       ),
       dependencyListLine(
         "Needed-list entries using this unit",
-        dependencyNames(
-          matchingNeededEntries,
-          (entry) => itemNameForId(entry.itemId ?? entry.id)
-        )
-      )
+        dependencyNames(matchingNeededEntries, (entry) =>
+          itemNameForId(entry.itemId ?? entry.id),
+        ),
+      ),
     ]);
     return;
   }
@@ -2483,11 +2393,11 @@ async function deactivateUnit(unit) {
 
 async function deactivateStoreType(storeType) {
   const matchingStores = currentStores.filter(
-    (store) => store.storeTypeId === storeType.id
+    (store) => store.storeTypeId === storeType.id,
   );
 
-  const matchingProductTypes = currentProductTypes.filter(
-    (productType) => productTypeBelongsToStoreType(productType, storeType.id)
+  const matchingProductTypes = currentProductTypes.filter((productType) =>
+    productTypeBelongsToStoreType(productType, storeType.id),
   );
 
   const matchingOneOffEntries = allNeededEntries().filter(
@@ -2495,8 +2405,8 @@ async function deactivateStoreType(storeType) {
       entry.oneOff === true &&
       Array.isArray(entry.storeTypeIds) &&
       entry.storeTypeIds.some(
-        (storeTypeId) => String(storeTypeId) === String(storeType.id)
-      )
+        (storeTypeId) => String(storeTypeId) === String(storeType.id),
+      ),
   );
 
   if (
@@ -2507,16 +2417,19 @@ async function deactivateStoreType(storeType) {
     showDependencyBlock(storeType.name, [
       dependencyListLine(
         "Stores using this store type",
-        dependencyNames(matchingStores, (store) => store.name)
+        dependencyNames(matchingStores, (store) => store.name),
       ),
       dependencyListLine(
         "Product types using this store type",
-        dependencyNames(matchingProductTypes, (productType) => productType.name)
+        dependencyNames(
+          matchingProductTypes,
+          (productType) => productType.name,
+        ),
       ),
       dependencyListLine(
         "One-off items using this store type",
-        dependencyNames(matchingOneOffEntries, (entry) => entry.itemName)
-      )
+        dependencyNames(matchingOneOffEntries, (entry) => entry.itemName),
+      ),
     ]);
     return;
   }
@@ -2537,25 +2450,21 @@ async function deactivateStoreType(storeType) {
 
 async function deactivateStore(store) {
   const matchingItems = activeItems().filter(
-    (item) => String(item.storeId ?? "") === String(store.id)
+    (item) => String(item.storeId ?? "") === String(store.id),
   );
 
   const matchingSpecificProducts = currentSpecificProducts.filter(
     (product) =>
       product.active !== false &&
       Array.isArray(product.storeIds) &&
-      product.storeIds.some(
-        (storeId) => String(storeId) === String(store.id)
-      )
+      product.storeIds.some((storeId) => String(storeId) === String(store.id)),
   );
 
   const matchingOneOffEntries = allNeededEntries().filter(
     (entry) =>
       entry.oneOff === true &&
       Array.isArray(entry.storeIds) &&
-      entry.storeIds.some(
-        (storeId) => String(storeId) === String(store.id)
-      )
+      entry.storeIds.some((storeId) => String(storeId) === String(store.id)),
   );
 
   if (
@@ -2566,27 +2475,22 @@ async function deactivateStore(store) {
     showDependencyBlock(store.name, [
       dependencyListLine(
         "Items assigned to this store",
-        dependencyNames(matchingItems, (item) => item.name)
+        dependencyNames(matchingItems, (item) => item.name),
       ),
       dependencyListLine(
         "Specific products recorded for this store",
-        dependencyNames(
-          matchingSpecificProducts,
-          (product) => {
-            const item = currentItems.find(
-              (candidate) => String(candidate.id) === String(product.itemId)
-            );
+        dependencyNames(matchingSpecificProducts, (product) => {
+          const item = currentItems.find(
+            (candidate) => String(candidate.id) === String(product.itemId),
+          );
 
-            return item
-              ? `${item.name} ${product.name}`
-              : product.name;
-          }
-        )
+          return item ? `${item.name} ${product.name}` : product.name;
+        }),
       ),
       dependencyListLine(
         "One-off items assigned to this store",
-        dependencyNames(matchingOneOffEntries, (entry) => entry.itemName)
-      )
+        dependencyNames(matchingOneOffEntries, (entry) => entry.itemName),
+      ),
     ]);
     return;
   }
@@ -2594,7 +2498,7 @@ async function deactivateStore(store) {
   if (
     !confirmSettingsDelete(
       store.name,
-      "Any custom product type order saved for this store will also be removed."
+      "Any custom product type order saved for this store will also be removed.",
     )
   ) {
     return;
@@ -2612,15 +2516,15 @@ async function deactivateStore(store) {
 
 async function deactivateProductType(productType) {
   const matchingItems = activeItems().filter(
-    (item) => item.productTypeId === productType.id
+    (item) => item.productTypeId === productType.id,
   );
 
   if (matchingItems.length > 0) {
     showDependencyBlock(productType.name, [
       dependencyListLine(
         "Items using this product type",
-        dependencyNames(matchingItems, (item) => item.name)
-      )
+        dependencyNames(matchingItems, (item) => item.name),
+      ),
     ]);
     return;
   }
@@ -2640,7 +2544,7 @@ async function deactivateProductType(productType) {
 
     batch.update(householdDocument("stores", store.id), {
       [`productTypeOrders.${productType.id}`]: deleteField(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   });
 
@@ -2650,20 +2554,20 @@ async function deactivateProductType(productType) {
 function storeTypeOptions() {
   return currentStoreTypes.map((storeType) => ({
     value: storeType.id,
-    text: storeType.name
+    text: storeType.name,
   }));
 }
 
 function storeOptions() {
   return currentStores.map((store) => ({
     value: store.id,
-    text: store.name
+    text: store.name,
   }));
 }
 
 function storesForProductType(productTypeId) {
   const productType = currentProductTypes.find(
-    (candidate) => String(candidate.id) === String(productTypeId)
+    (candidate) => String(candidate.id) === String(productTypeId),
   );
 
   if (!productType) {
@@ -2671,20 +2575,18 @@ function storesForProductType(productTypeId) {
   }
 
   const allowedStoreTypeIds = new Set(
-    productTypeStoreTypeIds(productType).map((id) => String(id))
+    productTypeStoreTypeIds(productType).map((id) => String(id)),
   );
 
   return currentStores
-    .filter((store) =>
-      allowedStoreTypeIds.has(String(store.storeTypeId))
-    )
+    .filter((store) => allowedStoreTypeIds.has(String(store.storeTypeId)))
     .sort(sortBySavedOrderThenName);
 }
 
 function itemStoreOptions(productTypeId) {
   return storesForProductType(productTypeId).map((store) => ({
     value: store.id,
-    text: store.name
+    text: store.name,
   }));
 }
 
@@ -2694,14 +2596,14 @@ function itemStoreIsAllowed(productTypeId, storeId) {
   }
 
   return storesForProductType(productTypeId).some(
-    (store) => String(store.id) === String(storeId)
+    (store) => String(store.id) === String(storeId),
   );
 }
 
 function populateItemStoreSelect(
   selectElement,
   productTypeId,
-  selectedStoreId = ""
+  selectedStoreId = "",
 ) {
   if (!selectElement) {
     return;
@@ -2712,9 +2614,8 @@ function populateItemStoreSelect(
 
   const emptyOption = document.createElement("option");
   emptyOption.value = "";
-  emptyOption.textContent = stores.length > 0
-    ? "Any matching store"
-    : "No matching stores";
+  emptyOption.textContent =
+    stores.length > 0 ? "Any matching store" : "No matching stores";
   selectElement.append(emptyOption);
 
   stores.forEach((store) => {
@@ -2725,7 +2626,7 @@ function populateItemStoreSelect(
   });
 
   const hasSelectedStore = stores.some(
-    (store) => String(store.id) === String(selectedStoreId)
+    (store) => String(store.id) === String(selectedStoreId),
   );
 
   selectElement.value = hasSelectedStore ? selectedStoreId : "";
@@ -2737,15 +2638,16 @@ function getItemStoreName(item) {
     return "";
   }
 
-  return currentStores.find(
-    (store) => String(store.id) === String(item.storeId)
-  )?.name ?? "";
+  return (
+    currentStores.find((store) => String(store.id) === String(item.storeId))
+      ?.name ?? ""
+  );
 }
 
 function roomOptions() {
   return currentRooms.map((room) => ({
     value: room.id,
-    text: room.name
+    text: room.name,
   }));
 }
 
@@ -2762,19 +2664,21 @@ function itemOptions() {
       .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")))
       .map((item) => ({
         value: item.id,
-        text: item.name
+        text: item.name,
       }));
 
     if (options.length > 0) {
       groups.push({
         label: productType.name,
-        options
+        options,
       });
     }
   });
 
   const groupedIds = new Set(
-    groups.flatMap((group) => group.options.map((option) => String(option.value)))
+    groups.flatMap((group) =>
+      group.options.map((option) => String(option.value)),
+    ),
   );
 
   const remainingOptions = activeCatalogueItems()
@@ -2782,13 +2686,13 @@ function itemOptions() {
     .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")))
     .map((item) => ({
       value: item.id,
-      text: item.name
+      text: item.name,
     }));
 
   if (remainingOptions.length > 0) {
     groups.push({
       label: "Product type not set",
-      options: remainingOptions
+      options: remainingOptions,
     });
   }
 
@@ -2797,7 +2701,7 @@ function itemOptions() {
 
 function getItemName(itemId) {
   const item = currentItems.find(
-    (candidate) => String(candidate.id) === String(itemId)
+    (candidate) => String(candidate.id) === String(itemId),
   );
 
   return item?.name ?? "Item not set";
@@ -2805,7 +2709,7 @@ function getItemName(itemId) {
 
 function getStoreName(storeId) {
   const store = currentStores.find(
-    (candidate) => String(candidate.id) === String(storeId)
+    (candidate) => String(candidate.id) === String(storeId),
   );
 
   return store?.name ?? "Store not set";
@@ -2827,13 +2731,13 @@ function productTypeOptions() {
       .sort(sortProductTypesForStoreType(storeType.id))
       .map((productType) => ({
         value: productType.id,
-        text: productType.name
+        text: productType.name,
       }));
 
     if (options.length > 0) {
       groups.push({
         label: storeType.name,
-        options
+        options,
       });
     }
   });
@@ -2843,13 +2747,13 @@ function productTypeOptions() {
     .sort(sortBySavedOrderThenName)
     .map((productType) => ({
       value: productType.id,
-      text: productType.name
+      text: productType.name,
     }));
 
   if (unassignedOptions.length > 0) {
     groups.push({
       label: "Store type not set",
-      options: unassignedOptions
+      options: unassignedOptions,
     });
   }
 
@@ -2859,13 +2763,13 @@ function productTypeOptions() {
 function unitOptions() {
   return currentUnits.map((unit) => ({
     value: unit.id,
-    text: `${unit.name} (${unit.symbol})`
+    text: `${unit.name} (${unit.symbol})`,
   }));
 }
 
 function getStoreTypeName(storeTypeId) {
   const storeType = currentStoreTypes.find(
-    (candidate) => candidate.id === storeTypeId
+    (candidate) => candidate.id === storeTypeId,
   );
 
   return storeType?.name ?? "Store type not set";
@@ -2888,7 +2792,7 @@ function productTypeStoreTypeIds(productType) {
 
 function productTypeBelongsToStoreType(productType, storeTypeId) {
   return productTypeStoreTypeIds(productType).some(
-    (candidateId) => String(candidateId) === String(storeTypeId)
+    (candidateId) => String(candidateId) === String(storeTypeId),
   );
 }
 
@@ -2908,7 +2812,7 @@ function pruneObjectByKeys(sourceObject = {}, keysToKeep = []) {
 function storeProductTypeOrderContains(store, productTypeId) {
   return Object.prototype.hasOwnProperty.call(
     store.productTypeOrders ?? {},
-    productTypeId
+    productTypeId,
   );
 }
 
@@ -2973,7 +2877,7 @@ function sortProductTypesForStore(store, storeTypeId) {
 
 function getProductTypesForStoreType(storeTypeId) {
   return currentProductTypes.filter((productType) =>
-    productTypeBelongsToStoreType(productType, storeTypeId)
+    productTypeBelongsToStoreType(productType, storeTypeId),
   );
 }
 
@@ -2983,13 +2887,14 @@ function getOrderedProductTypesForShoppingTarget(storeTypeId, store = null) {
   return productTypes.sort(
     store
       ? sortProductTypesForStore(store, storeTypeId)
-      : sortProductTypesForStoreType(storeTypeId)
+      : sortProductTypesForStoreType(storeTypeId),
   );
 }
 
 function createStoreProductTypeOrderRow(productType) {
   const row = document.createElement("div");
-  row.className = "settings-list-item settings-order-row store-product-type-order-row";
+  row.className =
+    "settings-list-item settings-order-row store-product-type-order-row";
   row.dataset.documentId = productType.id;
 
   const handle = document.createElement("span");
@@ -3022,18 +2927,21 @@ function createStoreProductTypeOrderPanel(store) {
   if (!store.storeTypeId) {
     const message = document.createElement("p");
     message.className = "settings-help-text";
-    message.textContent = "Choose and save a store type before setting product type order.";
+    message.textContent =
+      "Choose and save a store type before setting product type order.";
     wrapper.append(message);
     return wrapper;
   }
 
-  const productTypesForStore = getProductTypesForStoreType(store.storeTypeId)
-    .sort(sortProductTypesForStore(store, store.storeTypeId));
+  const productTypesForStore = getProductTypesForStoreType(
+    store.storeTypeId,
+  ).sort(sortProductTypesForStore(store, store.storeTypeId));
 
   if (productTypesForStore.length === 0) {
     const message = document.createElement("p");
     message.className = "settings-help-text";
-    message.textContent = "No product types are associated with this store type yet.";
+    message.textContent =
+      "No product types are associated with this store type yet.";
     wrapper.append(message);
     return wrapper;
   }
@@ -3050,7 +2958,8 @@ function createStoreProductTypeOrderPanel(store) {
 
   const resetButton = document.createElement("button");
   resetButton.type = "button";
-  resetButton.className = "settings-secondary-button store-product-type-reset-button";
+  resetButton.className =
+    "settings-secondary-button store-product-type-reset-button";
   resetButton.textContent = "Reset to default order";
 
   resetButton.addEventListener("click", async () => {
@@ -3078,12 +2987,10 @@ function createStoreProductTypeOrderPanel(store) {
 async function saveStoreProductTypeOrder(groupList, store) {
   const scrollY = window.scrollY;
 
-  const rows = Array.from(
-    groupList.querySelectorAll(".settings-order-row")
-  );
+  const rows = Array.from(groupList.querySelectorAll(".settings-order-row"));
 
   const productTypeOrders = {
-    ...(store.productTypeOrders ?? {})
+    ...(store.productTypeOrders ?? {}),
   };
 
   rows.forEach((row, index) => {
@@ -3092,7 +2999,7 @@ async function saveStoreProductTypeOrder(groupList, store) {
 
   await updateDoc(householdDocument("stores", store.id), {
     productTypeOrders,
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   });
 
   restoreScrollPosition(scrollY);
@@ -3103,7 +3010,7 @@ async function resetStoreProductTypeOrder(store) {
 
   await updateDoc(householdDocument("stores", store.id), {
     productTypeOrders: {},
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   });
 
   restoreScrollPosition(scrollY);
@@ -3145,7 +3052,7 @@ function enableStoreProductTypeOrdering(groupList, store) {
         console.error("Could not save store product type order:", error);
         alert("The new product type order could not be saved.");
       }
-    }
+    },
   });
 
   settingsSortables.set(sortableKey, sortable);
@@ -3153,7 +3060,9 @@ function enableStoreProductTypeOrdering(groupList, store) {
 
 function getProductTypeStoreTypeIdsFromForm() {
   return Array.from(
-    productTypeStoreTypesContainer.querySelectorAll("input[type='checkbox']:checked")
+    productTypeStoreTypesContainer.querySelectorAll(
+      "input[type='checkbox']:checked",
+    ),
   ).map((checkbox) => checkbox.value);
 }
 
@@ -3169,9 +3078,7 @@ function createStoreTypeCheckboxList(container, selectedStoreTypeIds = []) {
   container.innerHTML = "";
   container.className = "settings-checkbox-list";
 
-  const selectedValues = new Set(
-    selectedStoreTypeIds.map((id) => String(id))
-  );
+  const selectedValues = new Set(selectedStoreTypeIds.map((id) => String(id)));
 
   if (currentStoreTypes.length === 0) {
     container.innerHTML = "<p>No store types are available.</p>";
@@ -3182,7 +3089,7 @@ function createStoreTypeCheckboxList(container, selectedStoreTypeIds = []) {
     const { optionLabel } = createSettingsCheckboxOption({
       value: storeType.id,
       text: storeType.name,
-      checked: selectedValues.has(String(storeType.id))
+      checked: selectedValues.has(String(storeType.id)),
     });
 
     container.append(optionLabel);
@@ -3195,7 +3102,8 @@ function populateOneOffRoomSelect() {
   }
 
   const selectedValue = oneOffItemRoomSelect.value;
-  oneOffItemRoomSelect.innerHTML = '<option value="">No additional room</option>';
+  oneOffItemRoomSelect.innerHTML =
+    '<option value="">No additional room</option>';
 
   currentRooms.forEach((room) => {
     const option = document.createElement("option");
@@ -3220,9 +3128,9 @@ function renderOneOffShoppingTargets({ preserveSelection = true } = {}) {
     ? new Set(
         Array.from(
           oneOffShoppingTargets.querySelectorAll(
-            "input[type='checkbox']:checked"
-          )
-        ).map((checkbox) => checkbox.value)
+            "input[type='checkbox']:checked",
+          ),
+        ).map((checkbox) => checkbox.value),
       )
     : new Set();
 
@@ -3240,7 +3148,7 @@ function renderOneOffShoppingTargets({ preserveSelection = true } = {}) {
     const storeTypeChoice = createSettingsCheckboxOption({
       value: `storeType:${storeType.id}`,
       text: storeType.name,
-      checked: selectedValues.has(`storeType:${storeType.id}`)
+      checked: selectedValues.has(`storeType:${storeType.id}`),
     });
     storeTypeChoice.optionLabel.classList.add("one-off-shopping-target-option");
     group.append(storeTypeChoice.optionLabel);
@@ -3252,7 +3160,7 @@ function renderOneOffShoppingTargets({ preserveSelection = true } = {}) {
         const storeChoice = createSettingsCheckboxOption({
           value: `store:${store.id}`,
           text: store.name,
-          checked: selectedValues.has(`store:${store.id}`)
+          checked: selectedValues.has(`store:${store.id}`),
         });
         storeChoice.optionLabel.classList.add("one-off-shopping-target-option");
         group.append(storeChoice.optionLabel);
@@ -3316,29 +3224,24 @@ async function saveOneOffItem() {
     addedAt: serverTimestamp(),
     adjustedAt: serverTimestamp(),
     statusChangedAt: serverTimestamp(),
-    collectedAt: null
+    collectedAt: null,
   });
 }
 
-async function saveSettingsOrder({
-  listElement,
-  collectionName
-}) {
-  const rows = Array.from(
-    listElement.querySelectorAll(".settings-order-row")
-  );
+async function saveSettingsOrder({ listElement, collectionName }) {
+  const rows = Array.from(listElement.querySelectorAll(".settings-order-row"));
 
   const batch = writeBatch(db);
 
   rows.forEach((row, index) => {
     const documentRef = householdDocument(
       collectionName,
-      row.dataset.documentId
+      row.dataset.documentId,
     );
 
     batch.update(documentRef, {
       sortOrder: index,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   });
 
@@ -3348,9 +3251,7 @@ async function saveSettingsOrder({
 async function saveProductTypeGroupOrder(groupList, storeTypeId) {
   const scrollY = window.scrollY;
 
-  const rows = Array.from(
-    groupList.querySelectorAll(".settings-order-row")
-  );
+  const rows = Array.from(groupList.querySelectorAll(".settings-order-row"));
 
   const batch = writeBatch(db);
   const orderField = `storeTypeOrders.${storeTypeId}`;
@@ -3358,7 +3259,7 @@ async function saveProductTypeGroupOrder(groupList, storeTypeId) {
   rows.forEach((row, index) => {
     batch.update(householdDocument("productTypes", row.dataset.documentId), {
       [orderField]: index,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   });
 
@@ -3381,7 +3282,7 @@ function restoreScrollPosition(scrollY) {
     window.scrollTo({
       top: scrollY,
       left: 0,
-      behavior: "auto"
+      behavior: "auto",
     });
   });
 }
@@ -3394,9 +3295,7 @@ function applySavedSettingsMenuOrder() {
   let savedOrder = [];
 
   try {
-    const storedValue = localStorage.getItem(
-      SETTINGS_MENU_ORDER_KEY
-    );
+    const storedValue = localStorage.getItem(SETTINGS_MENU_ORDER_KEY);
     savedOrder = storedValue ? JSON.parse(storedValue) : [];
   } catch (error) {
     console.warn("Could not read Settings menu order:", error);
@@ -3405,9 +3304,9 @@ function applySavedSettingsMenuOrder() {
   const optionsByKey = new Map(
     Array.from(
       settingsHome.querySelectorAll(
-        ".settings-menu-order-row[data-settings-category]"
-      )
-    ).map((option) => [option.dataset.settingsCategory, option])
+        ".settings-menu-order-row[data-settings-category]",
+      ),
+    ).map((option) => [option.dataset.settingsCategory, option]),
   );
 
   savedOrder.forEach((categoryName) => {
@@ -3427,15 +3326,12 @@ function applySavedSettingsMenuOrder() {
 function saveSettingsMenuOrder() {
   const order = Array.from(
     settingsHome.querySelectorAll(
-      ".settings-menu-order-row[data-settings-category]"
-    )
+      ".settings-menu-order-row[data-settings-category]",
+    ),
   ).map((option) => option.dataset.settingsCategory);
 
   try {
-    localStorage.setItem(
-      SETTINGS_MENU_ORDER_KEY,
-      JSON.stringify(order)
-    );
+    localStorage.setItem(SETTINGS_MENU_ORDER_KEY, JSON.stringify(order));
   } catch (error) {
     console.warn("Could not save Settings menu order:", error);
   }
@@ -3466,7 +3362,7 @@ function enableSettingsMenuOrdering() {
     fallbackTolerance: 5,
     ghostClass: "settings-sort-ghost",
     chosenClass: "settings-sort-chosen",
-    onEnd: saveSettingsMenuOrder
+    onEnd: saveSettingsMenuOrder,
   });
 
   settingsSortables.set(sortableKey, sortable);
@@ -3508,16 +3404,13 @@ function enableProductTypeGroupOrdering(groupList, storeTypeId) {
         console.error("Could not save product type order:", error);
         alert("The new order could not be saved.");
       }
-    }
+    },
   });
 
   settingsSortables.set(sortableKey, sortable);
 }
 
-function enableSettingsOrdering({
-  listElement,
-  collectionName
-}) {
+function enableSettingsOrdering({ listElement, collectionName }) {
   const sortableKey = listElement.id;
 
   if (settingsSortables.has(sortableKey)) {
@@ -3550,17 +3443,19 @@ function enableSettingsOrdering({
       try {
         await saveSettingsOrder({
           listElement,
-          collectionName
+          collectionName,
         });
       } catch (error) {
         console.error("Could not save order:", error);
         alert("The new order could not be saved.");
       }
-    }
+    },
   });
 
   settingsSortables.set(sortableKey, sortable);
 }
+
+/* ===== Settings renderers ===== */
 
 function renderSettingsRows({
   settingsKey,
@@ -3573,7 +3468,7 @@ function renderSettingsRows({
   fields,
   onSave,
   onDelete,
-  extraContent = null
+  extraContent = null,
 }) {
   listElement.innerHTML = "";
 
@@ -3601,7 +3496,7 @@ function renderSettingsRows({
           console.error("Could not remove settings item:", error);
           alert(error.message || "The item could not be removed.");
         }
-      }
+      },
     });
 
     listElement.append(row);
@@ -3613,13 +3508,13 @@ function renderSettingsRows({
       item,
       fields,
       onSave,
-      extraContent
+      extraContent,
     });
   });
 
   enableSettingsOrdering({
     listElement,
-    collectionName
+    collectionName,
   });
 }
 
@@ -3653,8 +3548,9 @@ function renderRooms(rooms) {
         key: "name",
         label: "Room name",
         maxLength: 50,
-        value: () => rooms.find((room) => room.id === editingSettingsId)?.name ?? ""
-      }
+        value: () =>
+          rooms.find((room) => room.id === editingSettingsId)?.name ?? "",
+      },
     ],
     onSave: async (values, room) => {
       if (!values.name) {
@@ -3663,10 +3559,10 @@ function renderRooms(rooms) {
 
       await updateDoc(householdDocument("locations", room.id), {
         name: values.name,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
     },
-    onDelete: deactivateRoom
+    onDelete: deactivateRoom,
   });
 
   needingRoomsList.innerHTML = "";
@@ -3684,7 +3580,8 @@ function renderRooms(rooms) {
 
   const regularButton = document.createElement("button");
   regularButton.type = "button";
-  regularButton.className = "room-button shopping-location-option regular-room-button";
+  regularButton.className =
+    "room-button shopping-location-option regular-room-button";
   regularButton.textContent = "Regular stuff";
   regularButton.addEventListener("click", () => {
     recordAppNavigation();
@@ -3734,8 +3631,9 @@ function renderUnits(units) {
         key: "symbol",
         label: "Unit symbol",
         maxLength: 10,
-        value: () => units.find((unit) => unit.id === editingSettingsId)?.symbol ?? ""
-      }
+        value: () =>
+          units.find((unit) => unit.id === editingSettingsId)?.symbol ?? "",
+      },
     ],
     onSave: async (values, unit) => {
       if (!values.symbol) {
@@ -3746,10 +3644,10 @@ function renderUnits(units) {
         name: values.symbol,
         symbol: values.symbol,
         displayMode: values.symbol === "×" ? "multiplier" : "suffix",
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
     },
-    onDelete: deactivateUnit
+    onDelete: deactivateUnit,
   });
 
   populateUnitDropdown();
@@ -3770,8 +3668,10 @@ function renderStoreTypes(storeTypes) {
         key: "name",
         label: "Store type name",
         maxLength: 50,
-        value: () => storeTypes.find((storeType) => storeType.id === editingSettingsId)?.name ?? ""
-      }
+        value: () =>
+          storeTypes.find((storeType) => storeType.id === editingSettingsId)
+            ?.name ?? "",
+      },
     ],
     onSave: async (values, storeType) => {
       if (!values.name) {
@@ -3780,10 +3680,10 @@ function renderStoreTypes(storeTypes) {
 
       await updateDoc(householdDocument("storeTypes", storeType.id), {
         name: values.name,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
     },
-    onDelete: deactivateStoreType
+    onDelete: deactivateStoreType,
   });
 
   populateStoreTypeDropdowns();
@@ -3810,7 +3710,8 @@ function renderStores(stores) {
         key: "name",
         label: "Store name",
         maxLength: 80,
-        value: () => stores.find((store) => store.id === editingSettingsId)?.name ?? ""
+        value: () =>
+          stores.find((store) => store.id === editingSettingsId)?.name ?? "",
       },
       {
         key: "storeTypeId",
@@ -3818,8 +3719,10 @@ function renderStores(stores) {
         type: "select",
         emptyText: "Choose a store type",
         options: storeTypeOptions,
-        value: () => stores.find((store) => store.id === editingSettingsId)?.storeTypeId ?? ""
-      }
+        value: () =>
+          stores.find((store) => store.id === editingSettingsId)?.storeTypeId ??
+          "",
+      },
     ],
     onSave: async (values, store) => {
       if (!values.name || !values.storeTypeId) {
@@ -3835,11 +3738,11 @@ function renderStores(stores) {
         productTypeOrders: storeTypeChanged
           ? {}
           : (store.productTypeOrders ?? {}),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
     },
     onDelete: deactivateStore,
-    extraContent: (store) => createStoreProductTypeOrderPanel(store)
+    extraContent: (store) => createStoreProductTypeOrderPanel(store),
   });
 
   renderShoppingLocations();
@@ -3847,12 +3750,12 @@ function renderStores(stores) {
   populateItemStoreSelect(
     itemStoreSelect,
     itemProductTypeSelect?.value,
-    itemStoreSelect?.value
+    itemStoreSelect?.value,
   );
   populateItemStoreSelect(
     settingsItemStoreSelect,
     settingsItemProductTypeSelect?.value,
-    settingsItemStoreSelect?.value
+    settingsItemStoreSelect?.value,
   );
 }
 
@@ -3862,7 +3765,9 @@ function productTypeEditFields(productTypes) {
       key: "name",
       label: "Product type name",
       maxLength: 50,
-      value: () => productTypes.find((productType) => productType.id === editingSettingsId)?.name ?? ""
+      value: () =>
+        productTypes.find((productType) => productType.id === editingSettingsId)
+          ?.name ?? "",
     },
     {
       key: "storeTypeIds",
@@ -3871,22 +3776,22 @@ function productTypeEditFields(productTypes) {
       options: storeTypeOptions,
       value: () => {
         const productType = productTypes.find(
-          (candidate) => candidate.id === editingSettingsId
+          (candidate) => candidate.id === editingSettingsId,
         );
 
         return productType ? productTypeStoreTypeIds(productType) : [];
-      }
-    }
+      },
+    },
   ];
 }
 
 async function cleanStoreProductTypeOrdersForProductType(
   batch,
   productTypeId,
-  validStoreTypeIds
+  validStoreTypeIds,
 ) {
   const validStoreTypeIdSet = new Set(
-    validStoreTypeIds.map((storeTypeId) => String(storeTypeId))
+    validStoreTypeIds.map((storeTypeId) => String(storeTypeId)),
   );
 
   currentStores.forEach((store) => {
@@ -3900,7 +3805,7 @@ async function cleanStoreProductTypeOrdersForProductType(
 
     batch.update(householdDocument("stores", store.id), {
       [`productTypeOrders.${productTypeId}`]: deleteField(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   });
 }
@@ -3919,25 +3824,21 @@ async function saveProductType(values, productType) {
     storeTypeIds,
     storeTypeOrders: pruneObjectByKeys(
       productType.storeTypeOrders,
-      storeTypeIds
+      storeTypeIds,
     ),
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   });
 
   await cleanStoreProductTypeOrdersForProductType(
     batch,
     productType.id,
-    storeTypeIds
+    storeTypeIds,
   );
 
   await batch.commit();
 }
 
-function appendProductTypeGroup({
-  storeTypeId,
-  headingText,
-  productTypes
-}) {
+function appendProductTypeGroup({ storeTypeId, headingText, productTypes }) {
   const group = document.createElement("section");
   group.className = "settings-group";
 
@@ -3969,7 +3870,7 @@ function appendProductTypeGroup({
           console.error("Could not remove product type:", error);
           alert(error.message || "The product type could not be removed.");
         }
-      }
+      },
     });
 
     groupList.append(row);
@@ -3981,7 +3882,7 @@ function appendProductTypeGroup({
       contextId: storeTypeId,
       item: productType,
       fields: productTypeEditFields(currentProductTypes),
-      onSave: saveProductType
+      onSave: saveProductType,
     });
   });
 
@@ -4010,7 +3911,7 @@ function renderProductTypes(productTypes) {
   currentStoreTypes.forEach((storeType) => {
     const productTypesForStoreType = productTypes
       .filter((productType) =>
-        productTypeBelongsToStoreType(productType, storeType.id)
+        productTypeBelongsToStoreType(productType, storeType.id),
       )
       .sort(sortProductTypesForStoreType(storeType.id));
 
@@ -4021,7 +3922,7 @@ function renderProductTypes(productTypes) {
     appendProductTypeGroup({
       storeTypeId: storeType.id,
       headingText: storeType.name,
-      productTypes: productTypesForStoreType
+      productTypes: productTypesForStoreType,
     });
   });
 
@@ -4033,7 +3934,7 @@ function renderProductTypes(productTypes) {
     appendProductTypeGroup({
       storeTypeId: "unassigned",
       headingText: "Store type not set",
-      productTypes: unassignedProductTypes
+      productTypes: unassignedProductTypes,
     });
   }
 
@@ -4045,7 +3946,7 @@ function renderProductTypes(productTypes) {
 
 function getRoomName(roomId) {
   const room = currentRooms.find(
-    (candidate) => String(candidate.id) === String(roomId)
+    (candidate) => String(candidate.id) === String(roomId),
   );
 
   return room?.name ?? "Room not set";
@@ -4053,7 +3954,7 @@ function getRoomName(roomId) {
 
 function getUnitDisplay(unitId) {
   const unit = currentUnits.find(
-    (candidate) => String(candidate.id) === String(unitId)
+    (candidate) => String(candidate.id) === String(unitId),
   );
 
   return unit ? unit.symbol : "Unit not set";
@@ -4066,7 +3967,7 @@ function itemSettingsSublabel(item) {
     item.specificAttributes,
     getRoomName(item.locationId),
     getUnitDisplay(item.unitId),
-    getItemStoreName(item)
+    getItemStoreName(item),
   ].filter(Boolean);
 
   return parts.join(" · ");
@@ -4088,18 +3989,14 @@ function itemMatchesSettingsSearch(item, searchText) {
     productType?.name,
     roomName,
     unitName,
-    storeName
+    storeName,
   ]
     .filter(Boolean)
-    .some((value) =>
-      String(value).toLowerCase().includes(searchText)
-    );
+    .some((value) => String(value).toLowerCase().includes(searchText));
 }
 
 function showBriefToast(message) {
-  document
-    .querySelectorAll(".brief-toast")
-    .forEach((toast) => toast.remove());
+  $$(".brief-toast").forEach((toast) => toast.remove());
 
   const toast = document.createElement("div");
   toast.className = "brief-toast";
@@ -4121,13 +4018,11 @@ async function toggleItemRegularList(item) {
   try {
     await updateDoc(householdDocument("items", item.id), {
       regularList: nextValue,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
 
     showBriefToast(
-      nextValue
-        ? "Added to regular list"
-        : "Removed from regular list"
+      nextValue ? "Added to regular list" : "Removed from regular list",
     );
   } catch (error) {
     console.error("Could not update regular list:", error);
@@ -4144,7 +4039,7 @@ function createRegularListToggleButton(item) {
     "aria-label",
     itemIsRegular(item)
       ? `Remove ${item.name} from regular list`
-      : `Add ${item.name} to regular list`
+      : `Add ${item.name} to regular list`,
   );
 
   const graphic = document.createElement("span");
@@ -4166,31 +4061,28 @@ function createRegularListToggleButton(item) {
 async function deactivateSettingsItem(item) {
   if (neededEntriesForItem(item.id).length > 0) {
     alert(
-      `${item.name} is currently on the needed list. Remove all generic and specific entries for it before removing it from Items.`
+      `${item.name} is currently on the needed list. Remove all generic and specific entries for it before removing it from Items.`,
     );
     return;
   }
 
   const linkedSpecificProducts = currentSpecificProducts.filter(
-    (product) => String(product.itemId) === String(item.id)
+    (product) => String(product.itemId) === String(item.id),
   );
 
   if (linkedSpecificProducts.length > 0) {
     showDependencyBlock(item.name, [
       dependencyListLine(
         "Specific products linked to this item",
-        dependencyNames(
-          linkedSpecificProducts,
-          (product) => product.name
-        )
-      )
+        dependencyNames(linkedSpecificProducts, (product) => product.name),
+      ),
     ]);
     return;
   }
 
   if (
     !window.confirm(
-      `Remove ${item.name}?\n\nThis will remove it from normal item lists.`
+      `Remove ${item.name}?\n\nThis will remove it from normal item lists.`,
     )
   ) {
     return;
@@ -4198,13 +4090,10 @@ async function deactivateSettingsItem(item) {
 
   await updateDoc(householdDocument("items", item.id), {
     active: false,
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   });
 
-  if (
-    editingSettingsKey === "items" &&
-    editingSettingsId === item.id
-  ) {
+  if (editingSettingsKey === "items" && editingSettingsId === item.id) {
     editingSettingsKey = null;
     editingSettingsId = null;
     editingSettingsContextId = null;
@@ -4240,7 +4129,7 @@ function createSettingsItemRow(item) {
     label: `Edit ${item.name}`,
     onClick: () => {
       setEditingSettings("items", item.id);
-    }
+    },
   });
 
   const deleteButton = createIconButton({
@@ -4254,7 +4143,7 @@ function createSettingsItemRow(item) {
         console.error("Could not remove item:", error);
         alert(error.message || "The item could not be removed.");
       }
-    }
+    },
   });
 
   actions.append(regularButton, editButton, deleteButton);
@@ -4267,8 +4156,8 @@ function createSettingsItemRow(item) {
     },
     {
       duration: 450,
-      moveTolerance: 20
-    }
+      moveTolerance: 20,
+    },
   );
 
   return row;
@@ -4280,7 +4169,8 @@ function itemEditFields(items) {
       key: "name",
       label: "Item name",
       maxLength: 80,
-      value: () => items.find((item) => item.id === editingSettingsId)?.name ?? ""
+      value: () =>
+        items.find((item) => item.id === editingSettingsId)?.name ?? "",
     },
     {
       key: "locationId",
@@ -4288,7 +4178,8 @@ function itemEditFields(items) {
       type: "select",
       emptyText: "Choose a room",
       options: roomOptions,
-      value: () => items.find((item) => item.id === editingSettingsId)?.locationId ?? ""
+      value: () =>
+        items.find((item) => item.id === editingSettingsId)?.locationId ?? "",
     },
     {
       key: "productTypeId",
@@ -4296,7 +4187,9 @@ function itemEditFields(items) {
       type: "select",
       emptyText: "Choose a product type",
       options: productTypeOptions,
-      value: () => items.find((item) => item.id === editingSettingsId)?.productTypeId ?? ""
+      value: () =>
+        items.find((item) => item.id === editingSettingsId)?.productTypeId ??
+        "",
     },
     {
       key: "specificAttributes",
@@ -4305,9 +4198,8 @@ function itemEditFields(items) {
       maxLength: 100,
       placeholder: "e.g. 2 L, gluten-free, fragrance-free",
       value: () =>
-        items.find(
-          (item) => item.id === editingSettingsId
-        )?.specificAttributes ?? ""
+        items.find((item) => item.id === editingSettingsId)
+          ?.specificAttributes ?? "",
     },
     {
       key: "storeId",
@@ -4317,12 +4209,13 @@ function itemEditFields(items) {
       emptyText: "Any matching store",
       options: () => {
         const item = items.find(
-          (candidate) => candidate.id === editingSettingsId
+          (candidate) => candidate.id === editingSettingsId,
         );
 
         return itemStoreOptions(item?.productTypeId ?? "");
       },
-      value: () => items.find((item) => item.id === editingSettingsId)?.storeId ?? ""
+      value: () =>
+        items.find((item) => item.id === editingSettingsId)?.storeId ?? "",
     },
     {
       key: "defaultAmount",
@@ -4330,7 +4223,8 @@ function itemEditFields(items) {
       type: "number",
       min: 0,
       step: "any",
-      value: () => items.find((item) => item.id === editingSettingsId)?.defaultAmount ?? 1
+      value: () =>
+        items.find((item) => item.id === editingSettingsId)?.defaultAmount ?? 1,
     },
     {
       key: "unitId",
@@ -4339,9 +4233,11 @@ function itemEditFields(items) {
       emptyText: null,
       options: unitOptions,
       value: () => {
-        const item = items.find((candidate) => candidate.id === editingSettingsId);
+        const item = items.find(
+          (candidate) => candidate.id === editingSettingsId,
+        );
         return item?.unitId ?? currentUnits[0]?.id ?? "";
-      }
+      },
     },
     {
       key: "increment",
@@ -4349,14 +4245,15 @@ function itemEditFields(items) {
       type: "number",
       min: 0.01,
       step: "any",
-      value: () => items.find((item) => item.id === editingSettingsId)?.increment ?? 1
-    }
+      value: () =>
+        items.find((item) => item.id === editingSettingsId)?.increment ?? 1,
+    },
   ];
 }
 
 async function saveSettingsItem(values, item) {
   const selectedProductType = currentProductTypes.find(
-    (productType) => String(productType.id) === String(values.productTypeId)
+    (productType) => String(productType.id) === String(values.productTypeId),
   );
 
   const inheritedStoreTypeIds = selectedProductType
@@ -4376,11 +4273,15 @@ async function saveSettingsItem(values, item) {
   }
 
   if (inheritedStoreTypeIds.length === 0) {
-    throw new Error("Please choose a product type that has at least one store type set.");
+    throw new Error(
+      "Please choose a product type that has at least one store type set.",
+    );
   }
 
   if (!itemStoreIsAllowed(values.productTypeId, values.storeId)) {
-    throw new Error("Please choose a store that matches the selected product type.");
+    throw new Error(
+      "Please choose a store that matches the selected product type.",
+    );
   }
 
   await updateDoc(householdDocument("items", item.id), {
@@ -4392,15 +4293,11 @@ async function saveSettingsItem(values, item) {
     defaultAmount: values.defaultAmount,
     unitId: values.unitId,
     increment: values.increment,
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
   });
 }
 
-function appendSettingsItemEditPanel(
-  item,
-  listElement,
-  rowElement
-) {
+function appendSettingsItemEditPanel(item, listElement, rowElement) {
   appendSettingsEditPanel({
     listElement,
     rowElement,
@@ -4415,19 +4312,19 @@ function appendSettingsItemEditPanel(
       populateItemStoreSelect(
         storeSelect,
         productTypeSelect?.value ?? "",
-        storeSelect?.value ?? ""
+        storeSelect?.value ?? "",
       );
 
       productTypeSelect?.addEventListener("change", () => {
         populateItemStoreSelect(
           storeSelect,
           productTypeSelect.value,
-          storeSelect?.value ?? ""
+          storeSelect?.value ?? "",
         );
       });
 
       return null;
-    }
+    },
   });
 }
 
@@ -4437,10 +4334,10 @@ function recordedStoreNames(storeIds = []) {
   }
 
   return storeIds
-    .map((storeId) =>
-      currentStores.find(
-        (store) => String(store.id) === String(storeId)
-      )?.name ?? ""
+    .map(
+      (storeId) =>
+        currentStores.find((store) => String(store.id) === String(storeId))
+          ?.name ?? "",
     )
     .map((name) => String(name).trim())
     .filter(Boolean)
@@ -4451,7 +4348,7 @@ function specificProductSublabel(product, { includeItem = true } = {}) {
   const parts = [
     includeItem ? getItemName(product.itemId) : "",
     product.specificAttributes ?? product.size,
-    recordedStoreNames(product.storeIds)
+    recordedStoreNames(product.storeIds),
   ]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean);
@@ -4468,19 +4365,15 @@ function specificProductMatchesSearch(product, searchText) {
     product.name,
     getItemName(product.itemId),
     product.specificAttributes ?? product.size,
-    recordedStoreNames(product.storeIds)
+    recordedStoreNames(product.storeIds),
   ]
     .map((value) => String(value ?? "").toLowerCase())
     .some((value) => value.includes(searchText));
 }
 
-function createSettingsSpecificProductRow(
-  product,
-  { nested = false } = {}
-) {
+function createSettingsSpecificProductRow(product, { nested = false } = {}) {
   const row = document.createElement("div");
-  row.className =
-    "settings-list-item settings-specific-product-row";
+  row.className = "settings-list-item settings-specific-product-row";
   row.dataset.documentId = product.id;
 
   if (nested) {
@@ -4496,7 +4389,7 @@ function createSettingsSpecificProductRow(
   text.append(name);
 
   const sublabel = specificProductSublabel(product, {
-    includeItem: !nested
+    includeItem: !nested,
   });
 
   if (sublabel) {
@@ -4510,24 +4403,22 @@ function createSettingsSpecificProductRow(
   actions.className = "settings-row-actions";
 
   const editButton = createIconButton({
-    className:
-      "settings-row-icon-button settings-row-edit-button",
+    className: "settings-row-icon-button settings-row-edit-button",
     icon: "✏️",
     label: `Edit ${product.name}`,
     onClick: () => {
       setEditingSettings("specific-products", product.id);
-    }
+    },
   });
 
   const deleteButton = createIconButton({
-    className:
-      "settings-row-icon-button settings-row-delete-button",
+    className: "settings-row-icon-button settings-row-delete-button",
     icon: "🗑️",
     label: `Delete ${product.name}`,
     onClick: async () => {
       if (specificNeededEntryForProduct(product.id)) {
         alert(
-          `${product.name} is currently on the needed list. Remove it from the needed list before deleting it.`
+          `${product.name} is currently on the needed list. Remove it from the needed list before deleting it.`,
         );
         return;
       }
@@ -4536,18 +4427,15 @@ function createSettingsSpecificProductRow(
         return;
       }
 
-      await deleteSettingsDocument(
-        "specificProducts",
-        product.id
-      );
-    }
+      await deleteSettingsDocument("specificProducts", product.id);
+    },
   });
 
   actions.append(editButton, deleteButton);
   row.append(text, actions);
 
   const parentItem = currentItems.find(
-    (item) => String(item.id) === String(product.itemId)
+    (item) => String(item.id) === String(product.itemId),
   );
 
   if (parentItem) {
@@ -4568,18 +4456,16 @@ function specificProductEditFields(products) {
       emptyText: "Choose an item",
       options: itemOptions,
       value: () =>
-        products.find(
-          (product) => product.id === editingSettingsId
-        )?.itemId ?? ""
+        products.find((product) => product.id === editingSettingsId)?.itemId ??
+        "",
     },
     {
       key: "name",
       label: "Product name",
       maxLength: 100,
       value: () =>
-        products.find(
-          (product) => product.id === editingSettingsId
-        )?.name ?? ""
+        products.find((product) => product.id === editingSettingsId)?.name ??
+        "",
     },
     {
       key: "specificAttributes",
@@ -4589,11 +4475,11 @@ function specificProductEditFields(products) {
       placeholder: "e.g. 2 L, gluten-free, fragrance-free",
       value: () => {
         const product = products.find(
-          (candidate) => candidate.id === editingSettingsId
+          (candidate) => candidate.id === editingSettingsId,
         );
 
         return product?.specificAttributes ?? product?.size ?? "";
-      }
+      },
     },
     {
       key: "storeIds",
@@ -4602,52 +4488,42 @@ function specificProductEditFields(products) {
       options: storeOptions,
       required: false,
       value: () =>
-        products.find(
-          (product) => product.id === editingSettingsId
-        )?.storeIds ?? []
-    }
+        products.find((product) => product.id === editingSettingsId)
+          ?.storeIds ?? [],
+    },
   ];
 }
 
 async function saveSettingsSpecificProduct(values, product) {
   if (!values.itemId || !values.name) {
-    throw new Error(
-      "Please choose an item and enter a product name."
-    );
+    throw new Error("Please choose an item and enter a product name.");
   }
 
-  await updateDoc(
-    householdDocument("specificProducts", product.id),
-    {
-      itemId: values.itemId,
-      name: values.name,
-      specificAttributes: values.specificAttributes ?? "",
-      storeIds: values.storeIds ?? [],
-      updatedAt: serverTimestamp()
-    }
-  );
+  await updateDoc(householdDocument("specificProducts", product.id), {
+    itemId: values.itemId,
+    name: values.name,
+    specificAttributes: values.specificAttributes ?? "",
+    storeIds: values.storeIds ?? [],
+    updatedAt: serverTimestamp(),
+  });
 }
 
 function appendSettingsSpecificProductEditPanel(
   product,
   listElement,
-  rowElement
+  rowElement,
 ) {
   const panel = appendSettingsEditPanel({
     listElement,
     rowElement,
     settingsKey: "specific-products",
     item: product,
-    fields: specificProductEditFields(
-      currentSpecificProducts
-    ),
-    onSave: saveSettingsSpecificProduct
+    fields: specificProductEditFields(currentSpecificProducts),
+    onSave: saveSettingsSpecificProduct,
   });
 
   if (panel) {
-    panel.classList.add(
-      "settings-item-specific-product-edit-panel"
-    );
+    panel.classList.add("settings-item-specific-product-edit-panel");
   }
 }
 
@@ -4655,12 +4531,9 @@ function activeSpecificProductsForSettingsItem(itemId) {
   return currentSpecificProducts
     .filter(
       (product) =>
-        product.active !== false &&
-        String(product.itemId) === String(itemId)
+        product.active !== false && String(product.itemId) === String(itemId),
     )
-    .sort((a, b) =>
-      String(a.name ?? "").localeCompare(String(b.name ?? ""))
-    );
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
 }
 
 function settingsItemRecord(item, searchText) {
@@ -4669,13 +4542,13 @@ function settingsItemRecord(item, searchText) {
   if (!searchText) {
     return {
       item,
-      products
+      products,
     };
   }
 
   const itemMatches = itemMatchesSettingsSearch(item, searchText);
   const matchingProducts = products.filter((product) =>
-    specificProductMatchesSearch(product, searchText)
+    specificProductMatchesSearch(product, searchText),
   );
 
   if (!itemMatches && matchingProducts.length === 0) {
@@ -4684,44 +4557,33 @@ function settingsItemRecord(item, searchText) {
 
   return {
     item,
-    products: itemMatches ? products : matchingProducts
+    products: itemMatches ? products : matchingProducts,
   };
 }
 
-function appendSettingsSpecificProductsUnderItem({
-  itemRecord,
-  listElement
-}) {
+function appendSettingsSpecificProductsUnderItem({ itemRecord, listElement }) {
   if (itemRecord.products.length === 0) {
     return;
   }
 
   itemRecord.products.forEach((product) => {
     const row = createSettingsSpecificProductRow(product, {
-      nested: true
+      nested: true,
     });
 
     listElement.append(row);
 
-    appendSettingsSpecificProductEditPanel(
-      product,
-      listElement,
-      row
-    );
+    appendSettingsSpecificProductEditPanel(product, listElement, row);
   });
 }
 
 function appendSettingsItemRecord(itemRecord, listElement) {
   const row = createSettingsItemRow(itemRecord.item);
   listElement.append(row);
-  appendSettingsItemEditPanel(
-    itemRecord.item,
-    listElement,
-    row
-  );
+  appendSettingsItemEditPanel(itemRecord.item, listElement, row);
   appendSettingsSpecificProductsUnderItem({
     itemRecord,
-    listElement
+    listElement,
   });
 }
 
@@ -4729,17 +4591,12 @@ function appendSettingsItemsForProductType({
   container,
   productType,
   itemRecords,
-  renderedItemIds
+  renderedItemIds,
 }) {
   const productTypeItems = itemRecords
-    .filter(
-      ({ item }) =>
-        String(item.productTypeId) === String(productType.id)
-    )
+    .filter(({ item }) => String(item.productTypeId) === String(productType.id))
     .sort((a, b) =>
-      String(a.item.name ?? "").localeCompare(
-        String(b.item.name ?? "")
-      )
+      String(a.item.name ?? "").localeCompare(String(b.item.name ?? "")),
     );
 
   if (productTypeItems.length === 0) {
@@ -4771,9 +4628,7 @@ function renderSettingsItems() {
     return;
   }
 
-  const searchText = (settingsItemsSearch?.value ?? "")
-    .trim()
-    .toLowerCase();
+  const searchText = (settingsItemsSearch?.value ?? "").trim().toLowerCase();
 
   const itemRecords = currentItems
     .filter((item) => item.active !== false)
@@ -4796,16 +4651,14 @@ function renderSettingsItems() {
       container: settingsItemsList,
       productType,
       itemRecords,
-      renderedItemIds
+      renderedItemIds,
     });
   });
 
   const ungroupedItems = itemRecords
     .filter(({ item }) => !renderedItemIds.has(item.id))
     .sort((a, b) =>
-      String(a.item.name ?? "").localeCompare(
-        String(b.item.name ?? "")
-      )
+      String(a.item.name ?? "").localeCompare(String(b.item.name ?? "")),
     );
 
   if (ungroupedItems.length > 0) {
@@ -4829,6 +4682,8 @@ function renderSettingsItems() {
   }
 }
 
+/* ===== Form preparation and catalogue item entry ===== */
+
 function populateStoreTypeDropdowns() {
   storeTypeSelect.innerHTML = '<option value="">Choose a store type</option>';
 
@@ -4841,62 +4696,97 @@ function populateStoreTypeDropdowns() {
 
   createStoreTypeCheckboxList(productTypeStoreTypesContainer);
 }
-function populateSettingsItemRoomSelect(selectedRoomId = settingsItemRoomSelect?.value ?? "") {
-  if (!settingsItemRoomSelect) {
+function populateRoomSelect(
+  selectElement,
+  selectedRoomId = "",
+  emptyLabel = "Choose a room",
+) {
+  if (!selectElement) {
     return;
   }
 
-  settingsItemRoomSelect.innerHTML = '<option value="">Choose a room</option>';
+  selectElement.innerHTML = "";
+
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = emptyLabel;
+  selectElement.append(emptyOption);
 
   currentRooms.forEach((room) => {
     const option = document.createElement("option");
     option.value = room.id;
     option.textContent = room.name;
-    settingsItemRoomSelect.append(option);
+    selectElement.append(option);
   });
 
   if (currentRooms.some((room) => String(room.id) === String(selectedRoomId))) {
-    settingsItemRoomSelect.value = selectedRoomId;
+    selectElement.value = selectedRoomId;
   }
 }
 
-function populateSettingsItemUnitSelect(selectedUnitId = settingsItemUnitSelect?.value ?? "") {
-  if (!settingsItemUnitSelect) {
-    return;
+function populateSettingsItemRoomSelect(
+  selectedRoomId = settingsItemRoomSelect?.value ?? "",
+) {
+  populateRoomSelect(settingsItemRoomSelect, selectedRoomId);
+}
+
+function populateUnitSelect(selectElement, selectedUnitId = "") {
+  if (!selectElement) {
+    return false;
   }
 
-  settingsItemUnitSelect.innerHTML = "";
+  selectElement.innerHTML = "";
 
   currentUnits.forEach((unit) => {
     const option = document.createElement("option");
     option.value = unit.id;
     option.textContent = unit.symbol;
     option.dataset.increment = unit.defaultIncrement ?? 1;
-    settingsItemUnitSelect.append(option);
+    selectElement.append(option);
   });
 
-  if (currentUnits.some((unit) => String(unit.id) === String(selectedUnitId))) {
-    settingsItemUnitSelect.value = selectedUnitId;
+  const hasSelectedUnit = currentUnits.some(
+    (unit) => String(unit.id) === String(selectedUnitId),
+  );
+
+  if (hasSelectedUnit) {
+    selectElement.value = selectedUnitId;
   } else if (currentUnits.length > 0) {
-    settingsItemUnitSelect.value = currentUnits[0].id;
+    selectElement.value = currentUnits[0].id;
   }
 
+  return hasSelectedUnit;
+}
+
+function populateSettingsItemUnitSelect(
+  selectedUnitId = settingsItemUnitSelect?.value ?? "",
+) {
+  populateUnitSelect(settingsItemUnitSelect, selectedUnitId);
   updateSettingsItemIncrementFromUnit();
 }
 
-function updateSettingsItemIncrementFromUnit() {
-  if (!settingsItemUnitSelect || !settingsItemIncrementInput) {
+function selectedUnitIncrement(unitSelect) {
+  const selectedOption = unitSelect?.options[unitSelect.selectedIndex];
+  const suggestedIncrement = Number(selectedOption?.dataset.increment);
+
+  return Number.isFinite(suggestedIncrement) ? suggestedIncrement : 1;
+}
+
+function updateIncrementFromUnit(unitSelect, incrementInput) {
+  if (!unitSelect || !incrementInput) {
     return;
   }
 
-  const selectedOption =
-    settingsItemUnitSelect.options[settingsItemUnitSelect.selectedIndex];
-
+  const selectedOption = unitSelect.options[unitSelect.selectedIndex];
   const suggestedIncrement = Number(selectedOption?.dataset.increment);
 
   if (Number.isFinite(suggestedIncrement)) {
-    settingsItemIncrementInput.value = suggestedIncrement;
+    incrementInput.value = suggestedIncrement;
   }
+}
+
+function updateSettingsItemIncrementFromUnit() {
+  updateIncrementFromUnit(settingsItemUnitSelect, settingsItemIncrementInput);
 }
 
 function prepareSettingsItemAddForm() {
@@ -4910,13 +4800,13 @@ function prepareSettingsItemAddForm() {
   populateSettingsItemRoomSelect(previousRoomId);
   populateProductTypeSelect(
     settingsItemProductTypeSelect,
-    previousProductTypeId
+    previousProductTypeId,
   );
   populateSettingsItemUnitSelect(previousUnitId);
   populateItemStoreSelect(
     settingsItemStoreSelect,
     settingsItemProductTypeSelect?.value,
-    previousStoreId
+    previousStoreId,
   );
 
   if (settingsItemDefaultAmountInput) {
@@ -4943,8 +4833,8 @@ function createStoreCheckboxList(
   selectedStoreIds = [],
   {
     allowedStoreTypeIds = null,
-    emptyMessage = "No stores are available."
-  } = {}
+    emptyMessage = "No stores are available.",
+  } = {},
 ) {
   if (!container) {
     return;
@@ -4953,24 +4843,16 @@ function createStoreCheckboxList(
   container.innerHTML = "";
   container.className = "settings-checkbox-list";
 
-  const selectedValues = new Set(
-    selectedStoreIds.map((id) => String(id))
-  );
+  const selectedValues = new Set(selectedStoreIds.map((id) => String(id)));
 
-  const allowedStoreTypeIdSet = Array.isArray(
-    allowedStoreTypeIds
-  )
-    ? new Set(
-        allowedStoreTypeIds.map((id) => String(id))
-      )
+  const allowedStoreTypeIdSet = Array.isArray(allowedStoreTypeIds)
+    ? new Set(allowedStoreTypeIds.map((id) => String(id)))
     : null;
 
   const availableStores = currentStores.filter(
     (store) =>
       !allowedStoreTypeIdSet ||
-      allowedStoreTypeIdSet.has(
-        String(store.storeTypeId)
-      )
+      allowedStoreTypeIdSet.has(String(store.storeTypeId)),
   );
 
   if (availableStores.length === 0) {
@@ -4982,7 +4864,7 @@ function createStoreCheckboxList(
     const { optionLabel } = createSettingsCheckboxOption({
       value: store.id,
       text: store.name,
-      checked: selectedValues.has(String(store.id))
+      checked: selectedValues.has(String(store.id)),
     });
 
     container.append(optionLabel);
@@ -4995,34 +4877,27 @@ function getCheckedValues(container) {
   }
 
   return Array.from(
-    container.querySelectorAll("input[type='checkbox']:checked")
+    container.querySelectorAll("input[type='checkbox']:checked"),
   ).map((checkbox) => checkbox.value);
 }
 
-
 function prepareQuickSpecificProductForm(item) {
   quickSpecificProductItemId = item.id;
-  specificProductPanelTitle.textContent =
-    `Add specific product to ${item.name}`;
+  specificProductPanelTitle.textContent = `Add specific product to ${item.name}`;
   addSpecificProductForm.reset();
 
   const productType = currentProductTypes.find(
-    (candidate) => candidate.id === item.productTypeId
+    (candidate) => candidate.id === item.productTypeId,
   );
 
   const allowedStoreTypeIds = productType
     ? productTypeStoreTypeIds(productType)
     : [];
 
-  createStoreCheckboxList(
-    specificProductStoresContainer,
-    [],
-    {
-      allowedStoreTypeIds,
-      emptyMessage:
-        "No stores are available for this item's product type."
-    }
-  );
+  createStoreCheckboxList(specificProductStoresContainer, [], {
+    allowedStoreTypeIds,
+    emptyMessage: "No stores are available for this item's product type.",
+  });
 }
 
 function openSpecificProductQuickAdd(item) {
@@ -5054,16 +4929,15 @@ function closeSpecificProductQuickAdd() {
   }
 }
 
-
 function appendProductTypeOptionsForStoreType({
   selectElement,
   storeType,
   selectedProductTypeId,
-  selectedState
+  selectedState,
 }) {
   const productTypesForStoreType = currentProductTypes
     .filter((productType) =>
-      productTypeBelongsToStoreType(productType, storeType.id)
+      productTypeBelongsToStoreType(productType, storeType.id),
     )
     .sort(sortProductTypesForStoreType(storeType.id));
 
@@ -5097,7 +4971,7 @@ function populateProductTypeSelect(selectElement, selectedProductTypeId = "") {
   selectElement.innerHTML = '<option value="">Choose a product type</option>';
 
   const selectedState = {
-    hasSelected: false
+    hasSelected: false,
   };
 
   currentStoreTypes.forEach((storeType) => {
@@ -5105,7 +4979,7 @@ function populateProductTypeSelect(selectElement, selectedProductTypeId = "") {
       selectElement,
       storeType,
       selectedProductTypeId,
-      selectedState
+      selectedState,
     });
   });
 
@@ -5138,34 +5012,24 @@ function populateProductTypeSelect(selectElement, selectedProductTypeId = "") {
 }
 
 function populateProductTypeDropdown() {
-  populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
+  Object.values(itemFormContexts).forEach(({ fields }) => {
+    const { productTypeSelect, storeSelect } = fields;
 
-  if (settingsItemProductTypeSelect) {
-    populateProductTypeSelect(
-      settingsItemProductTypeSelect,
-      settingsItemProductTypeSelect.value
+    if (!productTypeSelect) {
+      return;
+    }
+
+    populateProductTypeSelect(productTypeSelect, productTypeSelect.value);
+    populateItemStoreSelect(
+      storeSelect,
+      productTypeSelect.value,
+      storeSelect?.value,
     );
-  }
-
-  populateItemStoreSelect(
-    itemStoreSelect,
-    itemProductTypeSelect?.value,
-    itemStoreSelect?.value
-  );
-  populateItemStoreSelect(
-    settingsItemStoreSelect,
-    settingsItemProductTypeSelect?.value,
-    settingsItemStoreSelect?.value
-  );
+  });
 }
 
 function selectedItemUnitIncrement() {
-  const selectedOption = itemUnitSelect.options[itemUnitSelect.selectedIndex];
-  const suggestedIncrement = Number(selectedOption?.dataset.increment);
-
-  return Number.isFinite(suggestedIncrement)
-    ? suggestedIncrement
-    : 1;
+  return selectedUnitIncrement(itemUnitSelect);
 }
 
 function applyDefaultItemUnit() {
@@ -5179,24 +5043,10 @@ function applyDefaultItemUnit() {
 }
 
 function populateUnitDropdown(selectedUnitId = itemUnitSelect.value) {
-  itemUnitSelect.innerHTML = "";
+  const hasSelectedUnit = populateUnitSelect(itemUnitSelect, selectedUnitId);
 
-  currentUnits.forEach((unit) => {
-    const option = document.createElement("option");
-    option.value = unit.id;
-    option.textContent = unit.symbol;
-    option.dataset.increment = unit.defaultIncrement ?? 1;
-    itemUnitSelect.append(option);
-  });
-
-  const hasSelectedUnit = currentUnits.some(
-    (unit) => String(unit.id) === String(selectedUnitId)
-  );
-
-  if (hasSelectedUnit) {
-    itemUnitSelect.value = selectedUnitId;
-  } else if (currentUnits.length > 0) {
-    applyDefaultItemUnit();
+  if (!hasSelectedUnit && currentUnits.length > 0) {
+    updateIncrementFromUnit(itemUnitSelect, itemIncrementInput);
   }
 
   populateSettingsItemUnitSelect();
@@ -5206,6 +5056,83 @@ function resetNewItemForm() {
   addItemForm.reset();
   itemDefaultAmountInput.value = 1;
   applyDefaultItemUnit();
+}
+
+function readItemFormValues({
+  nameInput,
+  roomSelect,
+  productTypeSelect,
+  storeSelect,
+  attributesInput,
+  amountInput,
+  unitSelect,
+  incrementInput,
+  locationId = roomSelect?.value ?? "",
+}) {
+  return {
+    name: nameInput?.value.trim() ?? "",
+    locationId,
+    productTypeId: productTypeSelect?.value ?? "",
+    storeId: storeSelect?.value ?? "",
+    specificAttributes: attributesInput?.value.trim() ?? "",
+    defaultAmount: Number(amountInput?.value),
+    unitId: unitSelect?.value ?? "",
+    increment: Number(incrementInput?.value),
+  };
+}
+
+function validateItemFormValues(values, { rejectRegularRoom = false } = {}) {
+  if (
+    !values.locationId ||
+    (rejectRegularRoom && isRegularRoomSelected()) ||
+    !values.name ||
+    !values.productTypeId ||
+    !values.unitId ||
+    !Number.isFinite(values.defaultAmount) ||
+    !Number.isFinite(values.increment)
+  ) {
+    return "Please complete all required fields.";
+  }
+
+  const selectedProductType = currentProductTypes.find(
+    (productType) => productType.id === values.productTypeId,
+  );
+
+  if (
+    !selectedProductType ||
+    productTypeStoreTypeIds(selectedProductType).length === 0
+  ) {
+    return "Please choose a product type that has at least one store type set.";
+  }
+
+  if (!itemStoreIsAllowed(values.productTypeId, values.storeId)) {
+    return "Please choose a store that matches the selected product type.";
+  }
+
+  return "";
+}
+
+function itemDocumentData(values) {
+  return {
+    name: values.name,
+    active: true,
+    locationId: values.locationId,
+    productTypeId: values.productTypeId,
+    storeId: values.storeId || null,
+    specificAttributes: values.specificAttributes,
+    defaultAmount: values.defaultAmount,
+    unitId: values.unitId,
+    increment: values.increment,
+    addCount: 0,
+    lastAddedAt: null,
+    lastAdjustedAt: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+}
+
+async function createCatalogueItem(values) {
+  await addDoc(householdCollection("items"), itemDocumentData(values));
 }
 
 function orderedProductTypesForDefaultRoomView() {
@@ -5236,12 +5163,13 @@ function orderedProductTypesForDefaultRoomView() {
   return orderedProductTypes;
 }
 
+/* ===== Needed-entry model and lookup helpers ===== */
 
 function specificProductsForItem(itemId) {
   return currentSpecificProducts
-    .filter((product) =>
-      product.active !== false &&
-      String(product.itemId) === String(itemId)
+    .filter(
+      (product) =>
+        product.active !== false && String(product.itemId) === String(itemId),
     )
     .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
 }
@@ -5249,7 +5177,7 @@ function specificProductsForItem(itemId) {
 function specificProductDetailText(product) {
   return [
     product.specificAttributes ?? product.size,
-    recordedStoreNames(product.storeIds)
+    recordedStoreNames(product.storeIds),
   ]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
@@ -5261,35 +5189,40 @@ function specificProductForNeededEntry(neededEntry) {
     return null;
   }
 
-  return currentSpecificProducts.find(
-    (product) => String(product.id) === String(neededEntry.specificProductId)
-  ) ?? null;
+  return (
+    currentSpecificProducts.find(
+      (product) => String(product.id) === String(neededEntry.specificProductId),
+    ) ?? null
+  );
 }
-
 
 function allNeededEntries() {
   return Array.from(currentNeededEntries.values());
 }
 
 function genericNeededEntryForItem(itemId) {
-  return allNeededEntries().find(
-    (entry) =>
-      String(entry.itemId ?? entry.id) === String(itemId) &&
-      !entry.specificProductId
-  ) ?? null;
+  return (
+    allNeededEntries().find(
+      (entry) =>
+        String(entry.itemId ?? entry.id) === String(itemId) &&
+        !entry.specificProductId,
+    ) ?? null
+  );
 }
 
 function specificNeededEntryForProduct(productId) {
-  return allNeededEntries().find(
-    (entry) =>
-      entry.specificProductId &&
-      String(entry.specificProductId) === String(productId)
-  ) ?? null;
+  return (
+    allNeededEntries().find(
+      (entry) =>
+        entry.specificProductId &&
+        String(entry.specificProductId) === String(productId),
+    ) ?? null
+  );
 }
 
 function neededEntriesForItem(itemId) {
   return allNeededEntries().filter(
-    (entry) => String(entry.itemId ?? entry.id) === String(itemId)
+    (entry) => String(entry.itemId ?? entry.id) === String(itemId),
   );
 }
 
@@ -5304,12 +5237,10 @@ function specificNeededEntryDocumentId(productId) {
 function neededEntryDocumentIdFor(
   item,
   specificProduct = null,
-  neededEntry = null
+  neededEntry = null,
 ) {
   if (specificProduct?.id) {
-    const canonicalId = specificNeededEntryDocumentId(
-      specificProduct.id
-    );
+    const canonicalId = specificNeededEntryDocumentId(specificProduct.id);
 
     if (currentNeededEntries.has(canonicalId)) {
       return canonicalId;
@@ -5329,24 +5260,22 @@ function itemForNeededEntry(entry) {
       id: `one-off-${entry.id}`,
       name: entry.itemName ?? "One-off item",
       specificAttributes: entry.specificAttributes ?? "",
-      storeTypeIds: Array.isArray(entry.storeTypeIds)
-        ? entry.storeTypeIds
-        : [],
-      storeIds: Array.isArray(entry.storeIds)
-        ? entry.storeIds
-        : [],
+      storeTypeIds: Array.isArray(entry.storeTypeIds) ? entry.storeTypeIds : [],
+      storeIds: Array.isArray(entry.storeIds) ? entry.storeIds : [],
       locationId: entry.roomId ?? null,
       defaultAmount: 1,
       increment: 1,
       unitId: null,
       active: true,
-      oneOff: true
+      oneOff: true,
     };
   }
 
-  return currentItems.find(
-    (item) => String(item.id) === String(entry.itemId ?? entry.id)
-  ) ?? null;
+  return (
+    currentItems.find(
+      (item) => String(item.id) === String(entry.itemId ?? entry.id),
+    ) ?? null
+  );
 }
 
 function neededRecordForEntry(entry) {
@@ -5359,14 +5288,12 @@ function neededRecordForEntry(entry) {
   return {
     item,
     entry,
-    specificProduct: specificProductForNeededEntry(entry)
+    specificProduct: specificProductForNeededEntry(entry),
   };
 }
 
 function currentNeededRecords() {
-  return allNeededEntries()
-    .map(neededRecordForEntry)
-    .filter(Boolean);
+  return allNeededEntries().map(neededRecordForEntry).filter(Boolean);
 }
 
 function neededRecordMatchesSearch(record, searchText) {
@@ -5375,8 +5302,7 @@ function neededRecordMatchesSearch(record, searchText) {
   }
 
   const productType = currentProductTypes.find(
-    (candidate) =>
-      String(candidate.id) === String(record.item.productTypeId)
+    (candidate) => String(candidate.id) === String(record.item.productTypeId),
   );
 
   return [
@@ -5389,15 +5315,16 @@ function neededRecordMatchesSearch(record, searchText) {
     storeTypeIdsForItem(record.item)
       .map((id) => getStoreTypeName(id))
       .join(" "),
-    recordedStoreNames(record.item.storeIds)
+    recordedStoreNames(record.item.storeIds),
   ]
-    .map((value) => String(value ?? '').toLowerCase())
+    .map((value) => String(value ?? "").toLowerCase())
     .some((value) => value.includes(searchText));
 }
 
 function compareNeededRecords(a, b) {
-  const itemNameDifference = String(a.item.name ?? '')
-    .localeCompare(String(b.item.name ?? ''));
+  const itemNameDifference = String(a.item.name ?? "").localeCompare(
+    String(b.item.name ?? ""),
+  );
 
   if (itemNameDifference !== 0) {
     return itemNameDifference;
@@ -5411,8 +5338,9 @@ function compareNeededRecords(a, b) {
     return 1;
   }
 
-  return String(a.specificProduct?.name ?? '')
-    .localeCompare(String(b.specificProduct?.name ?? ''));
+  return String(a.specificProduct?.name ?? "").localeCompare(
+    String(b.specificProduct?.name ?? ""),
+  );
 }
 
 function specificProductIsAvailableAtStore(specificProduct, storeId) {
@@ -5436,7 +5364,7 @@ function neededRecordIsAvailableAtStore(record, storeId) {
   }
 
   const selectedStore = currentStores.find(
-    (store) => String(store.id) === String(storeId)
+    (store) => String(store.id) === String(storeId),
   );
 
   const itemStoreIds = Array.isArray(record.item.storeIds)
@@ -5450,11 +5378,11 @@ function neededRecordIsAvailableAtStore(record, storeId) {
 
     return (
       itemStoreIds.some(
-        (candidateId) => String(candidateId) === String(storeId)
+        (candidateId) => String(candidateId) === String(storeId),
       ) ||
       explicitStoreTypeIds.some(
         (candidateId) =>
-          String(candidateId) === String(selectedStore?.storeTypeId)
+          String(candidateId) === String(selectedStore?.storeTypeId),
       )
     );
   }
@@ -5465,13 +5393,12 @@ function neededRecordIsAvailableAtStore(record, storeId) {
 
   if (specificStoreIds.length > 0) {
     return specificStoreIds.some(
-      (candidateId) => String(candidateId) === String(storeId)
+      (candidateId) => String(candidateId) === String(storeId),
     );
   }
 
   return (
-    !record.item.storeId ||
-    String(record.item.storeId) === String(storeId)
+    !record.item.storeId || String(record.item.storeId) === String(storeId)
   );
 }
 
@@ -5484,32 +5411,29 @@ async function migrateLegacySpecificEntryBeforeGenericAdd(item) {
 
   const { id, ...entryData } = legacyEntry;
   const replacementId = specificNeededEntryDocumentId(
-    legacyEntry.specificProductId
+    legacyEntry.specificProductId,
   );
 
   const batch = writeBatch(db);
 
   batch.set(
-    householdDocument('neededEntries', replacementId),
+    householdDocument("neededEntries", replacementId),
     {
       ...entryData,
       itemId: item.id,
-      adjustedAt: serverTimestamp()
+      adjustedAt: serverTimestamp(),
     },
-    { merge: true }
+    { merge: true },
   );
 
-  batch.delete(householdDocument('neededEntries', item.id));
+  batch.delete(householdDocument("neededEntries", item.id));
   await batch.commit();
 }
 
 function createItemNameDisplay(
   item,
   specificProduct = null,
-  {
-    includeParentName = false,
-    temporaryNote = ""
-  } = {}
+  { includeParentName = false, temporaryNote = "" } = {},
 ) {
   const wrapper = document.createElement("span");
   wrapper.className = "item-name-display";
@@ -5551,9 +5475,7 @@ function createItemNameDisplay(
 }
 
 function temporaryNoteItemLabel(item, specificProduct = null) {
-  return specificProduct
-    ? `${item.name} ${specificProduct.name}`
-    : item.name;
+  return specificProduct ? `${item.name} ${specificProduct.name}` : item.name;
 }
 
 function closeTemporaryNotePanel() {
@@ -5564,20 +5486,12 @@ function closeTemporaryNotePanel() {
   }
 }
 
-function openTemporaryNotePanel(
-  item,
-  neededEntry,
-  specificProduct = null
-) {
+function openTemporaryNotePanel(item, neededEntry, specificProduct = null) {
   if (!temporaryNotePanel || !neededEntry) {
     return;
   }
 
-  const entryId = neededEntryDocumentIdFor(
-    item,
-    specificProduct,
-    neededEntry
-  );
+  const entryId = neededEntryDocumentIdFor(item, specificProduct, neededEntry);
 
   if (!entryId) {
     return;
@@ -5589,7 +5503,7 @@ function openTemporaryNotePanel(
   temporaryNoteEntryId = entryId;
   temporaryNoteItemName.textContent = temporaryNoteItemLabel(
     item,
-    specificProduct
+    specificProduct,
   );
   temporaryNoteText.value = neededEntry.temporaryNote ?? "";
   temporaryNotePanel.hidden = false;
@@ -5599,7 +5513,7 @@ function openTemporaryNotePanel(
     temporaryNoteText.focus({ preventScroll: true });
     temporaryNoteText.setSelectionRange(
       temporaryNoteText.value.length,
-      temporaryNoteText.value.length
+      temporaryNoteText.value.length,
     );
   });
 }
@@ -5609,15 +5523,12 @@ async function saveTemporaryNote() {
     return;
   }
 
-  const entryRef = householdDocument(
-    "neededEntries",
-    temporaryNoteEntryId
-  );
+  const entryRef = householdDocument("neededEntries", temporaryNoteEntryId);
   const note = temporaryNoteText.value.trim();
 
   await updateDoc(entryRef, {
     temporaryNote: note || deleteField(),
-    adjustedAt: serverTimestamp()
+    adjustedAt: serverTimestamp(),
   });
 }
 
@@ -5646,8 +5557,8 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
   details.className = "item-row-details";
   details.append(
     createItemNameDisplay(item, null, {
-      temporaryNote: entry.temporaryNote
-    })
+      temporaryNote: entry.temporaryNote,
+    }),
   );
 
   const amountDisplay = document.createElement("strong");
@@ -5665,7 +5576,7 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
     onClick: async () => {
       disableButtons([increaseButton, decreaseButton]);
       await changeNeededAmount(item, entry, 1);
-    }
+    },
   });
 
   const decreaseButton = createIconButton({
@@ -5675,7 +5586,7 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
     onClick: async () => {
       disableButtons([increaseButton, decreaseButton]);
       await changeNeededAmount(item, entry, -1);
-    }
+    },
   });
 
   controls.append(increaseButton, decreaseButton);
@@ -5688,6 +5599,8 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
   targetList.append(row);
 }
 
+/* ===== Needing view rendering ===== */
+
 function renderRoomItems() {
   roomItemsList.innerHTML = "";
 
@@ -5698,19 +5611,17 @@ function renderRoomItems() {
   const roomSearchText = roomItemsSearch?.value.trim().toLowerCase() ?? "";
   const allOneOffRecords = oneOffNeededRecordsForRoom();
   const oneOffRecords = allOneOffRecords.filter((record) =>
-    neededRecordMatchesSearch(record, roomSearchText)
+    neededRecordMatchesSearch(record, roomSearchText),
   );
 
   if (isOneOffRoomSelected()) {
     if (allOneOffRecords.length === 0) {
-      roomItemsList.innerHTML =
-        "<p>No one-off items are currently needed.</p>";
+      roomItemsList.innerHTML = "<p>No one-off items are currently needed.</p>";
       return;
     }
 
     if (oneOffRecords.length === 0) {
-      roomItemsList.innerHTML =
-        "<p>No matching one-off items.</p>";
+      roomItemsList.innerHTML = "<p>No matching one-off items.</p>";
       return;
     }
 
@@ -5742,15 +5653,11 @@ function renderRoomItems() {
     }
 
     const productType = currentProductTypes.find(
-      (candidate) =>
-        String(candidate.id) === String(item.productTypeId)
+      (candidate) => String(candidate.id) === String(item.productTypeId),
     );
 
     const specificProductText = specificProductsForItem(item.id)
-      .flatMap((product) => [
-        product.name,
-        specificProductDetailText(product)
-      ])
+      .flatMap((product) => [product.name, specificProductDetailText(product)])
       .join(" ");
 
     return `${item.name} ${item.specificAttributes ?? ""} ${productType?.name ?? ""} ${specificProductText}`
@@ -5792,7 +5699,7 @@ function renderRoomItems() {
     item,
     neededEntry,
     labelName,
-    specificProduct = null
+    specificProduct = null,
   ) {
     const controls = document.createElement("div");
     controls.className = "room-item-controls";
@@ -5801,7 +5708,7 @@ function renderRoomItems() {
     amountDisplay.className = "room-current-quantity";
     amountDisplay.textContent = formatAmount(
       neededEntry.amount,
-      neededEntry.unitId
+      neededEntry.unitId,
     );
 
     const increaseButton = createIconButton({
@@ -5814,9 +5721,9 @@ function renderRoomItems() {
           item,
           neededEntry,
           item.increment ?? 1,
-          specificProduct
+          specificProduct,
         );
-      }
+      },
     });
 
     const decreaseButton = createIconButton({
@@ -5829,20 +5736,17 @@ function renderRoomItems() {
           item,
           neededEntry,
           -(item.increment ?? 1),
-          specificProduct
+          specificProduct,
         );
-      }
+      },
     });
 
-    const controlButtons = [
-      increaseButton,
-      decreaseButton
-    ];
+    const controlButtons = [increaseButton, decreaseButton];
 
     return {
       amountDisplay,
       controls,
-      buttons: [increaseButton, decreaseButton]
+      buttons: [increaseButton, decreaseButton],
     };
   }
 
@@ -5852,16 +5756,15 @@ function renderRoomItems() {
       const isNeeded = Boolean(neededEntry);
 
       const row = document.createElement("div");
-      row.className =
-        "item-row room-item-row specific-product-offer-row";
+      row.className = "item-row room-item-row specific-product-offer-row";
       row.classList.add(isNeeded ? "is-needed" : "is-available");
 
       const details = document.createElement("div");
       details.className = "item-row-details";
       details.append(
         createItemNameDisplay(item, product, {
-          temporaryNote: neededEntry?.temporaryNote
-        })
+          temporaryNote: neededEntry?.temporaryNote,
+        }),
       );
 
       const controls = document.createElement("div");
@@ -5869,13 +5772,12 @@ function renderRoomItems() {
 
       if (!isNeeded) {
         const addButton = createIconButton({
-          className:
-            "room-icon-button room-add-button add-needed-button",
+          className: "room-icon-button room-add-button add-needed-button",
           icon: "Add",
           label: `Add ${item.name} ${product.name} to needed list`,
           onClick: async () => {
             await addSpecificProductToNeededList(item, product);
-          }
+          },
         });
 
         controls.append(addButton);
@@ -5884,7 +5786,7 @@ function renderRoomItems() {
           item,
           neededEntry,
           `${item.name} ${product.name}`,
-          product
+          product,
         );
 
         details.append(quantity.amountDisplay);
@@ -5919,8 +5821,8 @@ function renderRoomItems() {
     details.className = "item-row-details";
     details.append(
       createItemNameDisplay(item, null, {
-        temporaryNote: neededEntry?.temporaryNote
-      })
+        temporaryNote: neededEntry?.temporaryNote,
+      }),
     );
 
     const controls = document.createElement("div");
@@ -5928,22 +5830,17 @@ function renderRoomItems() {
 
     if (!isNeeded) {
       const addButton = createIconButton({
-        className:
-          "room-icon-button room-add-button add-needed-button",
+        className: "room-icon-button room-add-button add-needed-button",
         icon: "Add",
         label: `Add ${item.name} to needed list`,
         onClick: async () => {
           await addItemToNeededList(item);
-        }
+        },
       });
 
       controls.append(addButton);
     } else {
-      const quantity = createQuantityControls(
-        item,
-        neededEntry,
-        item.name
-      );
+      const quantity = createQuantityControls(item, neededEntry, item.name);
 
       details.append(quantity.amountDisplay);
       controls.append(...quantity.buttons);
@@ -5968,17 +5865,12 @@ function renderRoomItems() {
 
   function appendProductTypeBlock(productType) {
     roomItems
-      .filter(
-        (item) =>
-          String(item.productTypeId) === String(productType.id)
-      )
+      .filter((item) => String(item.productTypeId) === String(productType.id))
       .sort(sortItemsByNeedThenName)
       .forEach(appendRoomItemRow);
   }
 
-  orderedProductTypesForDefaultRoomView().forEach(
-    appendProductTypeBlock
-  );
+  orderedProductTypesForDefaultRoomView().forEach(appendProductTypeBlock);
 
   roomItems
     .filter((item) => !renderedItemIds.has(item.id))
@@ -6118,7 +6010,7 @@ function appendRoomItemEditPanel(item) {
     const nextIncrement = Number(incrementInput.value);
 
     const selectedProductType = currentProductTypes.find(
-      (productType) => productType.id === nextProductTypeId
+      (productType) => productType.id === nextProductTypeId,
     );
 
     const inheritedStoreTypeIds = selectedProductType
@@ -6138,7 +6030,9 @@ function appendRoomItemEditPanel(item) {
     }
 
     if (inheritedStoreTypeIds.length === 0) {
-      alert("Please choose a product type that has at least one store type set.");
+      alert(
+        "Please choose a product type that has at least one store type set.",
+      );
       return;
     }
 
@@ -6152,7 +6046,7 @@ function appendRoomItemEditPanel(item) {
         defaultAmount: nextDefaultAmount,
         unitId: nextUnitId,
         increment: nextIncrement,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
 
       editingItemId = null;
@@ -6189,7 +6083,7 @@ function appendFullNeededProductHeading(label) {
 
 function productTypeForItem(item) {
   return currentProductTypes.find(
-    (productType) => String(productType.id) === String(item.productTypeId)
+    (productType) => String(productType.id) === String(item.productTypeId),
   );
 }
 
@@ -6208,16 +6102,13 @@ function appendFullNeededItemRow(record) {
   details.append(
     createItemNameDisplay(item, specificProduct, {
       includeParentName: Boolean(specificProduct),
-      temporaryNote: entry.temporaryNote
-    })
+      temporaryNote: entry.temporaryNote,
+    }),
   );
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
-  amountDisplay.textContent = formatAmount(
-    entry.amount,
-    entry.unitId
-  );
+  amountDisplay.textContent = formatAmount(entry.amount, entry.unitId);
   details.append(amountDisplay);
 
   const controls = document.createElement("div");
@@ -6233,9 +6124,9 @@ function appendFullNeededItemRow(record) {
         item,
         entry,
         item.increment ?? 1,
-        specificProduct
+        specificProduct,
       );
-    }
+    },
   });
 
   const decreaseButton = createIconButton({
@@ -6248,15 +6139,12 @@ function appendFullNeededItemRow(record) {
         item,
         entry,
         -(item.increment ?? 1),
-        specificProduct
+        specificProduct,
       );
-    }
+    },
   });
 
-  const buttons = [
-    increaseButton,
-    decreaseButton
-  ];
+  const buttons = [increaseButton, decreaseButton];
 
   controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
@@ -6276,8 +6164,7 @@ function appendFullNeededItemRow(record) {
 function appendFullNeededProductGroup(productType, records) {
   const groupedRecords = records
     .filter(
-      (record) =>
-        String(record.item.productTypeId) === String(productType.id)
+      (record) => String(record.item.productTypeId) === String(productType.id),
     )
     .sort(compareNeededRecords);
 
@@ -6292,16 +6179,14 @@ function appendFullNeededProductGroup(productType, records) {
 function renderFullNeededList() {
   fullNeededItems.innerHTML = "";
 
-  const searchText = neededListSearch.value
-    .trim()
-    .toLowerCase();
+  const searchText = neededListSearch.value.trim().toLowerCase();
 
-  const neededRecords = currentNeededRecords()
-    .filter((record) => neededRecordMatchesSearch(record, searchText));
+  const neededRecords = currentNeededRecords().filter((record) =>
+    neededRecordMatchesSearch(record, searchText),
+  );
 
   if (neededRecords.length === 0) {
-    fullNeededItems.innerHTML =
-      "<p>No matching needed items.</p>";
+    fullNeededItems.innerHTML = "<p>No matching needed items.</p>";
     return;
   }
 
@@ -6309,7 +6194,7 @@ function renderFullNeededList() {
 
   currentStoreTypes.forEach((storeType) => {
     const storeTypeRecords = neededRecords.filter((record) =>
-      itemBelongsToStoreType(record.item, storeType.id)
+      itemBelongsToStoreType(record.item, storeType.id),
     );
 
     if (storeTypeRecords.length === 0) {
@@ -6320,16 +6205,11 @@ function renderFullNeededList() {
 
     currentProductTypes
       .filter((productType) =>
-        productTypeBelongsToStoreType(productType, storeType.id)
+        productTypeBelongsToStoreType(productType, storeType.id),
       )
       .sort(sortProductTypesForStoreType(storeType.id))
       .forEach((productType) => {
-        if (
-          appendFullNeededProductGroup(
-            productType,
-            storeTypeRecords
-          )
-        ) {
+        if (appendFullNeededProductGroup(productType, storeTypeRecords)) {
           renderedAny = true;
         }
       });
@@ -6344,9 +6224,7 @@ function renderFullNeededList() {
   });
 
   const unassignedRecords = neededRecords
-    .filter((record) =>
-      storeTypeIdsForItem(record.item).length === 0
-    )
+    .filter((record) => storeTypeIdsForItem(record.item).length === 0)
     .sort(compareNeededRecords);
 
   if (unassignedRecords.length > 0) {
@@ -6356,18 +6234,18 @@ function renderFullNeededList() {
   }
 
   if (!renderedAny) {
-    fullNeededItems.innerHTML =
-      "<p>No matching needed items.</p>";
+    fullNeededItems.innerHTML = "<p>No matching needed items.</p>";
   }
 }
+
+/* ===== Getting view rendering ===== */
 
 function renderShoppingLocations() {
   shoppingLocationOptions.innerHTML = "";
 
   const validStoreTypes = currentStoreTypes.filter(
     (storeType) =>
-      typeof storeType.name === "string" &&
-      storeType.name.trim() !== ""
+      typeof storeType.name === "string" && storeType.name.trim() !== "",
   );
 
   if (validStoreTypes.length === 0) {
@@ -6388,12 +6266,12 @@ function renderShoppingLocations() {
       selectedShoppingTarget = {
         kind: "storeType",
         id: storeType.id,
-        name: storeType.name.trim()
+        name: storeType.name.trim(),
       };
 
       setContextButtonLabel(
         shoppingAtButton,
-        `Shopping at a ${storeType.name.trim()}`
+        `Shopping at a ${storeType.name.trim()}`,
       );
       shoppingAtPanel.hidden = true;
       shoppingAtButton.setAttribute("aria-expanded", "false");
@@ -6407,7 +6285,7 @@ function renderShoppingLocations() {
         (store) =>
           store.storeTypeId === storeType.id &&
           typeof store.name === "string" &&
-          store.name.trim() !== ""
+          store.name.trim() !== "",
       )
       .sort(sortBySavedOrderThenName);
 
@@ -6423,12 +6301,12 @@ function renderShoppingLocations() {
           kind: "store",
           id: store.id,
           storeTypeId: store.storeTypeId,
-          name: store.name.trim()
+          name: store.name.trim(),
         };
 
         setContextButtonLabel(
           shoppingAtButton,
-          `Shopping at ${store.name.trim()}`
+          `Shopping at ${store.name.trim()}`,
         );
         shoppingAtPanel.hidden = true;
         shoppingAtButton.setAttribute("aria-expanded", "false");
@@ -6453,9 +6331,7 @@ function renderGettingItems() {
 
   const selectedStore =
     selectedShoppingTarget.kind === "store"
-      ? currentStores.find(
-          (store) => store.id === selectedShoppingTarget.id
-        )
+      ? currentStores.find((store) => store.id === selectedShoppingTarget.id)
       : null;
 
   const selectedStoreTypeId =
@@ -6464,8 +6340,7 @@ function renderGettingItems() {
       : selectedShoppingTarget.id;
 
   if (!selectedStoreTypeId) {
-    gettingItemsList.innerHTML =
-      "<p>Choose where you are shopping.</p>";
+    gettingItemsList.innerHTML = "<p>Choose where you are shopping.</p>";
     updateBottomContextAction();
     return;
   }
@@ -6477,10 +6352,7 @@ function renderGettingItems() {
 
     if (
       selectedStore &&
-      !neededRecordIsAvailableAtStore(
-        record,
-        selectedStore.id
-      )
+      !neededRecordIsAvailableAtStore(record, selectedStore.id)
     ) {
       return false;
     }
@@ -6489,14 +6361,13 @@ function renderGettingItems() {
   });
 
   if (matchingRecords.length === 0) {
-    gettingItemsList.innerHTML =
-      "<p>No needed items for this shop.</p>";
+    gettingItemsList.innerHTML = "<p>No needed items for this shop.</p>";
     updateBottomContextAction();
     return;
   }
 
   const collectedRecords = matchingRecords.filter(
-    (record) => record.entry.status === "collected"
+    (record) => record.entry.status === "collected",
   );
 
   finishShopButton.hidden = collectedRecords.length === 0;
@@ -6524,16 +6395,13 @@ function renderGettingItems() {
     details.append(
       createItemNameDisplay(item, specificProduct, {
         includeParentName: true,
-        temporaryNote: entry.temporaryNote
-      })
+        temporaryNote: entry.temporaryNote,
+      }),
     );
 
     const amount = document.createElement("span");
     amount.className = "item-amount";
-    amount.textContent = formatAmount(
-      entry.amount,
-      entry.unitId
-    );
+    amount.textContent = formatAmount(entry.amount, entry.unitId);
     details.append(amount);
 
     const collectButton = document.createElement("button");
@@ -6544,7 +6412,7 @@ function renderGettingItems() {
       "aria-label",
       isCollected
         ? `Mark ${item.name} as not collected`
-        : `Mark ${item.name} as collected`
+        : `Mark ${item.name} as collected`,
     );
 
     const checkboxGraphic = document.createElement("span");
@@ -6554,11 +6422,7 @@ function renderGettingItems() {
 
     addLongPressHandler(collectButton, async () => {
       collectButton.disabled = true;
-      await setNeededItemCollected(
-        item,
-        entry,
-        !isCollected
-      );
+      await setNeededItemCollected(item, entry, !isCollected);
     });
 
     row.append(details, collectButton);
@@ -6568,14 +6432,14 @@ function renderGettingItems() {
 
   const orderedProductTypes = getOrderedProductTypesForShoppingTarget(
     selectedStoreTypeId,
-    selectedStore
+    selectedStore,
   );
 
   orderedProductTypes.forEach((productType) => {
     matchingRecords
       .filter(
         (record) =>
-          String(record.item.productTypeId) === String(productType.id)
+          String(record.item.productTypeId) === String(productType.id),
       )
       .sort(compareNeededRecords)
       .forEach(appendGettingRecord);
@@ -6587,234 +6451,159 @@ function renderGettingItems() {
     .forEach(appendGettingRecord);
 }
 
-function startItemsListener() {
-  if (itemsListenerStarted) {
-    return;
-  }
+/* ===== Realtime data listeners ===== */
 
-  itemsListenerStarted = true;
+const viewRefreshers = {
+  rooms: () => renderRooms(currentRooms),
+  units: () => renderUnits(currentUnits),
+  storeTypes: () => renderStoreTypes(currentStoreTypes),
+  stores: () => renderStores(currentStores),
+  productTypes: () => renderProductTypes(currentProductTypes),
+  roomItems: renderRoomItems,
+  fullNeededList: renderFullNeededList,
+  settingsItems: renderSettingsItems,
+  gettingItems: renderGettingItems,
+};
 
-  onSnapshot(
-    householdCollection("items"),
-    (snapshot) => {
-      currentItems = snapshot.docs.map((documentSnapshot) => ({
-        id: documentSnapshot.id,
-        ...documentSnapshot.data()
-      }));
-
-      renderRoomItems();
-      renderFullNeededList();
-      renderSettingsItems();
-      renderGettingItems();
-    },
-    (error) => {
-      console.error("Could not load items:", error);
-    }
-  );
+function refreshViews(...viewNames) {
+  new Set(viewNames).forEach((viewName) => {
+    viewRefreshers[viewName]?.();
+  });
 }
 
-function startSpecificProductsListener() {
-  if (specificProductsListenerStarted) {
-    return;
-  }
-
-  specificProductsListenerStarted = true;
-
-  onSnapshot(
-    householdCollection("specificProducts"),
-    (snapshot) => {
-      currentSpecificProducts = snapshot.docs
-        .map((documentSnapshot) => ({
-          ...documentSnapshot.data(),
-          id: documentSnapshot.id
-        }))
-        .filter((product) => product.active !== false)
-        .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
-
-      renderRoomItems();
-      renderFullNeededList();
-      renderSettingsItems();
-      renderGettingItems();
-    },
-    (error) => {
-      console.error("Could not load specific products:", error);
-    }
-  );
+function snapshotRecords(snapshot) {
+  return snapshot.docs.map((documentSnapshot) => ({
+    id: documentSnapshot.id,
+    ...documentSnapshot.data(),
+  }));
 }
 
-function startStoresListener() {
-  if (storesListenerStarted) {
-    return;
-  }
-
-  storesListenerStarted = true;
-
-  onSnapshot(
-    householdCollection("stores"),
-    (snapshot) => {
-      currentStores = snapshot.docs
-        .map((documentSnapshot) => ({
-          id: documentSnapshot.id,
-          ...documentSnapshot.data()
-        }))
-        .filter((store) => store.active !== false)
-        .sort(sortBySavedOrderThenName);
-
-      renderStores(currentStores);
-      renderSettingsItems();
-    },
-    (error) => {
-      console.error("Could not load stores:", error);
-    }
-  );
+function activeSortedRecords(snapshot, predicate = () => true) {
+  return snapshotRecords(snapshot)
+    .filter((record) => record.active !== false && predicate(record))
+    .sort(sortBySavedOrderThenName);
 }
 
-function startStoreTypesListener() {
-  if (storeTypesListenerStarted) {
-    return;
-  }
-
-  storeTypesListenerStarted = true;
-
-  onSnapshot(
-    householdCollection("storeTypes"),
-    (snapshot) => {
-      currentStoreTypes = snapshot.docs
-        .map((documentSnapshot) => ({
-          id: documentSnapshot.id,
-          ...documentSnapshot.data()
-        }))
-        .filter((storeType) => storeType.active !== false)
-        .sort(sortBySavedOrderThenName);
-
-      renderStoreTypes(currentStoreTypes);
-    },
-    (error) => {
-      console.error("Could not load store types:", error);
-    }
-  );
-}
-
-function startProductTypesListener() {
-  if (productTypesListenerStarted) {
-    return;
-  }
-
-  productTypesListenerStarted = true;
-
-  onSnapshot(
-    householdCollection("productTypes"),
-    (snapshot) => {
-      currentProductTypes = snapshot.docs
-        .map((documentSnapshot) => ({
-          id: documentSnapshot.id,
-          ...documentSnapshot.data()
-        }))
-        .filter((productType) => productType.active !== false)
-        .sort(sortBySavedOrderThenName);
-
-      renderProductTypes(currentProductTypes);
-    },
-    (error) => {
-      console.error("Could not load product types:", error);
-    }
-  );
-}
-
-function startRoomsListener() {
-  if (roomsListenerStarted) {
-    return;
-  }
-
-  roomsListenerStarted = true;
-
-  onSnapshot(
-    householdCollection("locations"),
-    (snapshot) => {
-      currentRooms = snapshot.docs
-        .map((documentSnapshot) => ({
-          id: documentSnapshot.id,
-          ...documentSnapshot.data()
-        }))
-        .filter(
-          (room) =>
-            room.level === "room" &&
-            room.active !== false
-        )
-        .sort(sortBySavedOrderThenName);
-
-      renderRooms(currentRooms);
-    },
-    (error) => {
-      console.error("Could not load rooms:", error);
-    }
-  );
-}
-
-function startUnitsListener() {
-  if (unitsListenerStarted) {
-    return;
-  }
-
-  unitsListenerStarted = true;
-
-  onSnapshot(
-    householdCollection("units"),
-    (snapshot) => {
-      currentUnits = snapshot.docs
-        .map((documentSnapshot) => ({
-          id: documentSnapshot.id,
-          ...documentSnapshot.data()
-        }))
-        .filter((unit) => unit.active !== false)
-        .sort(sortBySavedOrderThenName);
-
-      renderUnits(currentUnits);
-      renderRoomItems();
-      renderFullNeededList();
-      renderSettingsItems();
-      renderGettingItems();
-    },
-    (error) => {
-      console.error("Could not load units:", error);
-    }
-  );
-}
-
-function startNeededEntriesListener() {
-  if (neededEntriesListenerStarted) {
-    return;
-  }
-
-  neededEntriesListenerStarted = true;
-
-  onSnapshot(
-    householdCollection("neededEntries"),
-    (snapshot) => {
-      currentNeededEntries = new Map(
-        snapshot.docs.map((documentSnapshot) => [
-          documentSnapshot.id,
-          {
-            ...documentSnapshot.data(),
-            id: documentSnapshot.id
-          }
-        ])
+const listenerDefinitions = [
+  {
+    key: "rooms",
+    collectionName: "locations",
+    errorLabel: "Could not load rooms",
+    applySnapshot(snapshot) {
+      currentRooms = activeSortedRecords(
+        snapshot,
+        (room) => room.level === "room",
       );
-
-      renderRoomItems();
-      renderFullNeededList();
-      renderGettingItems();
+      refreshViews("rooms");
     },
+  },
+  {
+    key: "units",
+    collectionName: "units",
+    errorLabel: "Could not load units",
+    applySnapshot(snapshot) {
+      currentUnits = activeSortedRecords(snapshot);
+      refreshViews(
+        "units",
+        "roomItems",
+        "fullNeededList",
+        "settingsItems",
+        "gettingItems",
+      );
+    },
+  },
+  {
+    key: "storeTypes",
+    collectionName: "storeTypes",
+    errorLabel: "Could not load store types",
+    applySnapshot(snapshot) {
+      currentStoreTypes = activeSortedRecords(snapshot);
+      refreshViews("storeTypes");
+    },
+  },
+  {
+    key: "stores",
+    collectionName: "stores",
+    errorLabel: "Could not load stores",
+    applySnapshot(snapshot) {
+      currentStores = activeSortedRecords(snapshot);
+      refreshViews("stores", "settingsItems");
+    },
+  },
+  {
+    key: "productTypes",
+    collectionName: "productTypes",
+    errorLabel: "Could not load product types",
+    applySnapshot(snapshot) {
+      currentProductTypes = activeSortedRecords(snapshot);
+      refreshViews("productTypes");
+    },
+  },
+  {
+    key: "items",
+    collectionName: "items",
+    errorLabel: "Could not load items",
+    applySnapshot(snapshot) {
+      currentItems = snapshotRecords(snapshot);
+      refreshViews(
+        "roomItems",
+        "fullNeededList",
+        "settingsItems",
+        "gettingItems",
+      );
+    },
+  },
+  {
+    key: "specificProducts",
+    collectionName: "specificProducts",
+    errorLabel: "Could not load specific products",
+    applySnapshot(snapshot) {
+      currentSpecificProducts = snapshotRecords(snapshot)
+        .filter((product) => product.active !== false)
+        .sort((a, b) =>
+          String(a.name ?? "").localeCompare(String(b.name ?? "")),
+        );
+      refreshViews(
+        "roomItems",
+        "fullNeededList",
+        "settingsItems",
+        "gettingItems",
+      );
+    },
+  },
+  {
+    key: "neededEntries",
+    collectionName: "neededEntries",
+    errorLabel: "Could not load needed items",
+    applySnapshot(snapshot) {
+      currentNeededEntries = new Map(
+        snapshotRecords(snapshot).map((entry) => [entry.id, entry]),
+      );
+      refreshViews("roomItems", "fullNeededList", "gettingItems");
+    },
+  },
+];
+
+function startCollectionListener(definition) {
+  if (startedListeners.has(definition.key)) {
+    return;
+  }
+
+  startedListeners.add(definition.key);
+
+  onSnapshot(
+    householdCollection(definition.collectionName),
+    definition.applySnapshot,
     (error) => {
-      console.error("Could not load needed items:", error);
-    }
+      console.error(`${definition.errorLabel}:`, error);
+    },
   );
 }
+
+/* ===== Needed-entry actions ===== */
 
 function formatAmount(amount, unitId) {
-  const unit = currentUnits.find(
-    (candidate) => candidate.id === unitId
-  );
+  const unit = currentUnits.find((candidate) => candidate.id === unitId);
 
   if (!unit) {
     return String(amount);
@@ -6832,9 +6621,7 @@ function formatAmount(amount, unitId) {
 }
 
 function closeSpecificProductChoicePanel() {
-  document
-    .querySelectorAll(".specific-product-choice-panel")
-    .forEach((panel) => panel.remove());
+  $$(".specific-product-choice-panel").forEach((panel) => panel.remove());
 }
 
 function openSpecificProductChoicePanel(item) {
@@ -6906,7 +6693,7 @@ function openSpecificProductChoicePanel(item) {
   requestAnimationFrame(() => {
     panel.scrollIntoView({
       block: "end",
-      behavior: "smooth"
+      behavior: "smooth",
     });
   });
 }
@@ -6928,10 +6715,7 @@ async function addItemToNeededList(item) {
   try {
     await migrateLegacySpecificEntryBeforeGenericAdd(item);
 
-    const neededEntryRef = householdDocument(
-      "neededEntries",
-      item.id
-    );
+    const neededEntryRef = householdDocument("neededEntries", item.id);
 
     const itemRef = householdDocument("items", item.id);
 
@@ -6944,7 +6728,7 @@ async function addItemToNeededList(item) {
       addedAt: serverTimestamp(),
       adjustedAt: serverTimestamp(),
       statusChangedAt: serverTimestamp(),
-      collectedAt: null
+      collectedAt: null,
     });
 
     await setDoc(
@@ -6952,9 +6736,9 @@ async function addItemToNeededList(item) {
       {
         addCount: increment(1),
         lastAddedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
   } catch (error) {
     console.error("Could not add item to needed list:", error);
@@ -6962,12 +6746,10 @@ async function addItemToNeededList(item) {
   }
 }
 
-
-
 async function addSpecificProductToNeededList(item, specificProduct) {
   if (specificNeededEntryForProduct(specificProduct.id)) {
     alert(
-      `${item.name} ${specificProduct.name} is already on the needed list.`
+      `${item.name} ${specificProduct.name} is already on the needed list.`,
     );
     return;
   }
@@ -6975,7 +6757,7 @@ async function addSpecificProductToNeededList(item, specificProduct) {
   try {
     const neededEntryRef = householdDocument(
       "neededEntries",
-      specificNeededEntryDocumentId(specificProduct.id)
+      specificNeededEntryDocumentId(specificProduct.id),
     );
 
     const itemRef = householdDocument("items", item.id);
@@ -6989,7 +6771,7 @@ async function addSpecificProductToNeededList(item, specificProduct) {
       addedAt: serverTimestamp(),
       adjustedAt: serverTimestamp(),
       statusChangedAt: serverTimestamp(),
-      collectedAt: null
+      collectedAt: null,
     });
 
     await setDoc(
@@ -6997,15 +6779,12 @@ async function addSpecificProductToNeededList(item, specificProduct) {
       {
         addCount: increment(1),
         lastAddedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
   } catch (error) {
-    console.error(
-      "Could not add specific product to needed list:",
-      error
-    );
+    console.error("Could not add specific product to needed list:", error);
     alert("The specific product could not be added to the needed list.");
   }
 }
@@ -7014,26 +6793,21 @@ async function changeNeededAmount(
   item,
   neededEntry,
   change,
-  specificProduct = null
+  specificProduct = null,
 ) {
   const neededEntryId = neededEntryDocumentIdFor(
     item,
     specificProduct,
-    neededEntry
+    neededEntry,
   );
 
   if (!neededEntryId) {
     return;
   }
 
-  const neededEntryRef = householdDocument(
-    "neededEntries",
-    neededEntryId
-  );
+  const neededEntryRef = householdDocument("neededEntries", neededEntryId);
 
-  const itemRef = item.oneOff
-    ? null
-    : householdDocument("items", item.id);
+  const itemRef = item.oneOff ? null : householdDocument("items", item.id);
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -7043,9 +6817,7 @@ async function changeNeededAmount(
         return;
       }
 
-      const currentAmount = Number(
-        neededSnapshot.data().amount
-      );
+      const currentAmount = Number(neededSnapshot.data().amount);
 
       const nextAmount = currentAmount + change;
 
@@ -7054,7 +6826,7 @@ async function changeNeededAmount(
       } else {
         transaction.update(neededEntryRef, {
           amount: nextAmount,
-          adjustedAt: serverTimestamp()
+          adjustedAt: serverTimestamp(),
         });
       }
 
@@ -7063,9 +6835,9 @@ async function changeNeededAmount(
           itemRef,
           {
             lastAdjustedAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
           },
-          { merge: true }
+          { merge: true },
         );
       }
     });
@@ -7076,10 +6848,7 @@ async function changeNeededAmount(
 }
 
 async function removeNeededItem(neededEntry) {
-  const neededEntryRef = householdDocument(
-    "neededEntries",
-    neededEntry.id
-  );
+  const neededEntryRef = householdDocument("neededEntries", neededEntry.id);
 
   try {
     await deleteDoc(neededEntryRef);
@@ -7089,23 +6858,14 @@ async function removeNeededItem(neededEntry) {
   }
 }
 
-async function setNeededItemCollected(
-  item,
-  neededEntry,
-  isCollected
-) {
-  const neededEntryRef = householdDocument(
-    "neededEntries",
-    neededEntry.id
-  );
+async function setNeededItemCollected(item, neededEntry, isCollected) {
+  const neededEntryRef = householdDocument("neededEntries", neededEntry.id);
 
   try {
     await updateDoc(neededEntryRef, {
       status: isCollected ? "collected" : "needed",
-      collectedAt: isCollected
-        ? serverTimestamp()
-        : null,
-      statusChangedAt: serverTimestamp()
+      collectedAt: isCollected ? serverTimestamp() : null,
+      statusChangedAt: serverTimestamp(),
     });
   } catch (error) {
     console.error("Could not update collected status:", error);
@@ -7121,9 +6881,7 @@ async function finishCurrentShop() {
 
   const selectedStore =
     selectedShoppingTarget.kind === "store"
-      ? currentStores.find(
-          (store) => store.id === selectedShoppingTarget.id
-        )
+      ? currentStores.find((store) => store.id === selectedShoppingTarget.id)
       : null;
 
   const selectedStoreTypeId =
@@ -7140,10 +6898,7 @@ async function finishCurrentShop() {
       return false;
     }
 
-    return neededRecordIsAvailableAtStore(
-      record,
-      selectedStore?.id
-    );
+    return neededRecordIsAvailableAtStore(record, selectedStore?.id);
   });
 
   if (collectedRecords.length === 0) {
@@ -7156,12 +6911,7 @@ async function finishCurrentShop() {
     const batch = writeBatch(db);
 
     collectedRecords.forEach((record) => {
-      batch.delete(
-        householdDocument(
-          "neededEntries",
-          record.entry.id
-        )
-      );
+      batch.delete(householdDocument("neededEntries", record.entry.id));
     });
 
     await batch.commit();
@@ -7174,18 +6924,14 @@ async function finishCurrentShop() {
   }
 }
 
+/* ===== Event wiring and startup ===== */
+
 function wireNavigation() {
-  const needingTabButton = document.querySelector(
-    ".main-tabs button[data-view='needing']"
-  );
+  const needingTabButton = $(".main-tabs button[data-view='needing']");
 
-  const gettingTabButton = document.querySelector(
-    ".main-tabs button[data-view='getting']"
-  );
+  const gettingTabButton = $(".main-tabs button[data-view='getting']");
 
-  const settingsShortcutButton = document.querySelector(
-    ".settings-shortcut[data-view='settings']"
-  );
+  const settingsShortcutButton = $(".settings-shortcut[data-view='settings']");
 
   needingTabButton.addEventListener("click", () => {
     recordAppNavigation();
@@ -7209,11 +6955,7 @@ function wireNavigation() {
       if (!views.needing.hidden) {
         recordAppNavigation();
 
-        if (
-          isAllStuffSelected() &&
-          roomView &&
-          !roomView.hidden
-        ) {
+        if (isAllStuffSelected() && roomView && !roomView.hidden) {
           openSettingsItemsFromShortcut();
         } else {
           openFullNeededList();
@@ -7227,22 +6969,25 @@ function wireNavigation() {
         toggleCurrentSettingsAddForm();
         return;
       }
-
     });
 
-    addLongPressHandler(bottomContextAction, async () => {
-      if (views.getting.hidden || bottomContextAction.disabled) {
-        return;
-      }
+    addLongPressHandler(
+      bottomContextAction,
+      async () => {
+        if (views.getting.hidden || bottomContextAction.disabled) {
+          return;
+        }
 
-      const confirmed = confirm(
-        "Finish shop and remove collected items from the needed list?"
-      );
+        const confirmed = confirm(
+          "Finish shop and remove collected items from the needed list?",
+        );
 
-      if (confirmed) {
-        await finishCurrentShop();
-      }
-    }, { duration: 450 });
+        if (confirmed) {
+          await finishCurrentShop();
+        }
+      },
+      { duration: 450 },
+    );
   }
 
   settingsCategoryOptions.forEach((button) => {
@@ -7257,7 +7002,6 @@ function wireNavigation() {
       renderSettingsItems();
     });
   }
-
 
   settingsCategoryButton.addEventListener("click", () => {
     recordAppNavigation();
@@ -7309,19 +7053,15 @@ function wireNavigation() {
     itemRoomLabel.hidden = !chooseRoom;
     itemRoomSelect.hidden = !chooseRoom;
     itemRoomSelect.required = chooseRoom;
-    itemRoomSelect.innerHTML = '<option value="">Choose a room</option>';
-
-    currentRooms.forEach((room) => {
-      const option = document.createElement("option");
-      option.value = room.id;
-      option.textContent = room.name;
-      itemRoomSelect.append(option);
-    });
-    populateProductTypeSelect(itemProductTypeSelect, itemProductTypeSelect.value);
+    populateRoomSelect(itemRoomSelect);
+    populateProductTypeSelect(
+      itemProductTypeSelect,
+      itemProductTypeSelect.value,
+    );
     populateItemStoreSelect(
       itemStoreSelect,
       itemProductTypeSelect.value,
-      itemStoreSelect?.value ?? ""
+      itemStoreSelect?.value ?? "",
     );
 
     if (!itemUnitSelect.value) {
@@ -7350,10 +7090,7 @@ function wireNavigation() {
     });
   }
 
-  cancelTemporaryNoteButton?.addEventListener(
-    "click",
-    closeTemporaryNotePanel
-  );
+  cancelTemporaryNoteButton?.addEventListener("click", closeTemporaryNotePanel);
 
   clearTemporaryNoteButton?.addEventListener("click", async () => {
     temporaryNoteText.value = "";
@@ -7370,7 +7107,7 @@ function wireNavigation() {
   temporaryNoteForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const submitButton = temporaryNoteForm.querySelector(
-      'button[type="submit"]'
+      'button[type="submit"]',
     );
     submitButton.disabled = true;
 
@@ -7392,15 +7129,19 @@ function wireNavigation() {
     shoppingAtButton.setAttribute("aria-expanded", String(willOpen));
   });
 
-  addLongPressHandler(finishShopButton, async () => {
-    const confirmed = confirm(
-      "Finish shop and remove collected items from the needed list?"
-    );
+  addLongPressHandler(
+    finishShopButton,
+    async () => {
+      const confirmed = confirm(
+        "Finish shop and remove collected items from the needed list?",
+      );
 
-    if (confirmed) {
-      await finishCurrentShop();
-    }
-  }, { duration: 450 });
+      if (confirmed) {
+        await finishCurrentShop();
+      }
+    },
+    { duration: 450 },
+  );
 
   viewNeededListButton.addEventListener("click", () => {
     recordAppNavigation();
@@ -7430,64 +7171,66 @@ function wireNavigation() {
   });
 }
 
+function wireItemFormDependencies({
+  productTypeSelect,
+  storeSelect,
+  unitSelect,
+  incrementInput,
+}) {
+  productTypeSelect?.addEventListener("change", () => {
+    populateItemStoreSelect(
+      storeSelect,
+      productTypeSelect.value,
+      storeSelect?.value ?? "",
+    );
+  });
+
+  unitSelect?.addEventListener("change", () => {
+    updateIncrementFromUnit(unitSelect, incrementInput);
+  });
+}
+
 function wireForms() {
-  addRoomForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  Object.values(itemFormContexts).forEach(({ fields }) => {
+    wireItemFormDependencies(fields);
+  });
 
-    const roomName = roomNameInput.value.trim();
+  wireAsyncForm(
+    addRoomForm,
+    async () => {
+      const roomName = roomNameInput.value.trim();
 
-    if (!roomName) {
-      return;
-    }
+      if (!roomName) {
+        return;
+      }
 
-    const submitButton = addRoomForm.querySelector("button[type='submit']");
-    submitButton.disabled = true;
-
-    try {
       await addDoc(householdCollection("locations"), {
         name: roomName,
         parentId: null,
         level: "room",
         active: true,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
 
       addRoomForm.reset();
       addRoomForm.hidden = true;
-    } catch (error) {
-      console.error("Could not add room:", error);
-      alert("The room could not be added.");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
+    },
+    {
+      errorLabel: "Could not add room",
+      errorMessage: "The room could not be added.",
+    },
+  );
 
-  itemProductTypeSelect.addEventListener("change", () => {
-    populateItemStoreSelect(
-      itemStoreSelect,
-      itemProductTypeSelect.value,
-      itemStoreSelect?.value ?? ""
-    );
-  });
+  wireAsyncForm(
+    addUnitForm,
+    async () => {
+      const unitSymbol = unitSymbolInput.value.trim();
 
-  itemUnitSelect.addEventListener("change", () => {
-    itemIncrementInput.value = selectedItemUnitIncrement();
-  });
+      if (!unitSymbol) {
+        return;
+      }
 
-  addUnitForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const unitSymbol = unitSymbolInput.value.trim();
-
-    if (!unitSymbol) {
-      return;
-    }
-
-    const submitButton = addUnitForm.querySelector("button[type='submit']");
-    submitButton.disabled = true;
-
-    try {
       await addDoc(householdCollection("units"), {
         name: unitSymbol,
         symbol: unitSymbol,
@@ -7496,97 +7239,84 @@ function wireForms() {
         decimalPlaces: 0,
         active: true,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
 
       addUnitForm.reset();
       addUnitForm.hidden = true;
-    } catch (error) {
-      console.error("Could not add unit:", error);
-      alert("The unit could not be added.");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
+    },
+    {
+      errorLabel: "Could not add unit",
+      errorMessage: "The unit could not be added.",
+    },
+  );
 
-  addStoreTypeForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  wireAsyncForm(
+    addStoreTypeForm,
+    async () => {
+      const storeTypeName = storeTypeNameInput.value.trim();
 
-    const storeTypeName = storeTypeNameInput.value.trim();
+      if (!storeTypeName) {
+        return;
+      }
 
-    if (!storeTypeName) {
-      return;
-    }
-
-    const submitButton = addStoreTypeForm.querySelector("button[type='submit']");
-    submitButton.disabled = true;
-
-    try {
       await addDoc(householdCollection("storeTypes"), {
         name: storeTypeName,
         active: true,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
 
       addStoreTypeForm.reset();
       addStoreTypeForm.hidden = true;
-    } catch (error) {
-      console.error("Could not add store type:", error);
-      alert("The store type could not be added.");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
+    },
+    {
+      errorLabel: "Could not add store type",
+      errorMessage: "The store type could not be added.",
+    },
+  );
 
-  addStoreForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  wireAsyncForm(
+    addStoreForm,
+    async () => {
+      const storeName = storeNameInput.value.trim();
+      const storeTypeId = storeTypeSelect.value;
 
-    const storeName = storeNameInput.value.trim();
-    const storeTypeId = storeTypeSelect.value;
+      if (!storeName || !storeTypeId) {
+        return;
+      }
 
-    if (!storeName || !storeTypeId) {
-      return;
-    }
-
-    const submitButton = addStoreForm.querySelector("button[type='submit']");
-    submitButton.disabled = true;
-
-    try {
       await addDoc(householdCollection("stores"), {
         name: storeName,
         storeTypeId,
         productTypeOrders: {},
         active: true,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
 
       addStoreForm.reset();
       addStoreForm.hidden = true;
-    } catch (error) {
-      console.error("Could not add store:", error);
-      alert("The store could not be added.");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
+    },
+    {
+      errorLabel: "Could not add store",
+      errorMessage: "The store could not be added.",
+    },
+  );
 
-  addProductTypeForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  wireAsyncForm(
+    addProductTypeForm,
+    async () => {
+      const productTypeName = productTypeNameInput.value.trim();
+      const storeTypeIds = getProductTypeStoreTypeIdsFromForm();
 
-    const productTypeName = productTypeNameInput.value.trim();
-    const storeTypeIds = getProductTypeStoreTypeIdsFromForm();
+      if (!productTypeName || storeTypeIds.length === 0) {
+        alert(
+          "Please enter a product type name and choose at least one store type.",
+        );
+        return;
+      }
 
-    if (!productTypeName || storeTypeIds.length === 0) {
-      alert("Please enter a product type name and choose at least one store type.");
-      return;
-    }
-
-    const submitButton = addProductTypeForm.querySelector("button[type='submit']");
-    submitButton.disabled = true;
-
-    try {
       await addDoc(householdCollection("productTypes"), {
         name: productTypeName,
         storeTypeIds,
@@ -7594,119 +7324,44 @@ function wireForms() {
         parentId: null,
         active: true,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       });
 
       productTypeNameInput.value = "";
-      createStoreTypeCheckboxList(
-        productTypeStoreTypesContainer,
-        storeTypeIds
-      );
+      createStoreTypeCheckboxList(productTypeStoreTypesContainer, storeTypeIds);
       productTypeNameInput.focus();
-    } catch (error) {
-      console.error("Could not add product type:", error);
-      alert("The product type could not be added.");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
+    },
+    {
+      errorLabel: "Could not add product type",
+      errorMessage: "The product type could not be added.",
+    },
+  );
 
-  if (settingsItemProductTypeSelect) {
-    settingsItemProductTypeSelect.addEventListener("change", () => {
-      populateItemStoreSelect(
-        settingsItemStoreSelect,
-        settingsItemProductTypeSelect.value,
-        settingsItemStoreSelect?.value ?? ""
-      );
-    });
-  }
+  wireAsyncForm(
+    addSettingsItemForm,
+    async () => {
+      const values = readItemFormValues(itemFormContexts.settings.fields);
 
-  if (settingsItemUnitSelect) {
-    settingsItemUnitSelect.addEventListener("change", () => {
-      updateSettingsItemIncrementFromUnit();
-    });
-  }
+      const validationMessage = validateItemFormValues(values);
 
-  if (addSettingsItemForm) {
-    addSettingsItemForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      const itemName = settingsItemNameInput.value.trim();
-      const locationId = settingsItemRoomSelect.value;
-      const productTypeId = settingsItemProductTypeSelect.value;
-      const storeId = settingsItemStoreSelect?.value ?? "";
-      const specificAttributes = settingsItemSpecificAttributesInput?.value.trim() ?? "";
-      const unitId = settingsItemUnitSelect.value;
-      const defaultAmount = Number(settingsItemDefaultAmountInput.value);
-      const increment = Number(settingsItemIncrementInput.value);
-
-      const selectedProductType = currentProductTypes.find(
-        (productType) => productType.id === productTypeId
-      );
-
-      const inheritedStoreTypeIds = selectedProductType
-        ? productTypeStoreTypeIds(selectedProductType)
-        : [];
-
-      if (
-        !itemName ||
-        !locationId ||
-        !productTypeId ||
-        !unitId ||
-        !Number.isFinite(defaultAmount) ||
-        !Number.isFinite(increment)
-      ) {
-        alert("Please complete all required fields.");
+      if (validationMessage) {
+        alert(validationMessage);
         return;
       }
 
-      if (inheritedStoreTypeIds.length === 0) {
-        alert("Please choose a product type that has at least one store type set.");
-        return;
-      }
+      await createCatalogueItem(values);
+      resetSettingsItemAddForm();
+      addSettingsItemForm.hidden = true;
+    },
+    {
+      errorLabel: "Could not add item",
+      errorMessage: "The item could not be saved.",
+    },
+  );
 
-      if (!itemStoreIsAllowed(productTypeId, storeId)) {
-        alert("Please choose a store that matches the selected product type.");
-        return;
-      }
-
-      const submitButton = addSettingsItemForm.querySelector("button[type='submit']");
-      submitButton.disabled = true;
-
-      try {
-        await addDoc(householdCollection("items"), {
-          name: itemName,
-          active: true,
-          locationId,
-          productTypeId,
-          storeId: storeId || null,
-          specificAttributes,
-          defaultAmount,
-          unitId,
-          increment,
-          addCount: 0,
-          lastAddedAt: null,
-          lastAdjustedAt: null,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-
-        resetSettingsItemAddForm();
-        addSettingsItemForm.hidden = true;
-      } catch (error) {
-        console.error("Could not add item:", error);
-        alert("The item could not be saved.");
-      } finally {
-        submitButton.disabled = false;
-      }
-    });
-  }
-
-
-  if (addSpecificProductForm) {
-    addSpecificProductForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
+  wireAsyncForm(
+    addSpecificProductForm,
+    async () => {
       const productName = specificProductNameInput.value.trim();
       const specificAttributes = specificProductAttributesInput.value.trim();
       const storeIds = getCheckedValues(specificProductStoresContainer);
@@ -7716,141 +7371,78 @@ function wireForms() {
         return;
       }
 
-      const submitButton = addSpecificProductForm.querySelector("button[type='submit']");
-      submitButton.disabled = true;
+      await addDoc(householdCollection("specificProducts"), {
+        itemId: quickSpecificProductItemId,
+        name: productName,
+        specificAttributes,
+        storeIds,
+        active: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
-      try {
-        await addDoc(householdCollection("specificProducts"), {
-          itemId: quickSpecificProductItemId,
-          name: productName,
-          specificAttributes,
-          storeIds,
-          active: true,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
+      closeSpecificProductQuickAdd();
+    },
+    {
+      errorLabel: "Could not add specific product",
+      errorMessage: "The specific product could not be saved.",
+    },
+  );
 
-        closeSpecificProductQuickAdd();
-      } catch (error) {
-        console.error("Could not add specific product:", error);
-        alert("The specific product could not be saved.");
-      } finally {
-        submitButton.disabled = false;
-      }
-    });
-  }
-
-  addOneOffItemForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const submitButton = addOneOffItemForm.querySelector(
-      "button[type='submit']"
-    );
-    submitButton.disabled = true;
-
-    try {
+  wireAsyncForm(
+    addOneOffItemForm,
+    async () => {
       await saveOneOffItem();
       resetOneOffItemForm();
       oneOffItemPanel.hidden = true;
       newItemButton.hidden = false;
-    } catch (error) {
-      console.error("Could not add one-off item:", error);
-      alert(error.message || "The one-off item could not be added.");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
+    },
+    {
+      errorLabel: "Could not add one-off item",
+      errorMessage: (error) =>
+        error.message || "The one-off item could not be added.",
+    },
+  );
 
-  addItemForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const itemName = itemNameInput.value.trim();
-    const locationId = isAllStuffSelected()
-      ? itemRoomSelect.value
-      : selectedRoomId;
-    const productTypeId = itemProductTypeSelect.value;
-    const storeId = itemStoreSelect?.value ?? "";
-    const specificAttributes = itemSpecificAttributesInput?.value.trim() ?? "";
-    const unitId = itemUnitSelect.value;
-    const defaultAmount = Number(itemDefaultAmountInput.value);
-    const increment = Number(itemIncrementInput.value);
-
-    const selectedProductType = currentProductTypes.find(
-      (productType) => productType.id === productTypeId
-    );
-
-    const inheritedStoreTypeIds = selectedProductType
-      ? productTypeStoreTypeIds(selectedProductType)
-      : [];
-
-    if (
-      !locationId ||
-      isRegularRoomSelected() ||
-      !itemName ||
-      !productTypeId ||
-      !unitId ||
-      !Number.isFinite(defaultAmount) ||
-      !Number.isFinite(increment)
-    ) {
-      alert("Please complete all required fields.");
-      return;
-    }
-
-    if (inheritedStoreTypeIds.length === 0) {
-      alert("Please choose a product type that has at least one store type set.");
-      return;
-    }
-
-    if (!itemStoreIsAllowed(productTypeId, storeId)) {
-      alert("Please choose a store that matches the selected product type.");
-      return;
-    }
-
-    const submitButton = addItemForm.querySelector("button[type='submit']");
-    submitButton.disabled = true;
-
-    try {
-      await addDoc(householdCollection("items"), {
-        name: itemName,
-        active: true,
-        locationId,
-        productTypeId,
-        storeId: storeId || null,
-        specificAttributes,
-        defaultAmount,
-        unitId,
-        increment,
-        addCount: 0,
-        lastAddedAt: null,
-        lastAdjustedAt: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+  wireAsyncForm(
+    addItemForm,
+    async () => {
+      const values = readItemFormValues({
+        ...itemFormContexts.room.fields,
+        locationId: isAllStuffSelected()
+          ? itemRoomSelect.value
+          : selectedRoomId,
       });
 
+      const validationMessage = validateItemFormValues(values, {
+        rejectRegularRoom: true,
+      });
+
+      if (validationMessage) {
+        alert(validationMessage);
+        return;
+      }
+
+      await createCatalogueItem(values);
+
       itemNameInput.value = "";
+
       if (itemSpecificAttributesInput) {
         itemSpecificAttributesInput.value = "";
       }
+
       newItemPanel.hidden = true;
       newItemButton.hidden = false;
-    } catch (error) {
-      console.error("Could not add item:", error);
-      alert("The item could not be saved.");
-    } finally {
-      submitButton.disabled = false;
-    }
-  });
+    },
+    {
+      errorLabel: "Could not add item",
+      errorMessage: "The item could not be saved.",
+    },
+  );
 }
 
 function startListeners() {
-  startRoomsListener();
-  startUnitsListener();
-  startStoreTypesListener();
-  startStoresListener();
-  startProductTypesListener();
-  startItemsListener();
-  startSpecificProductsListener();
-  startNeededEntriesListener();
+  listenerDefinitions.forEach(startCollectionListener);
 }
 
 wireNavigation();

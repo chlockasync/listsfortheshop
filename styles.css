@@ -1,6 +1,15 @@
-/* Style restore: preserves earlier manual nav/global button styling. */
+/* ===== Base reset and application tokens ===== */
 * {
   box-sizing: border-box;
+}
+
+:root {
+  --bottom-bar-height: 48px;
+  --space-tint: #f7f7f7;
+  --space-panel: #ffffff;
+  --space-edge: #d6d6d6;
+  --row-bg: var(--space-panel);
+  --nav-border: rgb(0 0 0 / 16%);
 }
 
 [hidden] {
@@ -33,7 +42,7 @@ button {
   min-height: 44px;
   padding: 0.7rem 1rem;
   border: 0px solid #999;
-  border-radius: 0.0rem;
+  border-radius: 0rem;
   background: white;
   font: inherit;
   cursor: pointer;
@@ -70,7 +79,6 @@ section {
 
 .app-header {
   position: sticky;
-  top: 0;
   z-index: 10;
   width: 100%;
   padding: 0;
@@ -105,7 +113,6 @@ section {
 .main-tabs button[aria-pressed="true"] {
   font-weight: 700;
   border-bottom-color: currentColor;
-  background: white;
 }
 
 .utility-controls {
@@ -269,18 +276,12 @@ section {
 }
 
 .settings-checkbox-option {
-  display: flex !important;
-  align-items: center;
   gap: 0.55rem;
   min-height: 44px;
-  margin: 0 !important;
   padding: 0.55rem 0.7rem;
   border: 1px solid #d3d3d3;
-  border-radius: 0.45rem;
   background: #f8f8f8;
   font-size: 1rem !important;
-  font-weight: 500 !important;
-  opacity: 1 !important;
 }
 
 .settings-checkbox-option input {
@@ -530,29 +531,15 @@ section {
   padding: 0;
   border: 1px solid rgb(0 0 0 / 12%);
   border-radius: 0.7rem;
-  background:
-    radial-gradient(
-      circle at 30% 20%,
-      #ffffff,
-      #efefef 58%,
-      #d4d4d4
-    );
+  background: radial-gradient(circle at 30% 20%, #ffffff, #efefef 58%, #d4d4d4);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 85%),
     0 1px 3px rgb(0 0 0 / 14%);
-  font-size: 1rem;
-  line-height: 1;
 }
 
 .room-icon-button:hover,
 .settings-row-icon-button:hover {
-  background:
-    radial-gradient(
-      circle at 30% 20%,
-      #ffffff,
-      #e4e4e4 58%,
-      #c8c8c8
-    );
+  background: radial-gradient(circle at 30% 20%, #ffffff, #e4e4e4 58%, #c8c8c8);
 }
 
 .room-icon-button:active,
@@ -568,7 +555,6 @@ section {
   width: 56px;
   min-width: 56px;
   font-size: 0.9rem;
-  font-weight: 700;
 }
 
 .room-icon-button.decrease-needed-button,
@@ -619,10 +605,8 @@ section {
   font-weight: 600;
 }
 
-body:has(
-  #room-view:not([hidden])
-  #new-item-button:not([hidden])
-) .utility-controls {
+body:has(#room-view:not([hidden]) #new-item-button:not([hidden]))
+  .utility-controls {
   bottom: 56px;
 }
 
@@ -740,37 +724,19 @@ body:has(
   padding: 0;
   border: 0;
   border-radius: 0.85rem;
-  background:
-    radial-gradient(
-      circle at 30% 25%,
-      #ffffff,
-      #ededed 55%,
-      #d2d2d2
-    );
+  background: radial-gradient(circle at 30% 25%, #ffffff, #ededed 55%, #d2d2d2);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 90%),
     0 2px 5px rgb(0 0 0 / 18%);
 }
 
 .collect-checkbox-button:hover {
-  background:
-    radial-gradient(
-      circle at 30% 25%,
-      #ffffff,
-      #e2e2e2 55%,
-      #c5c5c5
-    );
+  background: radial-gradient(circle at 30% 25%, #ffffff, #e2e2e2 55%, #c5c5c5);
 }
 
 .collect-checkbox-button[aria-pressed="true"] {
   opacity: 1;
-  background:
-    radial-gradient(
-      circle at 30% 25%,
-      #ffffff,
-      #d8d8d8 55%,
-      #b6b6b6
-    );
+  background: radial-gradient(circle at 30% 25%, #ffffff, #d8d8d8 55%, #b6b6b6);
 }
 
 .collect-checkbox-graphic {
@@ -995,7 +961,6 @@ body:has(
   }
 }
 
-
 /* ===== Compact shared checkbox choices ===== */
 .settings-checkbox-list {
   gap: 0.25rem;
@@ -1006,12 +971,10 @@ body:has(
   display: flex !important;
   align-items: center;
   gap: 0.5rem;
-  min-height: 36px;
   margin: 0 !important;
   padding: 0.3rem 0.45rem;
   border: 1px solid #e0e0e0;
   border-radius: 0.45rem;
-  background: white;
   font-size: 0.95rem !important;
   font-weight: 500 !important;
   line-height: 1.2;
@@ -1069,7 +1032,6 @@ body:has(
   padding: 0.65rem 1rem 0.45rem;
   border-top: 10px solid #f4f4f4;
   border-bottom: 1px solid #dddddd;
-  background: #f4f4f4;
   color: rgb(0 0 0 / 68%);
   font-size: 0.78rem;
   font-weight: 800;
@@ -1108,7 +1070,6 @@ body:has(
 #full-needed-items .full-needed-item-row {
   background: white;
 }
-
 
 /* ===== Store-specific product type ordering ===== */
 .store-product-type-order-panel {
@@ -1171,38 +1132,20 @@ body:has(
   border-top: 0;
 }
 
-/* ===== Product-order polish pass ===== */
+/* ===== Product type ordering ===== */
 .collect-checkbox-button {
-  background:
-    radial-gradient(
-      circle at 30% 25%,
-      #ffffff,
-      #f4f4f4 60%,
-      #e8e8e8
-    );
+  background: radial-gradient(circle at 30% 25%, #ffffff, #f4f4f4 60%, #e8e8e8);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 80%),
     0 1px 2px rgb(0 0 0 / 8%);
 }
 
 .collect-checkbox-button:hover {
-  background:
-    radial-gradient(
-      circle at 30% 25%,
-      #ffffff,
-      #eeeeee 60%,
-      #e0e0e0
-    );
+  background: radial-gradient(circle at 30% 25%, #ffffff, #eeeeee 60%, #e0e0e0);
 }
 
 .collect-checkbox-button[aria-pressed="true"] {
-  background:
-    radial-gradient(
-      circle at 30% 25%,
-      #ffffff,
-      #eeeeee 60%,
-      #dddddd
-    );
+  background: radial-gradient(circle at 30% 25%, #ffffff, #eeeeee 60%, #dddddd);
 }
 
 .collect-checkbox-graphic {
@@ -1281,8 +1224,7 @@ body:has(
   cursor: wait;
 }
 
-
-/* ===== Item list simplification pass ===== */
+/* ===== Simplified item lists ===== */
 .room-list-section-heading,
 .room-product-type-heading {
   display: none;
@@ -1321,7 +1263,6 @@ body:has(
   width: auto;
   min-width: 46px;
   padding: 0 0.65rem;
-  font-size: 0.86rem;
   font-weight: 700;
 }
 
@@ -1372,12 +1313,7 @@ body:has(
   letter-spacing: 0;
 }
 
-
 /* ===== Mobile readiness ===== */
-html,
-body {
-  overflow-x: hidden;
-}
 
 img,
 svg,
@@ -1392,7 +1328,6 @@ button {
 
 #app-build {
   margin-left: auto;
-  font-size: 0.62rem;
   line-height: 1;
   opacity: 0.35;
   pointer-events: none;
@@ -1419,10 +1354,7 @@ button {
   }
 }
 
-/* ===== Mobile layout polish pass: 202607071500 ===== */
-:root {
-  --bottom-bar-height: 48px;
-}
+/* ===== Mobile shell and bottom action bar ===== */
 
 html,
 body {
@@ -1455,7 +1387,6 @@ main {
   bottom: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
   width: min(430px, 100%);
   min-height: var(--bottom-bar-height);
   margin: 0;
@@ -1503,7 +1434,6 @@ main {
 .bottom-bar-status {
   flex-direction: column;
   gap: 0.08rem;
-  font-size: 0.78rem;
   pointer-events: none;
 }
 
@@ -1720,28 +1650,19 @@ main {
   bottom: var(--bottom-bar-height) !important;
 }
 
-body:has(
-  #room-view:not([hidden])
-  #new-item-button:not([hidden])
-) .bottom-action-bar {
+body:has(#room-view:not([hidden]) #new-item-button:not([hidden]))
+  .bottom-action-bar {
   bottom: 0;
 }
 
-/* ===== Mobile correction pass: 202607071501 ===== */
+/* ===== Small-screen layout corrections ===== */
 .bottom-action-bar {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
 .bottom-action-bar .settings-shortcut {
-  width: auto;
-  min-width: 0;
-  height: auto;
-  min-height: var(--bottom-bar-height);
   padding: 0;
-  border-radius: 0;
-  opacity: 1;
   font-size: 1.15rem;
-  pointer-events: auto;
 }
 
 .bottom-bar-status {
@@ -1788,7 +1709,6 @@ body:has(
   flex: 0 0 auto;
   opacity: 0.62;
   font-size: 1.25rem;
-  line-height: 1;
 }
 
 .room-item-row .item-row-details,
@@ -1803,33 +1723,19 @@ body:has(
 .full-needed-item-row .room-current-quantity {
   min-width: 3.2rem;
   margin-right: 0;
-  text-align: right;
 }
 
 .getting-item-row .item-row-details {
   padding-right: 0.8rem;
 }
 
-.increase-needed-button,
-.decrease-needed-button {
-  font-size: 0 !important;
-}
-
 .increase-needed-button::before,
 .decrease-needed-button::before {
   display: block;
-  font-family: Arial, sans-serif;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1;
 }
 
 .increase-needed-button::before {
   content: "+";
-}
-
-.decrease-needed-button::before {
-  content: "−";
 }
 
 .main-tabs button,
@@ -1838,7 +1744,7 @@ body:has(
   box-shadow: none !important;
 }
 
-/* ===== Interaction polish pass: 202607071502 ===== */
+/* ===== Interaction feedback ===== */
 body:has(#needing-view:not([hidden])) main {
   background: #f8fbf6;
 }
@@ -1884,7 +1790,6 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar {
 .context-exit-icon,
 .room-selector-exit {
   width: 2rem;
-  text-align: right;
   font-size: 1.7rem;
   font-weight: 600;
   opacity: 0.78;
@@ -1907,22 +1812,9 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar {
   padding-right: 1.25rem;
 }
 
-.increase-needed-button,
-.decrease-needed-button {
-  font-size: 1rem !important;
-  font-weight: 700 !important;
-}
-
-.increase-needed-button::before,
-.decrease-needed-button::before {
-  display: none !important;
-  content: none !important;
-}
-
 .collect-checkbox-button.is-long-pressing,
 .bottom-context-action.is-long-pressing {
   filter: brightness(0.93);
-  transform: translateY(1px);
 }
 
 .settings-add-form .settings-add-button {
@@ -1933,13 +1825,7 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar {
   display: none;
 }
 
-
-/* ===== Mobile repair pass: 202607071503 ===== */
-:root {
-  --space-tint: #f7f7f7;
-  --space-panel: #ffffff;
-  --space-edge: #d6d6d6;
-}
+/* ===== View colour themes and mobile layout ===== */
 
 body:has(#needing-view:not([hidden])) {
   --space-tint: #f3f9f1;
@@ -2064,7 +1950,6 @@ main,
 .collect-checkbox-button.is-long-pressing,
 .bottom-context-action.is-long-pressing {
   filter: brightness(0.92);
-  transform: translateY(1px);
 }
 
 .getting-item-row .item-row-details {
@@ -2075,8 +1960,7 @@ main,
   font-weight: 600;
 }
 
-
-/* ===== Functional repair pass: 202607071504 ===== */
+/* ===== Layout safeguards ===== */
 .increase-needed-button,
 .decrease-needed-button {
   font-size: 1rem !important;
@@ -2102,12 +1986,7 @@ main,
   transform: translateY(1px);
 }
 
-
-/* ===== UI consistency repair pass: 202607071505 ===== */
-:root {
-  --row-bg: var(--space-panel);
-  --nav-border: rgb(0 0 0 / 16%);
-}
+/* ===== Navigation and row consistency ===== */
 
 /* Navigation and secondary context bars: always show fine, light borders. */
 .main-tabs button,
@@ -2223,7 +2102,7 @@ main,
   background: var(--space-panel) !important;
 }
 
-/* ===== Specific products and item-entry polish: 202607071651 ===== */
+/* ===== Specific-product item rows ===== */
 .room-item-row.is-needed .item-name,
 .full-needed-item-row.is-needed .item-name {
   font-weight: 700 !important;
@@ -2285,7 +2164,7 @@ main,
   background: var(--space-tint) !important;
 }
 
-/* ===== Room product-offer and nav colour polish: 202607071710 ===== */
+/* ===== Room product offers and navigation colours ===== */
 .main-tabs button[data-view="needing"],
 .main-tabs button[data-view="needing"]:hover,
 .main-tabs button[data-view="needing"]:active,
@@ -2346,7 +2225,7 @@ main,
   font-size: 0.94rem;
 }
 
-/* ===== Regular list and specific-product choice: 202607071747 ===== */
+/* ===== Regular list and specific-product choice ===== */
 .settings-row-regular-button {
   border-color: rgb(0 0 0 / 16%) !important;
   background: #ffffff !important;
@@ -2370,7 +2249,8 @@ main,
   background: #ffffff !important;
 }
 
-.specific-product-offer-row.is-selected-specific-product .specific-product-offer-name {
+.specific-product-offer-row.is-selected-specific-product
+  .specific-product-offer-name {
   font-weight: 500;
 }
 
@@ -2450,8 +2330,7 @@ main,
   opacity: 0;
 }
 
-
-/* ===== Independent specific products and full-screen entry form: 202607071956 ===== */
+/* ===== Full-screen specific-product entry ===== */
 #specific-product-panel {
   top: 0 !important;
   right: max(0px, calc((100vw - 430px) / 2)) !important;
@@ -2462,8 +2341,7 @@ main,
   height: 100dvh;
   padding-top: max(1rem, env(safe-area-inset-top));
   padding-bottom: calc(
-    var(--bottom-bar-height) +
-    max(1rem, env(safe-area-inset-bottom))
+    var(--bottom-bar-height) + max(1rem, env(safe-area-inset-bottom))
   );
   transform: none !important;
   border-top: 0 !important;
@@ -2503,7 +2381,6 @@ body:has(#specific-product-panel:not([hidden])) {
   flex: 0 0 auto;
 }
 
-
 /* ===== Combined Items and Specific Products settings list ===== */
 .settings-item-specific-product-row {
   min-height: 46px !important;
@@ -2542,8 +2419,7 @@ body:has(#specific-product-panel:not([hidden])) {
   min-width: 0;
 }
 
-
-/* ===== Getting action and navigation polish: 202607081548 ===== */
+/* ===== Getting actions and navigation ===== */
 .main-tabs button {
   font-size: 1.15rem;
 }
@@ -2587,22 +2463,17 @@ body:has(#specific-product-panel:not([hidden])) {
 #finish-shop-button,
 body:has(#getting-view:not([hidden])) .bottom-context-action {
   touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 }
 
 #shopping-at-button.is-long-pressing,
 #shopping-location-options .shopping-location-option.is-long-pressing,
 #getting-items-list .collect-checkbox-button.is-long-pressing,
 #finish-shop-button.is-long-pressing,
-body:has(#getting-view:not([hidden]))
-  .bottom-context-action.is-long-pressing {
+body:has(#getting-view:not([hidden])) .bottom-context-action.is-long-pressing {
   filter: brightness(0.94);
 }
 
-
-/* ===== Mobile navigation and long-press repair: 202607081627 ===== */
+/* ===== Mobile navigation and long press ===== */
 .app-header {
   position: fixed;
   top: 0;
@@ -2637,7 +2508,7 @@ body:has(#getting-view:not([hidden])) .bottom-context-action {
   user-select: none;
 }
 
-/* ===== Compact form actions, reorder safety, and menu ordering: 202607091313 ===== */
+/* ===== Compact form actions and safe reordering ===== */
 html,
 body {
   overscroll-behavior-y: none;
@@ -2720,7 +2591,6 @@ body {
 }
 
 .settings-order-handle {
-  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -2744,7 +2614,7 @@ body.settings-sort-active {
   -webkit-touch-callout: default;
 }
 
-/* ===== Scroll repair, All stuff item entry, and temporary notes: 202607091349 ===== */
+/* ===== All-stuff entry, temporary notes, and scrolling ===== */
 html {
   overscroll-behavior-y: none;
 }
@@ -2870,8 +2740,7 @@ body {
   background: #eeeeee;
 }
 
-
-/* ===== Native scrolling and long-press reset: 202607091358 ===== */
+/* ===== Native scrolling and gesture ownership ===== */
 html,
 body {
   overscroll-behavior-y: auto;
@@ -2896,8 +2765,7 @@ body:has(#getting-view:not([hidden])) .bottom-context-action {
   touch-action: none;
 }
 
-
-/* ===== Guaranteed native page scroll: 202607091402 ===== */
+/* ===== Native page scrolling ===== */
 html,
 body {
   overflow-y: auto !important;
@@ -2914,7 +2782,7 @@ section {
   touch-action: pan-y pinch-zoom;
 }
 
-/* ===== Reliable item-row hold, full-screen temporary note, isolated quantities: 202607091417 ===== */
+/* ===== Item-row hold and full-screen temporary notes ===== */
 #temporary-note-panel {
   position: fixed;
   top: 0;
@@ -2928,8 +2796,7 @@ section {
   margin: 0;
   padding-top: max(1rem, env(safe-area-inset-top));
   padding-bottom: calc(
-    var(--bottom-bar-height) +
-    max(1rem, env(safe-area-inset-bottom))
+    var(--bottom-bar-height) + max(1rem, env(safe-area-inset-bottom))
   );
   overflow-y: auto;
   border-top: 0;
@@ -2986,7 +2853,7 @@ body:has(#temporary-note-panel:not([hidden])) {
   filter: brightness(0.94);
 }
 
-/* ===== Overlay visibility and dependable row gestures: 202607091428 ===== */
+/* ===== Overlay layering and row gestures ===== */
 /* The add-specific-product and temporary-note panels now sit directly under
    body, so no hidden app view can conceal them. */
 .has-double-tap,
@@ -2994,8 +2861,7 @@ body:has(#temporary-note-panel:not([hidden])) {
   touch-action: manipulation !important;
 }
 
-
-/* ===== One-off room and compact selectors: 202607091622 ===== */
+/* ===== One-off items and compact selectors ===== */
 .one-off-room-button {
   font-weight: 600;
 }
@@ -3202,7 +3068,6 @@ body:has(#temporary-note-panel:not([hidden])) {
   font-weight: 700;
 }
 
-
 /* Tighten selector-style lists without shrinking ordinary item rows. */
 #rooms-list .shopping-location-option,
 #shopping-location-options .shopping-location-option,
@@ -3226,7 +3091,6 @@ body:has(#temporary-note-panel:not([hidden])) {
   width: min(430px, 100%);
   max-height: min(72dvh, 560px);
   margin: 0;
-  overflow-y: auto;
   transform: translateX(-50%);
   border-top: 1px solid #cfcfcf;
   border-radius: 0;
@@ -3245,18 +3109,11 @@ body:has(#temporary-note-panel:not([hidden])) {
   font-weight: 700;
 }
 
-#one-off-item-panel .form-heading-row {
-  position: static;
-  top: auto;
-  margin-top: 0;
-}
-
 #one-off-item-panel .settings-form-fields {
   margin-top: 0;
 }
 
-
-/* ===== Form field order and full-screen one-off entry: 202607091946 ===== */
+/* ===== Form field ordering and one-off entry ===== */
 #one-off-item-panel {
   top: 0 !important;
   right: max(0px, calc((100vw - 430px) / 2)) !important;
@@ -3267,8 +3124,7 @@ body:has(#temporary-note-panel:not([hidden])) {
   height: 100dvh;
   padding-top: max(1rem, env(safe-area-inset-top));
   padding-bottom: calc(
-    var(--bottom-bar-height) +
-    max(1rem, env(safe-area-inset-bottom))
+    var(--bottom-bar-height) + max(1rem, env(safe-area-inset-bottom))
   );
   overflow-y: auto;
   transform: none !important;

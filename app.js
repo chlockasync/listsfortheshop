@@ -738,20 +738,57 @@ function defaultDeviceName() {
   return `${browser} on ${platform}`;
 }
 
-function inviteTokenFromLocation() {
+const INVITE_SESSION_KEY = "listsForTheShop.pendingInvite";
+
+function inviteTokenInCurrentUrl() {
   const hashParameters = new URLSearchParams(window.location.hash.slice(1));
-  return hashParameters.get("invite")?.trim() ?? "";
+  const hashToken = hashParameters.get("invite")?.trim();
+
+  if (hashToken) {
+    return hashToken;
+  }
+
+  return new URLSearchParams(window.location.search).get("invite")?.trim() ?? "";
+}
+
+let pendingInviteToken = inviteTokenInCurrentUrl();
+
+if (pendingInviteToken) {
+  try {
+    window.sessionStorage.setItem(INVITE_SESSION_KEY, pendingInviteToken);
+  } catch (_error) {
+    /* Session storage may be unavailable in restrictive private modes. */
+  }
+} else {
+  try {
+    pendingInviteToken =
+      window.sessionStorage.getItem(INVITE_SESSION_KEY)?.trim() ?? "";
+  } catch (_error) {
+    pendingInviteToken = "";
+  }
+}
+
+function inviteTokenFromLocation() {
+  return pendingInviteToken;
 }
 
 function clearInviteFromLocation() {
-  if (!window.location.hash) {
-    return;
+  pendingInviteToken = "";
+
+  try {
+    window.sessionStorage.removeItem(INVITE_SESSION_KEY);
+  } catch (_error) {
+    /* Session storage may be unavailable in restrictive private modes. */
   }
+
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("invite");
+  cleanUrl.hash = "";
 
   window.history.replaceState(
     window.history.state,
     "",
-    `${window.location.pathname}${window.location.search}`,
+    `${cleanUrl.pathname}${cleanUrl.search}`,
   );
 }
 
@@ -787,7 +824,8 @@ async function sha256Hex(value) {
 function inviteUrlForToken(token) {
   const url = new URL(window.location.href);
   url.search = "";
-  url.hash = new URLSearchParams({ invite: token }).toString();
+  url.searchParams.set("invite", token);
+  url.hash = "";
   return url.toString();
 }
 
@@ -1370,6 +1408,7 @@ async function initializeDeviceAccess(user) {
         memberSnapshot = await getDoc(memberRef);
       } catch (error) {
         console.error("Could not redeem access link:", error);
+        clearInviteFromLocation();
         showAccessGate(error.message || "This access link could not be used.");
         return;
       }

@@ -14,8 +14,8 @@
     <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-192.png?v=1651" />
 
-    <link rel="stylesheet" href="styles.css?v=202607101756" />
-    <script type="module" src="app.js?v=202607101756"></script>
+    <link rel="stylesheet" href="styles.css?v=202607101826" />
+    <script type="module" src="app.js?v=202607101826"></script>
 
     <title>Lists for the Shop</title>
   </head>
@@ -39,6 +39,34 @@
         </p>
         <button type="button" id="continue-view-only">View app</button>
       </div>
+    </section>
+    <section id="access-text-prompt" class="access-text-prompt" hidden>
+      <form
+        id="access-text-prompt-form"
+        class="access-text-prompt-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="access-text-prompt-title"
+      >
+        <h1 id="access-text-prompt-title">Enter details</h1>
+        <p id="access-text-prompt-message" hidden></p>
+
+        <label for="access-text-prompt-input">
+          <span id="access-text-prompt-label">Description</span>
+          <input
+            type="text"
+            id="access-text-prompt-input"
+            required
+            maxlength="80"
+            autocomplete="off"
+          />
+        </label>
+
+        <div class="access-text-prompt-actions">
+          <button type="button" id="cancel-access-text-prompt">Cancel</button>
+          <button type="submit" id="submit-access-text-prompt">Continue</button>
+        </div>
+      </form>
     </section>
     <header class="app-header">
       <nav class="main-tabs" aria-label="Main navigation">
@@ -526,21 +554,6 @@
                 <p>Loading household devices…</p>
               </div>
 
-              <label
-                class="access-recipient-field"
-                for="household-link-recipient"
-              >
-                Intended recipient or device
-                <input
-                  type="text"
-                  id="household-link-recipient"
-                  required
-                  maxlength="80"
-                  autocomplete="off"
-                  placeholder="e.g. Kitchen tablet or Sarah's phone"
-                />
-              </label>
-
               <button
                 type="button"
                 id="create-household-link"
@@ -555,7 +568,7 @@
 
               <h4>Household device links</h4>
               <div id="household-invites-list" class="access-record-list">
-                <p>No unused device links.</p>
+                <p>No household device links.</p>
               </div>
             </div>
 
@@ -565,18 +578,6 @@
                 Creates a live, view-only link that can be used by multiple
                 people. It expires after 14 days and can be revoked at any time.
               </p>
-
-              <label class="access-recipient-field" for="viewer-link-recipient">
-                Intended recipient or purpose
-                <input
-                  type="text"
-                  id="viewer-link-recipient"
-                  required
-                  maxlength="80"
-                  autocomplete="off"
-                  placeholder="e.g. Show Alex the populated app"
-                />
-              </label>
 
               <button
                 type="button"
@@ -588,7 +589,7 @@
 
               <h4>Read-only sharing links</h4>
               <div id="viewer-invites-list" class="access-record-list">
-                <p>No active sharing links.</p>
+                <p>No read-only sharing links.</p>
               </div>
             </div>
           </section>
@@ -742,7 +743,7 @@
       </button>
 
       <div class="bottom-bar-status">
-        <span id="app-build" title="Build 202607101756">v1.1.060</span>
+        <span id="app-build" title="Build 202607101826">v1.1.061</span>
         <span id="connection-status">Connecting…</span>
       </div>
 

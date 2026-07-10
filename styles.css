@@ -3315,6 +3315,88 @@ body.viewer-notice-open > #compact-select-panel {
   visibility: hidden !important;
 }
 
+.access-text-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem;
+  overflow-y: auto;
+  background: rgb(0 0 0 / 45%);
+}
+
+.access-text-prompt-dialog {
+  width: min(398px, 100%);
+  margin: 0 auto;
+  padding: 1.25rem;
+  border: 1px solid rgb(0 0 0 / 18%);
+  border-radius: 0.65rem;
+  background: white;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 25%);
+}
+
+.access-text-prompt-dialog h1 {
+  margin: 0 0 0.6rem;
+  font-size: 1.25rem;
+}
+
+.access-text-prompt-dialog p {
+  margin: 0 0 1rem;
+  color: rgb(0 0 0 / 68%);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.access-text-prompt-dialog label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgb(0 0 0 / 72%);
+}
+
+.access-text-prompt-dialog input {
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #aaaaaa;
+  border-radius: 0.45rem;
+  background: white;
+  color: #222222;
+}
+
+.access-text-prompt-dialog input:focus {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.access-text-prompt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.access-text-prompt-actions button {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #777777;
+  border-radius: 0.45rem;
+  background: #eeeeee;
+  font-weight: 700;
+}
+
+.access-text-prompt-actions button[hidden] + button {
+  grid-column: 1 / -1;
+}
+
+body.access-text-prompt-open {
+  overflow: hidden;
+}
+
 body.access-pending > .app-header,
 body.access-pending > main,
 body.access-pending > .bottom-action-bar,
@@ -3426,31 +3508,6 @@ body.access-viewer > .access-gate {
 
 .access-record-button.is-danger {
   border-color: #b9b9b9;
-}
-
-.access-recipient-field {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0 0 0.75rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: rgb(0 0 0 / 72%);
-}
-
-.access-recipient-field input {
-  width: 100%;
-  min-height: 48px;
-  margin: 0;
-  padding: 0.7rem 0.8rem;
-  border: 1px solid #aaaaaa;
-  border-radius: 0.45rem;
-  background: white;
-  color: #222222;
-}
-
-.access-recipient-field input:focus {
-  outline: 2px solid currentColor;
-  outline-offset: 1px;
 }
 
 /* View-only visitors see the complete interface. JavaScript and Firestore

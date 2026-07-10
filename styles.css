@@ -1770,21 +1770,21 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar {
 }
 
 .settings-add-form {
-  position: fixed;
-  left: 50%;
-  bottom: var(--bottom-bar-height);
-  z-index: 28;
-  width: min(430px, 100%);
-  max-height: min(72dvh, 560px);
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  max-height: none;
+  height: auto;
   margin: 0;
-  overflow: auto;
-  transform: translateX(-50%);
-  border-top: 1px solid #cfcfcf;
-  box-shadow: 0 -8px 22px rgb(0 0 0 / 14%);
+  overflow: visible;
+  transform: none;
+  border-top: 8px solid var(--space-tint);
+  box-shadow: none;
 }
 
 .settings-category-panel {
-  padding-bottom: calc(var(--bottom-bar-height) + 8.5rem);
+  padding-bottom: calc(var(--bottom-bar-height) + 1rem);
 }
 
 .context-exit-icon,

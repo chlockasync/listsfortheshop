@@ -3205,3 +3205,21 @@ body:has(#one-off-item-panel:not([hidden])) {
 body:has(#needing-home:not([hidden])) #needing-view {
   min-height: 0 !important;
 }
+
+/* ===== 202607101431 targeted list corrections ===== */
+.one-off-room-button {
+  font-weight: 400;
+}
+
+.all-stuff-room-button {
+  margin-top: 0;
+  border-top: 0 !important;
+}
+
+.item-name-with-specific-product {
+  display: inline;
+}
+
+.specific-product-name-suffix {
+  white-space: nowrap;
+}

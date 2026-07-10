@@ -909,7 +909,7 @@ function updateBottomContextAction() {
         return false;
       }
 
-      if (!itemBelongsToStoreType(record.item, selectedStoreTypeId)) {
+      if (!neededRecordBelongsToStoreType(record, selectedStoreTypeId)) {
         return false;
       }
 
@@ -1178,24 +1178,32 @@ function sortBySavedOrderThenName(a, b) {
 }
 
 function storeTypeIdsForItem(item) {
-  const storeTypeIds = new Set(
-    (Array.isArray(item?.storeTypeIds) ? item.storeTypeIds : []).map((id) =>
-      String(id),
-    ),
-  );
+  const storeTypeIds = new Set();
 
-  (Array.isArray(item?.storeIds) ? item.storeIds : []).forEach((storeId) => {
-    const store = currentStores.find(
-      (candidate) => String(candidate.id) === String(storeId),
-    );
+  if (item?.oneOff === true) {
+    (Array.isArray(item.storeTypeIds) ? item.storeTypeIds : []).forEach((id) => {
+      storeTypeIds.add(String(id));
+    });
 
-    if (store?.storeTypeId) {
-      storeTypeIds.add(String(store.storeTypeId));
-    }
-  });
+    (Array.isArray(item.storeIds) ? item.storeIds : []).forEach((storeId) => {
+      const store = currentStores.find(
+        (candidate) => String(candidate.id) === String(storeId),
+      );
 
+      if (store?.storeTypeId) {
+        storeTypeIds.add(String(store.storeTypeId));
+      }
+    });
+
+    return Array.from(storeTypeIds);
+  }
+
+  /* Catalogue items are routed by their current product type. Older item
+   * documents may still contain hidden storeTypeIds/storeIds fields from
+   * earlier versions; those stale fields must not place an item in an
+   * unrelated Getting list. */
   const productType = currentProductTypes.find(
-    (candidate) => candidate.id === item?.productTypeId,
+    (candidate) => String(candidate.id) === String(item?.productTypeId),
   );
 
   if (productType) {
@@ -5527,6 +5535,36 @@ function specificProductIsAvailableAtStore(specificProduct, storeId) {
   );
 }
 
+function neededRecordBelongsToStoreType(record, storeTypeId) {
+  if (!record || !storeTypeId) {
+    return false;
+  }
+
+  if (record.item.oneOff) {
+    return itemBelongsToStoreType(record.item, storeTypeId);
+  }
+
+  if (!itemBelongsToStoreType(record.item, storeTypeId)) {
+    return false;
+  }
+
+  const specificStoreIds = Array.isArray(record.specificProduct?.storeIds)
+    ? record.specificProduct.storeIds
+    : [];
+
+  if (specificStoreIds.length === 0) {
+    return true;
+  }
+
+  return specificStoreIds.some((storeId) => {
+    const store = currentStores.find(
+      (candidate) => String(candidate.id) === String(storeId),
+    );
+
+    return String(store?.storeTypeId ?? "") === String(storeTypeId);
+  });
+}
+
 function neededRecordIsAvailableAtStore(record, storeId) {
   if (!storeId) {
     return true;
@@ -5599,6 +5637,14 @@ async function migrateLegacySpecificEntryBeforeGenericAdd(item) {
   await batch.commit();
 }
 
+function combinedItemSpecificProductName(item, specificProduct) {
+  if (!specificProduct) {
+    return item?.name ?? "";
+  }
+
+  return `${item?.name ?? ""} - ${specificProduct.name ?? ""}`.trim();
+}
+
 function createItemNameDisplay(
   item,
   specificProduct = null,
@@ -5613,11 +5659,23 @@ function createItemNameDisplay(
 
   const name = document.createElement("span");
   name.className = "item-name";
-  name.textContent = specificProduct
-    ? includeParentName
-      ? `${item.name} ${specificProduct.name}`
-      : specificProduct.name
-    : item.name;
+
+  if (specificProduct && includeParentName) {
+    name.classList.add("item-name-with-specific-product");
+
+    const parentName = document.createElement("span");
+    parentName.className = "parent-item-name";
+    parentName.textContent = item.name;
+
+    const specificName = document.createElement("span");
+    specificName.className = "specific-product-name-suffix";
+    specificName.textContent = specificProduct.name;
+
+    name.append(parentName, document.createTextNode(" - "), specificName);
+  } else {
+    name.textContent = specificProduct ? specificProduct.name : item.name;
+  }
+
   wrapper.append(name);
 
   const extra = specificProduct
@@ -5644,7 +5702,7 @@ function createItemNameDisplay(
 }
 
 function temporaryNoteItemLabel(item, specificProduct = null) {
-  return specificProduct ? `${item.name} ${specificProduct.name}` : item.name;
+  return combinedItemSpecificProductName(item, specificProduct);
 }
 
 function closeTemporaryNotePanel() {
@@ -6332,7 +6390,7 @@ function renderGettingItems() {
   }
 
   const matchingRecords = currentNeededRecords().filter((record) => {
-    if (!itemBelongsToStoreType(record.item, selectedStoreTypeId)) {
+    if (!neededRecordBelongsToStoreType(record, selectedStoreTypeId)) {
       return false;
     }
 
@@ -6735,7 +6793,10 @@ async function addItemToNeededList(item) {
 async function addSpecificProductToNeededList(item, specificProduct) {
   if (specificNeededEntryForProduct(specificProduct.id)) {
     alert(
-      `${item.name} ${specificProduct.name} is already on the needed list.`,
+      `${combinedItemSpecificProductName(
+        item,
+        specificProduct,
+      )} is already on the needed list.`,
     );
     return;
   }
@@ -6880,7 +6941,7 @@ async function finishCurrentShop() {
       return false;
     }
 
-    if (!itemBelongsToStoreType(record.item, selectedStoreTypeId)) {
+    if (!neededRecordBelongsToStoreType(record, selectedStoreTypeId)) {
       return false;
     }
 

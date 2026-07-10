@@ -3146,3 +3146,62 @@ body:has(#one-off-item-panel:not([hidden])) {
 #temporary-note-panel input#temporary-note-text {
   width: 100%;
 }
+
+/* ===== Catalogue item form consolidation and positioning ===== */
+/* Item forms are ordinary document content. They align to the top of the
+   viewport and use page scrolling rather than a capped internal scroller. */
+#new-item-panel {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 1rem !important;
+  overflow: visible !important;
+  transform: none !important;
+  border-top: 8px solid var(--space-tint) !important;
+  border-radius: 0 !important;
+  background: var(--space-panel) !important;
+  box-shadow: none !important;
+}
+
+.item-form-panel .form-heading-row {
+  position: static;
+  top: auto;
+  margin-top: 0;
+}
+
+.settings-inline-edit-panel.item-form-panel {
+  width: 100%;
+  margin: 0;
+  padding: 1rem;
+  border-top: 0;
+  border-bottom: 8px solid var(--space-tint);
+  border-radius: 0;
+  background: var(--space-panel) !important;
+}
+
+.item-form-panel .settings-form-fields {
+  margin-top: 0;
+}
+
+.form-positioning-scroll-space {
+  width: 1px;
+  margin: 0;
+  padding: 0;
+  visibility: hidden;
+}
+
+/* The rooms menu should be only as tall as its content. The shell already
+   reserves space for the fixed bottom bar, so a viewport-height filler here
+   created a blank scrollable area. */
+#needing-home {
+  min-height: 0 !important;
+  height: auto !important;
+  padding-bottom: 0 !important;
+}
+
+body:has(#needing-home:not([hidden])) #needing-view {
+  min-height: 0 !important;
+}

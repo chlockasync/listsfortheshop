@@ -13,8 +13,8 @@
     <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-192.png?v=1651" />
 
-    <link rel="stylesheet" href="styles.css?v=202607101326" />
-    <script type="module" src="app.js?v=202607101326"></script>
+    <link rel="stylesheet" href="styles.css?v=202607101410" />
+    <script type="module" src="app.js?v=202607101410"></script>
 
     <title>Lists for the Shop</title>
   </head>
@@ -86,7 +86,7 @@
 
           <section
             id="new-item-panel"
-            class="new-item-panel settings-form"
+            class="new-item-panel settings-form item-form-panel"
             hidden
           >
             <form id="add-item-form">
@@ -109,80 +109,7 @@
                 </div>
               </div>
 
-              <div class="settings-form-fields">
-                <label for="item-name"> Item name </label>
-
-                <input
-                  type="text"
-                  id="item-name"
-                  required
-                  maxlength="80"
-                  autocomplete="off"
-                />
-
-                <label for="item-room" id="item-room-label" hidden>
-                  Room
-                </label>
-
-                <select id="item-room" hidden>
-                  <option value="">Choose a room</option>
-                </select>
-
-                <label for="item-product-type"> Product type </label>
-
-                <select id="item-product-type" required>
-                  <option value="">Choose a product type</option>
-                </select>
-
-                <label for="item-specific-attributes">
-                  Specific Attributes (optional)
-                </label>
-
-                <input
-                  type="text"
-                  id="item-specific-attributes"
-                  maxlength="100"
-                  autocomplete="off"
-                  placeholder="e.g. 2 L, gluten-free, fragrance-free"
-                />
-
-                <label for="item-store"> Store (optional) </label>
-
-                <select id="item-store">
-                  <option value="">Any matching store</option>
-                </select>
-
-                <div class="amount-unit-step-row">
-                  <label for="item-default-amount">
-                    Amount
-                    <input
-                      type="number"
-                      id="item-default-amount"
-                      required
-                      min="0"
-                      step="any"
-                      value="1"
-                    />
-                  </label>
-
-                  <label for="item-unit">
-                    Unit
-                    <select id="item-unit" required></select>
-                  </label>
-
-                  <label for="item-increment">
-                    Step
-                    <input
-                      type="number"
-                      id="item-increment"
-                      required
-                      min="0.01"
-                      step="any"
-                      value="1"
-                    />
-                  </label>
-                </div>
-              </div>
+              <div id="item-form-fields" class="settings-form-fields"></div>
             </form>
           </section>
 
@@ -476,81 +403,13 @@
 
             <form
               id="add-settings-item-form"
-              class="settings-form settings-add-form"
+              class="settings-form settings-add-form item-form-panel"
               hidden
             >
-              <div class="settings-form-fields">
-                <label for="settings-item-name"> Item name </label>
-
-                <input
-                  type="text"
-                  id="settings-item-name"
-                  required
-                  maxlength="80"
-                  autocomplete="off"
-                />
-
-                <label for="settings-item-room"> Room </label>
-
-                <select id="settings-item-room" required>
-                  <option value="">Choose a room</option>
-                </select>
-
-                <label for="settings-item-product-type"> Product type </label>
-
-                <select id="settings-item-product-type" required>
-                  <option value="">Choose a product type</option>
-                </select>
-
-                <label for="settings-item-specific-attributes">
-                  Specific Attributes (optional)
-                </label>
-
-                <input
-                  type="text"
-                  id="settings-item-specific-attributes"
-                  maxlength="100"
-                  autocomplete="off"
-                  placeholder="e.g. 2 L, gluten-free, fragrance-free"
-                />
-
-                <label for="settings-item-store"> Store (optional) </label>
-
-                <select id="settings-item-store">
-                  <option value="">Any matching store</option>
-                </select>
-
-                <div class="amount-unit-step-row">
-                  <label for="settings-item-default-amount">
-                    Amount
-                    <input
-                      type="number"
-                      id="settings-item-default-amount"
-                      required
-                      min="0"
-                      step="any"
-                      value="1"
-                    />
-                  </label>
-
-                  <label for="settings-item-unit">
-                    Unit
-                    <select id="settings-item-unit" required></select>
-                  </label>
-
-                  <label for="settings-item-increment">
-                    Step
-                    <input
-                      type="number"
-                      id="settings-item-increment"
-                      required
-                      min="0.01"
-                      step="any"
-                      value="1"
-                    />
-                  </label>
-                </div>
-              </div>
+              <div
+                id="settings-item-form-fields"
+                class="settings-form-fields"
+              ></div>
 
               <button type="submit" class="settings-add-button">
                 Add item

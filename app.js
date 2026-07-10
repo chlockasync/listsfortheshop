@@ -23,6 +23,192 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) =>
   Array.from(root.querySelectorAll(selector));
 
+function createItemFormFields({
+  container,
+  idPrefix,
+  values = {},
+  roomHidden = false,
+}) {
+  if (!container) {
+    return null;
+  }
+
+  container.innerHTML = "";
+
+  function fieldId(suffix) {
+    return `${idPrefix}-${suffix}`;
+  }
+
+  function createLabel(text, controlId, { hidden = false } = {}) {
+    const label = document.createElement("label");
+    label.htmlFor = controlId;
+    label.textContent = text;
+    label.hidden = hidden;
+    return label;
+  }
+
+  function createTextInput({
+    suffix,
+    value = "",
+    required = false,
+    maxLength,
+    placeholder = "",
+  }) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = fieldId(suffix);
+    input.value = value ?? "";
+    input.required = required;
+    input.autocomplete = "off";
+
+    if (maxLength) {
+      input.maxLength = maxLength;
+    }
+
+    if (placeholder) {
+      input.placeholder = placeholder;
+    }
+
+    return input;
+  }
+
+  function createSelect({
+    suffix,
+    required = false,
+    placeholder = null,
+    hidden = false,
+  }) {
+    const select = document.createElement("select");
+    select.id = fieldId(suffix);
+    select.required = required;
+    select.hidden = hidden;
+
+    if (placeholder !== null) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = placeholder;
+      select.append(option);
+    }
+
+    return select;
+  }
+
+  function createNumberInput({ suffix, value, min, step }) {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.id = fieldId(suffix);
+    input.required = true;
+    input.min = String(min);
+    input.step = String(step);
+    input.value = String(value);
+    return input;
+  }
+
+  const nameInput = createTextInput({
+    suffix: "name",
+    value: values.name ?? "",
+    required: true,
+    maxLength: 80,
+  });
+  container.append(createLabel("Item name", nameInput.id), nameInput);
+
+  const roomSelect = createSelect({
+    suffix: "room",
+    required: !roomHidden,
+    placeholder: "Choose a room",
+    hidden: roomHidden,
+  });
+  const roomLabel = createLabel("Room", roomSelect.id, {
+    hidden: roomHidden,
+  });
+  roomLabel.id = fieldId("room-label");
+  container.append(roomLabel, roomSelect);
+
+  const productTypeSelect = createSelect({
+    suffix: "product-type",
+    required: true,
+    placeholder: "Choose a product type",
+  });
+  container.append(
+    createLabel("Product type", productTypeSelect.id),
+    productTypeSelect,
+  );
+
+  const attributesInput = createTextInput({
+    suffix: "specific-attributes",
+    value: values.specificAttributes ?? "",
+    maxLength: 100,
+    placeholder: "e.g. 2 L, gluten-free, fragrance-free",
+  });
+  container.append(
+    createLabel("Specific Attributes (optional)", attributesInput.id),
+    attributesInput,
+  );
+
+  const storeSelect = createSelect({
+    suffix: "store",
+    placeholder: "Any matching store",
+  });
+  container.append(
+    createLabel("Store (optional)", storeSelect.id),
+    storeSelect,
+  );
+
+  const amountRow = document.createElement("div");
+  amountRow.className = "amount-unit-step-row";
+
+  const amountInput = createNumberInput({
+    suffix: "default-amount",
+    value: values.defaultAmount ?? 1,
+    min: 0,
+    step: "any",
+  });
+  const amountLabel = createLabel("Amount", amountInput.id);
+  amountLabel.append(amountInput);
+
+  const unitSelect = createSelect({
+    suffix: "unit",
+    required: true,
+  });
+  const unitLabel = createLabel("Unit", unitSelect.id);
+  unitLabel.append(unitSelect);
+
+  const incrementInput = createNumberInput({
+    suffix: "increment",
+    value: values.increment ?? 1,
+    min: 0.01,
+    step: "any",
+  });
+  const incrementLabel = createLabel("Step", incrementInput.id);
+  incrementLabel.append(incrementInput);
+
+  amountRow.append(amountLabel, unitLabel, incrementLabel);
+  container.append(amountRow);
+
+  return {
+    nameInput,
+    roomLabel,
+    roomSelect,
+    productTypeSelect,
+    attributesInput,
+    storeSelect,
+    amountInput,
+    unitSelect,
+    incrementInput,
+  };
+}
+
+createItemFormFields({
+  container: $("#item-form-fields"),
+  idPrefix: "item",
+  roomHidden: true,
+});
+
+createItemFormFields({
+  container: $("#settings-item-form-fields"),
+  idPrefix: "settings-item",
+});
+
 function submitButtonFor(form) {
   return form?.querySelector('button[type="submit"]') ?? null;
 }
@@ -120,13 +306,20 @@ function getSettingsAddForm(categoryName) {
 }
 
 function closeSettingsAddForms({ except = null } = {}) {
+  let closedVisibleForm = false;
+
   Object.values(settingsAddForms).forEach((form) => {
     if (!form || form === except) {
       return;
     }
 
+    closedVisibleForm ||= !form.hidden;
     form.hidden = true;
   });
+
+  if (closedVisibleForm && (!except || except.hidden)) {
+    clearFormPositioningScrollSpace();
+  }
 }
 
 function toggleCurrentSettingsAddForm() {
@@ -145,8 +338,13 @@ function toggleCurrentSettingsAddForm() {
   closeSettingsAddForms({ except: form });
   form.hidden = !willOpen;
 
-  if (willOpen && categoryName === "items") {
-    placeElementAtTop(form, settingsItemNameInput);
+  if (willOpen) {
+    const focusElement = form.querySelector(
+      'input:not([type="hidden"]), select, textarea',
+    );
+    placeElementAtTop(form, focusElement);
+  } else {
+    clearFormPositioningScrollSpace();
   }
 }
 
@@ -309,7 +507,6 @@ const settingsSortables = new Map();
 let selectedSettingsCategory = null;
 let selectedRoomId = null;
 let selectedShoppingTarget = null;
-let editingItemId = null;
 let editingSettingsKey = null;
 let editingSettingsId = null;
 let editingSettingsContextId = null;
@@ -410,6 +607,8 @@ function closeOpenSettingsEditPanel() {
     return false;
   }
 
+  clearFormPositioningScrollSpace();
+
   const categoryName = getVisibleSettingsCategory();
 
   editingSettingsKey = null;
@@ -478,6 +677,7 @@ function handleAppBackButton() {
   }
 
   if (newItemPanel && !newItemPanel.hidden) {
+    clearFormPositioningScrollSpace();
     newItemPanel.hidden = true;
 
     if (newItemButton) {
@@ -490,6 +690,7 @@ function handleAppBackButton() {
   const openSettingsAddForm = getOpenSettingsAddForm();
 
   if (openSettingsAddForm) {
+    clearFormPositioningScrollSpace();
     openSettingsAddForm.hidden = true;
     updateBottomContextAction();
     return true;
@@ -609,6 +810,7 @@ function setupBrowserBackButton() {
 }
 
 function showSettingsHome() {
+  clearFormPositioningScrollSpace();
   selectedSettingsCategory = null;
   settingsCategoryButton.hidden = true;
   settingsCategoryButton.textContent = "";
@@ -776,6 +978,7 @@ function openSettingsCategory(categoryName) {
 }
 
 function showView(viewName) {
+  clearFormPositioningScrollSpace();
   closeCompactSelect();
 
   if (viewName !== "settings") {
@@ -825,8 +1028,8 @@ function showView(viewName) {
 }
 
 function showNeedingHome() {
+  clearFormPositioningScrollSpace();
   selectedRoomId = null;
-  editingItemId = null;
   roomSelectorButton.hidden = true;
   roomSelectorButton.textContent = "";
   needingHome.hidden = false;
@@ -842,7 +1045,6 @@ function showNeedingHome() {
 
 function resetNeedingToRoomList() {
   selectedRoomId = null;
-  editingItemId = null;
 
   if (newItemPanel) {
     newItemPanel.hidden = true;
@@ -869,8 +1071,8 @@ function resetGettingToShoppingList() {
 }
 
 function openRoomView({ id, name, newItemLabel = "New item" }) {
+  clearFormPositioningScrollSpace();
   selectedRoomId = id;
-  editingItemId = null;
 
   roomSelectorButton.hidden = false;
   setRoomSelectorLabel(name);
@@ -2061,6 +2263,7 @@ function appendSettingsEditPanel({
     editingSettingsKey = null;
     editingSettingsId = null;
     editingSettingsContextId = null;
+    clearFormPositioningScrollSpace();
     renderSettingsLists();
   });
 
@@ -2089,6 +2292,7 @@ function appendSettingsEditPanel({
       editingSettingsKey = null;
       editingSettingsId = null;
       editingSettingsContextId = null;
+      clearFormPositioningScrollSpace();
       renderSettingsLists();
     } catch (error) {
       console.error("Could not save settings item:", error);
@@ -2110,33 +2314,77 @@ function appendSettingsEditPanel({
   return panel;
 }
 
+function clearFormPositioningScrollSpace() {
+  $$(".form-positioning-scroll-space, .settings-edit-scroll-space").forEach(
+    (element) => element.remove(),
+  );
+}
+
+function clearSettingsEditScrollSpace() {
+  clearFormPositioningScrollSpace();
+}
+
 function placeElementAtTop(element, focusElement = null) {
   if (!element) {
     return;
   }
 
+  clearFormPositioningScrollSpace();
+
   requestAnimationFrame(() => {
+    const elementStyle = window.getComputedStyle(element);
+
+    if (elementStyle.position === "fixed") {
+      element.scrollTop = 0;
+
+      if (focusElement) {
+        try {
+          focusElement.focus({ preventScroll: true });
+        } catch (_error) {
+          focusElement.focus();
+        }
+      }
+
+      return;
+    }
+
     const header = $(".app-header");
     header?.classList.remove("is-hidden");
 
-    element.scrollIntoView({
-      block: "start",
-      inline: "nearest",
-      behavior: "auto",
-    });
+    const scrollRoot = document.scrollingElement;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const headerHeight = header?.offsetHeight ?? 0;
+    const elementDocumentTop =
+      window.scrollY + element.getBoundingClientRect().top;
+    const targetScrollTop = Math.max(0, elementDocumentTop - headerHeight);
+    const requiredDocumentHeight = targetScrollTop + viewportHeight;
+    const missingHeight = Math.max(
+      0,
+      requiredDocumentHeight - (scrollRoot?.scrollHeight ?? 0),
+    );
+
+    if (missingHeight > 0) {
+      const scrollSpace = document.createElement("div");
+      scrollSpace.className = "form-positioning-scroll-space";
+      scrollSpace.setAttribute("aria-hidden", "true");
+      scrollSpace.style.height = `${missingHeight + 1}px`;
+      scrollSpace.style.pointerEvents = "none";
+
+      const positioningRoot =
+        element.closest(
+          "#needing-view, #getting-view, #settings-view, #compact-select-panel",
+        ) ?? $("main");
+      positioningRoot?.append(scrollSpace);
+    }
+
+    ignoreHeaderAutoHideUntil = performance.now() + 500;
 
     requestAnimationFrame(() => {
-      const headerHeight = header?.offsetHeight ?? 0;
-      const elementTop = element.getBoundingClientRect().top;
-      const adjustment = elementTop - headerHeight;
-
-      if (Math.abs(adjustment) > 1) {
-        window.scrollBy({
-          top: adjustment,
-          left: 0,
-          behavior: "auto",
-        });
-      }
+      window.scrollTo({
+        top: targetScrollTop,
+        left: 0,
+        behavior: "auto",
+      });
 
       if (focusElement) {
         try {
@@ -2153,72 +2401,26 @@ function scrollEditFormToTop(panel) {
   placeElementAtTop(panel);
 }
 
-function clearSettingsEditScrollSpace() {
-  $$(".settings-edit-scroll-space").forEach((element) => element.remove());
-}
-
 function scrollOpenSettingsEditToTop() {
   let attempts = 0;
 
-  function alignEditedRow() {
+  function alignEditPanel() {
     attempts += 1;
 
-    const editedRow = $(".settings-list-item.is-editing");
+    const editPanel = $(".settings-inline-edit-panel");
 
-    if (!editedRow) {
+    if (!editPanel) {
       if (attempts < 8) {
-        requestAnimationFrame(alignEditedRow);
+        requestAnimationFrame(alignEditPanel);
       }
 
       return;
     }
 
-    const categoryPanel = editedRow.closest(".settings-category-panel");
-    const header = $(".app-header");
-
-    if (!categoryPanel) {
-      return;
-    }
-
-    clearSettingsEditScrollSpace();
-
-    const scrollSpace = document.createElement("div");
-    scrollSpace.className = "settings-edit-scroll-space";
-    scrollSpace.setAttribute("aria-hidden", "true");
-    scrollSpace.style.height = "0px";
-    scrollSpace.style.pointerEvents = "none";
-    categoryPanel.append(scrollSpace);
-
-    header?.classList.remove("is-hidden");
-
-    requestAnimationFrame(() => {
-      const headerHeight = header?.offsetHeight ?? 0;
-      const viewportHeight =
-        window.visualViewport?.height ?? window.innerHeight;
-      const rowDocumentTop =
-        window.scrollY + editedRow.getBoundingClientRect().top;
-      const targetScrollTop = Math.max(0, rowDocumentTop - headerHeight);
-      const scrollRoot = document.scrollingElement;
-      const requiredDocumentHeight = targetScrollTop + viewportHeight;
-      const missingHeight = Math.max(
-        0,
-        requiredDocumentHeight - (scrollRoot?.scrollHeight ?? 0),
-      );
-
-      scrollSpace.style.height = `${missingHeight + 1}px`;
-      ignoreHeaderAutoHideUntil = performance.now() + 500;
-
-      requestAnimationFrame(() => {
-        window.scrollTo({
-          top: targetScrollTop,
-          left: 0,
-          behavior: "auto",
-        });
-      });
-    });
+    placeElementAtTop(editPanel);
   }
 
-  requestAnimationFrame(alignEditedRow);
+  requestAnimationFrame(alignEditPanel);
 }
 
 function setEditingSettings(settingsKey, id) {
@@ -4163,125 +4365,11 @@ function createSettingsItemRow(item) {
   return row;
 }
 
-function itemEditFields(items) {
-  return [
-    {
-      key: "name",
-      label: "Item name",
-      maxLength: 80,
-      value: () =>
-        items.find((item) => item.id === editingSettingsId)?.name ?? "",
-    },
-    {
-      key: "locationId",
-      label: "Room",
-      type: "select",
-      emptyText: "Choose a room",
-      options: roomOptions,
-      value: () =>
-        items.find((item) => item.id === editingSettingsId)?.locationId ?? "",
-    },
-    {
-      key: "productTypeId",
-      label: "Product type",
-      type: "select",
-      emptyText: "Choose a product type",
-      options: productTypeOptions,
-      value: () =>
-        items.find((item) => item.id === editingSettingsId)?.productTypeId ??
-        "",
-    },
-    {
-      key: "specificAttributes",
-      label: "Specific Attributes (optional)",
-      required: false,
-      maxLength: 100,
-      placeholder: "e.g. 2 L, gluten-free, fragrance-free",
-      value: () =>
-        items.find((item) => item.id === editingSettingsId)
-          ?.specificAttributes ?? "",
-    },
-    {
-      key: "storeId",
-      label: "Store (optional)",
-      type: "select",
-      required: false,
-      emptyText: "Any matching store",
-      options: () => {
-        const item = items.find(
-          (candidate) => candidate.id === editingSettingsId,
-        );
-
-        return itemStoreOptions(item?.productTypeId ?? "");
-      },
-      value: () =>
-        items.find((item) => item.id === editingSettingsId)?.storeId ?? "",
-    },
-    {
-      key: "defaultAmount",
-      label: "Amount",
-      type: "number",
-      min: 0,
-      step: "any",
-      value: () =>
-        items.find((item) => item.id === editingSettingsId)?.defaultAmount ?? 1,
-    },
-    {
-      key: "unitId",
-      label: "Unit",
-      type: "select",
-      emptyText: null,
-      options: unitOptions,
-      value: () => {
-        const item = items.find(
-          (candidate) => candidate.id === editingSettingsId,
-        );
-        return item?.unitId ?? currentUnits[0]?.id ?? "";
-      },
-    },
-    {
-      key: "increment",
-      label: "Step",
-      type: "number",
-      min: 0.01,
-      step: "any",
-      value: () =>
-        items.find((item) => item.id === editingSettingsId)?.increment ?? 1,
-    },
-  ];
-}
-
 async function saveSettingsItem(values, item) {
-  const selectedProductType = currentProductTypes.find(
-    (productType) => String(productType.id) === String(values.productTypeId),
-  );
+  const validationMessage = validateItemFormValues(values);
 
-  const inheritedStoreTypeIds = selectedProductType
-    ? productTypeStoreTypeIds(selectedProductType)
-    : [];
-
-  if (
-    !values.name ||
-    !values.locationId ||
-    !values.productTypeId ||
-    !values.unitId ||
-    !Number.isFinite(values.defaultAmount) ||
-    !Number.isFinite(values.increment) ||
-    values.increment <= 0
-  ) {
-    throw new Error("Please complete all required fields.");
-  }
-
-  if (inheritedStoreTypeIds.length === 0) {
-    throw new Error(
-      "Please choose a product type that has at least one store type set.",
-    );
-  }
-
-  if (!itemStoreIsAllowed(values.productTypeId, values.storeId)) {
-    throw new Error(
-      "Please choose a store that matches the selected product type.",
-    );
+  if (validationMessage) {
+    throw new Error(validationMessage);
   }
 
   await updateDoc(householdDocument("items", item.id), {
@@ -4289,7 +4377,7 @@ async function saveSettingsItem(values, item) {
     locationId: values.locationId,
     productTypeId: values.productTypeId,
     storeId: values.storeId || null,
-    specificAttributes: values.specificAttributes ?? "",
+    specificAttributes: values.specificAttributes,
     defaultAmount: values.defaultAmount,
     unitId: values.unitId,
     increment: values.increment,
@@ -4298,34 +4386,114 @@ async function saveSettingsItem(values, item) {
 }
 
 function appendSettingsItemEditPanel(item, listElement, rowElement) {
-  appendSettingsEditPanel({
-    listElement,
-    rowElement,
-    settingsKey: "items",
-    item,
-    fields: itemEditFields(currentItems),
-    onSave: saveSettingsItem,
-    extraContent: (_item, inputMap) => {
-      const productTypeSelect = inputMap.get("productTypeId")?.input;
-      const storeSelect = inputMap.get("storeId")?.input;
+  if (
+    editingSettingsKey !== "items" ||
+    editingSettingsId !== item.id ||
+    editingSettingsContextId !== null
+  ) {
+    return null;
+  }
 
-      populateItemStoreSelect(
-        storeSelect,
-        productTypeSelect?.value ?? "",
-        storeSelect?.value ?? "",
-      );
+  rowElement?.classList.add("is-editing");
 
-      productTypeSelect?.addEventListener("change", () => {
-        populateItemStoreSelect(
-          storeSelect,
-          productTypeSelect.value,
-          storeSelect?.value ?? "",
-        );
-      });
+  const panel = document.createElement("section");
+  panel.className = "settings-inline-edit-panel settings-form item-form-panel";
+  panel.dataset.settingsEditKey = "items";
+  panel.dataset.settingsEditId = String(item.id);
+  panel.dataset.settingsEditContextId = "";
 
-      return null;
-    },
+  const form = document.createElement("form");
+
+  const headingRow = document.createElement("div");
+  headingRow.className = "form-heading-row";
+
+  const heading = document.createElement("h3");
+  heading.textContent = `Edit ${item.name}`;
+
+  const actions = document.createElement("div");
+  actions.className = "form-heading-actions";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "×";
+  cancelButton.setAttribute("aria-label", "Cancel editing");
+  cancelButton.title = "Cancel";
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.textContent = "✓";
+  saveButton.setAttribute("aria-label", "Save changes");
+  saveButton.title = "Save";
+
+  actions.append(cancelButton, saveButton);
+  headingRow.append(heading, actions);
+
+  const fieldContainer = document.createElement("div");
+  fieldContainer.className = "settings-form-fields";
+
+  const fields = createItemFormFields({
+    container: fieldContainer,
+    idPrefix: `settings-item-edit-${item.id}`,
+    values: item,
   });
+
+  populateRoomSelect(fields.roomSelect, item.locationId);
+  populateProductTypeSelect(fields.productTypeSelect, item.productTypeId);
+  populateUnitSelect(fields.unitSelect, item.unitId);
+  populateItemStoreSelect(
+    fields.storeSelect,
+    item.productTypeId,
+    item.storeId ?? "",
+  );
+
+  fields.productTypeSelect.addEventListener("change", () => {
+    populateItemStoreSelect(
+      fields.storeSelect,
+      fields.productTypeSelect.value,
+      fields.storeSelect.value,
+    );
+  });
+
+  fields.unitSelect.addEventListener("change", () => {
+    updateIncrementFromUnit(fields.unitSelect, fields.incrementInput);
+  });
+
+  cancelButton.addEventListener("click", () => {
+    editingSettingsKey = null;
+    editingSettingsId = null;
+    editingSettingsContextId = null;
+    clearFormPositioningScrollSpace();
+    renderSettingsLists();
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const values = readItemFormValues(fields);
+    saveButton.disabled = true;
+    cancelButton.disabled = true;
+
+    try {
+      await saveSettingsItem(values, item);
+      editingSettingsKey = null;
+      editingSettingsId = null;
+      editingSettingsContextId = null;
+      clearFormPositioningScrollSpace();
+      renderSettingsLists();
+    } catch (error) {
+      console.error("Could not save settings item:", error);
+      alert(error.message || "The item could not be saved.");
+    } finally {
+      saveButton.disabled = false;
+      cancelButton.disabled = false;
+    }
+  });
+
+  form.append(headingRow, fieldContainer);
+  panel.append(form);
+  listElement.append(panel);
+
+  return panel;
 }
 
 function recordedStoreNames(storeIds = []) {
@@ -4905,6 +5073,7 @@ function openSpecificProductQuickAdd(item) {
     return;
   }
 
+  clearFormPositioningScrollSpace();
   recordAppNavigation();
 
   if (newItemPanel) {
@@ -5884,189 +6053,6 @@ function disableButtons(buttons) {
   });
 }
 
-function appendRoomItemEditPanel(item) {
-  if (editingItemId !== item.id) {
-    return;
-  }
-
-  const panel = document.createElement("section");
-  panel.className = "room-item-edit-panel settings-form";
-
-  const form = document.createElement("form");
-
-  const headingRow = document.createElement("div");
-  headingRow.className = "form-heading-row";
-
-  const heading = document.createElement("h3");
-  heading.textContent = `Edit ${item.name}`;
-
-  const actions = document.createElement("div");
-  actions.className = "form-heading-actions";
-
-  const cancelButton = document.createElement("button");
-  cancelButton.type = "button";
-  cancelButton.textContent = "×";
-  cancelButton.setAttribute("aria-label", "Cancel editing");
-  cancelButton.title = "Cancel";
-
-  const saveButton = document.createElement("button");
-  saveButton.type = "submit";
-  saveButton.textContent = "✓";
-  saveButton.setAttribute("aria-label", "Save changes");
-  saveButton.title = "Save";
-
-  actions.append(cancelButton, saveButton);
-  headingRow.append(heading, actions);
-
-  const fields = document.createElement("div");
-  fields.className = "settings-form-fields";
-
-  const nameLabel = document.createElement("label");
-  nameLabel.textContent = "Item name";
-
-  const nameInput = document.createElement("input");
-  nameInput.type = "text";
-  nameInput.required = true;
-  nameInput.maxLength = 80;
-  nameInput.value = item.name ?? "";
-  nameLabel.append(nameInput);
-
-  const productTypeLabel = document.createElement("label");
-  productTypeLabel.textContent = "Product type";
-
-  const productTypeSelect = document.createElement("select");
-  productTypeSelect.required = true;
-  populateProductTypeSelect(productTypeSelect, item.productTypeId);
-
-  productTypeLabel.append(productTypeSelect);
-
-  const amountRow = document.createElement("div");
-  amountRow.className = "amount-unit-step-row";
-
-  const amountLabel = document.createElement("label");
-  amountLabel.textContent = "Amount";
-
-  const amountInput = document.createElement("input");
-  amountInput.type = "number";
-  amountInput.required = true;
-  amountInput.min = "0";
-  amountInput.step = "any";
-  amountInput.value = item.defaultAmount ?? 1;
-  amountLabel.append(amountInput);
-
-  const unitLabel = document.createElement("label");
-  unitLabel.textContent = "Unit";
-
-  const unitSelect = document.createElement("select");
-  unitSelect.required = true;
-
-  let unitSelected = false;
-
-  currentUnits.forEach((unit) => {
-    const option = document.createElement("option");
-    option.value = unit.id;
-    option.textContent = unit.symbol;
-
-    if (unit.id === item.unitId) {
-      option.selected = true;
-      unitSelected = true;
-    }
-
-    unitSelect.append(option);
-  });
-
-  if (!unitSelected && currentUnits.length > 0) {
-    unitSelect.value = currentUnits[0].id;
-  }
-
-  unitLabel.append(unitSelect);
-
-  const incrementLabel = document.createElement("label");
-  incrementLabel.textContent = "Step";
-
-  const incrementInput = document.createElement("input");
-  incrementInput.type = "number";
-  incrementInput.required = true;
-  incrementInput.min = "0.01";
-  incrementInput.step = "any";
-  incrementInput.value = item.increment ?? 1;
-  incrementLabel.append(incrementInput);
-
-  amountRow.append(amountLabel, unitLabel, incrementLabel);
-  fields.append(nameLabel, productTypeLabel, amountRow);
-
-  cancelButton.addEventListener("click", () => {
-    editingItemId = null;
-    renderRoomItems();
-  });
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const nextName = nameInput.value.trim();
-    const nextProductTypeId = productTypeSelect.value;
-    const nextDefaultAmount = Number(amountInput.value);
-    const nextUnitId = unitSelect.value;
-    const nextIncrement = Number(incrementInput.value);
-
-    const selectedProductType = currentProductTypes.find(
-      (productType) => productType.id === nextProductTypeId,
-    );
-
-    const inheritedStoreTypeIds = selectedProductType
-      ? productTypeStoreTypeIds(selectedProductType)
-      : [];
-
-    if (
-      !nextName ||
-      !nextProductTypeId ||
-      !nextUnitId ||
-      !Number.isFinite(nextDefaultAmount) ||
-      !Number.isFinite(nextIncrement) ||
-      nextIncrement <= 0
-    ) {
-      alert("Please complete all required fields.");
-      return;
-    }
-
-    if (inheritedStoreTypeIds.length === 0) {
-      alert(
-        "Please choose a product type that has at least one store type set.",
-      );
-      return;
-    }
-
-    saveButton.disabled = true;
-    cancelButton.disabled = true;
-
-    try {
-      await updateDoc(householdDocument("items", item.id), {
-        name: nextName,
-        productTypeId: nextProductTypeId,
-        defaultAmount: nextDefaultAmount,
-        unitId: nextUnitId,
-        increment: nextIncrement,
-        updatedAt: serverTimestamp(),
-      });
-
-      editingItemId = null;
-      renderRoomItems();
-    } catch (error) {
-      console.error("Could not update item:", error);
-      alert("The item could not be saved.");
-    } finally {
-      saveButton.disabled = false;
-      cancelButton.disabled = false;
-    }
-  });
-
-  form.append(headingRow, fields);
-  panel.append(form);
-  roomItemsList.append(panel);
-  scrollEditFormToTop(panel);
-  nameInput.focus();
-}
-
 function appendFullNeededStoreHeading(label) {
   const heading = document.createElement("div");
   heading.className = "full-needed-store-heading";
@@ -7030,6 +7016,7 @@ function wireNavigation() {
     }
 
     if (isOneOffRoomSelected()) {
+      clearFormPositioningScrollSpace();
       closeSpecificProductQuickAdd();
       newItemPanel.hidden = true;
       resetOneOffItemForm();
@@ -7075,6 +7062,7 @@ function wireNavigation() {
   });
 
   cancelNewItemButton.addEventListener("click", () => {
+    clearFormPositioningScrollSpace();
     newItemPanel.hidden = true;
     newItemButton.hidden = false;
   });
@@ -7214,6 +7202,7 @@ function wireForms() {
       });
 
       addRoomForm.reset();
+      clearFormPositioningScrollSpace();
       addRoomForm.hidden = true;
     },
     {
@@ -7243,6 +7232,7 @@ function wireForms() {
       });
 
       addUnitForm.reset();
+      clearFormPositioningScrollSpace();
       addUnitForm.hidden = true;
     },
     {
@@ -7268,6 +7258,7 @@ function wireForms() {
       });
 
       addStoreTypeForm.reset();
+      clearFormPositioningScrollSpace();
       addStoreTypeForm.hidden = true;
     },
     {
@@ -7296,6 +7287,7 @@ function wireForms() {
       });
 
       addStoreForm.reset();
+      clearFormPositioningScrollSpace();
       addStoreForm.hidden = true;
     },
     {
@@ -7351,6 +7343,7 @@ function wireForms() {
 
       await createCatalogueItem(values);
       resetSettingsItemAddForm();
+      clearFormPositioningScrollSpace();
       addSettingsItemForm.hidden = true;
     },
     {
@@ -7431,6 +7424,7 @@ function wireForms() {
         itemSpecificAttributesInput.value = "";
       }
 
+      clearFormPositioningScrollSpace();
       newItemPanel.hidden = true;
       newItemButton.hidden = false;
     },

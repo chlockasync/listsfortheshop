@@ -488,7 +488,6 @@ const accessTextPromptInput = $("#access-text-prompt-input");
 const cancelAccessTextPromptButton = $("#cancel-access-text-prompt");
 const submitAccessTextPromptButton = $("#submit-access-text-prompt");
 const householdDevicesList = $("#household-devices-list");
-const householdInvitesList = $("#household-invites-list");
 const viewerInvitesList = $("#viewer-invites-list");
 const createHouseholdLinkButton = $("#create-household-link");
 const createViewerLinkButton = $("#create-viewer-link");
@@ -1062,6 +1061,29 @@ function accessInviteShouldAppear(invite, kind) {
   return invite.active === true && !accessInviteIsExpired(invite);
 }
 
+async function revokeHouseholdDevice(member) {
+  const memberRef = householdDocument("members", member.id);
+  const inviteId = String(member.inviteId ?? "").trim();
+  const batch = writeBatch(db);
+
+  batch.delete(memberRef);
+
+  if (inviteId) {
+    const inviteRef = householdDocument("accessInvites", inviteId);
+    const inviteSnapshot = await getDoc(inviteRef);
+
+    if (inviteSnapshot.exists()) {
+      batch.update(inviteRef, {
+        active: false,
+        revokedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+
+  await batch.commit();
+}
+
 function renderAccessSettings() {
   if (!householdDevicesList) {
     return;
@@ -1070,14 +1092,24 @@ function renderAccessSettings() {
   if (!canEditHousehold()) {
     householdDevicesList.innerHTML =
       "<p>Household device details are not available through a read-only link.</p>";
-    householdInvitesList.innerHTML =
-      "<p>Household device links can only be managed by a household device.</p>";
     viewerInvitesList.innerHTML =
       "<p>Read-only sharing links can only be managed by a household device.</p>";
     return;
   }
 
   householdDevicesList.innerHTML = "";
+
+  const householdInvites = currentAccessInvites
+    .filter((invite) => accessInviteShouldAppear(invite, "household"))
+    .sort((a, b) => {
+      const aDate = firestoreDate(a.createdAt)?.getTime() ?? 0;
+      const bDate = firestoreDate(b.createdAt)?.getTime() ?? 0;
+      return bDate - aDate;
+    });
+  const householdInvitesById = new Map(
+    currentAccessInvites.map((invite) => [invite.id, invite]),
+  );
+  const representedInviteIds = new Set();
 
   const householdMembers = currentAccessMembers
     .filter((member) => normalizedAccessRole(member.role) === "household")
@@ -1089,48 +1121,112 @@ function renderAccessSettings() {
       );
     });
 
-  if (householdMembers.length === 0) {
-    householdDevicesList.innerHTML = "<p>No household devices found.</p>";
-  } else {
-    householdMembers.forEach((member) => {
-      const isCurrentDevice = member.id === auth.currentUser?.uid;
+  householdMembers.forEach((member) => {
+    const isCurrentDevice = member.id === auth.currentUser?.uid;
+    const inviteId = String(member.inviteId ?? "").trim();
+    const invite = inviteId ? householdInvitesById.get(inviteId) : null;
+    const actions = [];
+
+    if (inviteId) {
+      representedInviteIds.add(inviteId);
+    }
+
+    if (!isCurrentDevice) {
+      actions.push(
+        createAccessActionButton(
+          "Revoke",
+          async () => {
+            if (
+              !confirm(
+                `Revoke access for ${member.deviceName || "this device"}?`,
+              )
+            ) {
+              return;
+            }
+
+            try {
+              await revokeHouseholdDevice(member);
+            } catch (error) {
+              console.error("Could not revoke device:", error);
+              alert("The device could not be revoked.");
+            }
+          },
+          { danger: true },
+        ),
+      );
+    }
+
+    householdDevicesList.append(
+      accessRecordRow({
+        title:
+          member.deviceName ||
+          String(invite?.description ?? "").trim() ||
+          "Existing household device",
+        detail: isCurrentDevice
+          ? "This device"
+          : `Last seen ${formatAccessDate(member.lastSeenAt)}`,
+        actions,
+      }),
+    );
+  });
+
+  householdInvites
+    .filter((invite) => !representedInviteIds.has(invite.id))
+    .forEach((invite) => {
       const actions = [];
+      const uses = Number(invite.uses ?? 0);
+      const isUnused = uses === 0;
+      const canUseLink =
+        isUnused &&
+        invite.active === true &&
+        !accessInviteIsExpired(invite);
 
-      if (!isCurrentDevice) {
+      if (invite.token && canUseLink) {
         actions.push(
-          createAccessActionButton(
-            "Revoke",
-            async () => {
-              if (
-                !confirm(
-                  `Revoke access for ${member.deviceName || "this device"}?`,
-                )
-              ) {
-                return;
-              }
-
-              try {
-                await deleteDoc(householdDocument("members", member.id));
-              } catch (error) {
-                console.error("Could not revoke device:", error);
-                alert("The device could not be revoked.");
-              }
-            },
-            { danger: true },
-          ),
+          createAccessActionButton("Copy", async (event) => {
+            await copyTextToClipboard(
+              inviteUrlForToken(invite.token),
+              event.currentTarget,
+            );
+          }),
         );
       }
 
+      actions.push(
+        createAccessActionButton(
+          "Revoke",
+          async () => {
+            try {
+              await updateDoc(householdDocument("accessInvites", invite.id), {
+                active: false,
+                revokedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            } catch (error) {
+              console.error("Could not revoke link:", error);
+              alert("The link could not be revoked.");
+            }
+          },
+          { danger: true },
+        ),
+      );
+
       householdDevicesList.append(
         accessRecordRow({
-          title: member.deviceName || "Existing household device",
-          detail: isCurrentDevice
-            ? "This device"
-            : `Last seen ${formatAccessDate(member.lastSeenAt)}`,
+          title:
+            String(invite.description ?? "").trim() ||
+            "Household device link",
+          detail: isUnused
+            ? `Unused · expires ${formatAccessDate(invite.expiresAt)}`
+            : `Used ${formatAccessDate(invite.lastUsedAt)} · device no longer active`,
           actions,
         }),
       );
     });
+
+  if (householdDevicesList.children.length === 0) {
+    householdDevicesList.innerHTML =
+      "<p>No household devices or unused links found.</p>";
   }
 
   function renderInviteList(container, kind, emptyText) {
@@ -1151,11 +1247,8 @@ function renderAccessSettings() {
     matchingInvites.forEach((invite) => {
       const actions = [];
       const uses = Number(invite.uses ?? 0);
-      const isUsedHouseholdLink = kind === "household" && uses > 0;
       const canUseLink =
-        invite.active === true &&
-        !accessInviteIsExpired(invite) &&
-        !isUsedHouseholdLink;
+        invite.active === true && !accessInviteIsExpired(invite);
 
       if (invite.token && canUseLink) {
         actions.push(
@@ -1189,14 +1282,11 @@ function renderAccessSettings() {
         );
       }
 
-      const defaultTitle =
-        kind === "viewer" ? "Read-only sharing link" : "Household device link";
+      const defaultTitle = "Read-only sharing link";
       let detail;
 
       if (uses === 0) {
         detail = `Unused · expires ${formatAccessDate(invite.expiresAt)}`;
-      } else if (kind === "household") {
-        detail = `Used ${formatAccessDate(invite.lastUsedAt)}`;
       } else {
         const useLabel = uses === 1 ? "Used once" : `Used ${uses} times`;
         detail = `${useLabel} · last used ${formatAccessDate(invite.lastUsedAt)} · expires ${formatAccessDate(invite.expiresAt)}`;
@@ -1212,11 +1302,6 @@ function renderAccessSettings() {
     });
   }
 
-  renderInviteList(
-    householdInvitesList,
-    "household",
-    "No household device links.",
-  );
   renderInviteList(viewerInvitesList, "viewer", "No read-only sharing links.");
 }
 

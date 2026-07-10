@@ -3233,3 +3233,8 @@ body:has(#needing-home:not([hidden])) #needing-view {
 .specific-product-name-suffix {
   white-space: nowrap;
 }
+
+/* ===== 202607101530 targeted navigation and store-order updates ===== */
+#rooms-list .room-button {
+  font-weight: 400 !important;
+}

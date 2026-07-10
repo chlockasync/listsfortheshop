@@ -6,6 +6,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/f
 
 import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
   deleteField,
@@ -322,6 +323,14 @@ function closeSettingsAddForms({ except = null } = {}) {
   }
 }
 
+function moveSettingsAddFormToPanelTop(form) {
+  const panel = form?.closest(".settings-category-panel");
+
+  if (panel && panel.firstElementChild !== form) {
+    panel.prepend(form);
+  }
+}
+
 function toggleCurrentSettingsAddForm() {
   const categoryName = getVisibleSettingsCategory();
   const form = getSettingsAddForm(categoryName);
@@ -336,14 +345,17 @@ function toggleCurrentSettingsAddForm() {
 
   const willOpen = form.hidden;
   closeSettingsAddForms({ except: form });
-  form.hidden = !willOpen;
 
   if (willOpen) {
+    moveSettingsAddFormToPanelTop(form);
+    form.hidden = false;
+
     const focusElement = form.querySelector(
       'input:not([type="hidden"]), select, textarea',
     );
     placeElementAtTop(form, focusElement);
   } else {
+    form.hidden = true;
     clearFormPositioningScrollSpace();
   }
 }
@@ -533,6 +545,22 @@ const ONE_OFF_ROOM_ID = "__one_off_stuff__";
 const REGULAR_ROOM_ID = "__regular_stuff__";
 const ALL_STUFF_ROOM_ID = "__all_stuff__";
 const SETTINGS_MENU_ORDER_KEY = `listsForTheShop.settingsMenuOrder.${HOUSEHOLD_ID}`;
+const SETTINGS_MENU_DEFAULT_ORDER = [
+  "store-types",
+  "stores",
+  "product-types",
+  "rooms",
+  "units",
+  "items",
+];
+const LEGACY_SETTINGS_MENU_DEFAULT_ORDER = [
+  "stores",
+  "store-types",
+  "product-types",
+  "items",
+  "rooms",
+  "units",
+];
 
 /* ===== Navigation and view state ===== */
 
@@ -2776,14 +2804,31 @@ async function deactivateProductType(productType) {
   batch.delete(householdDocument("productTypes", productType.id));
 
   currentStores.forEach((store) => {
-    if (!storeProductTypeOrderContains(store, productType.id)) {
+    const excludedProductTypeIds = getStoreExcludedProductTypeIds(store);
+    const hasSavedOrder = storeProductTypeOrderContains(
+      store,
+      productType.id,
+    );
+    const isExcluded = excludedProductTypeIds.some(
+      (candidateId) => String(candidateId) === String(productType.id),
+    );
+
+    if (!hasSavedOrder && !isExcluded) {
       return;
     }
 
-    batch.update(householdDocument("stores", store.id), {
-      [`productTypeOrders.${productType.id}`]: deleteField(),
+    const updates = {
+      excludedProductTypeIds: excludedProductTypeIds.filter(
+        (candidateId) => String(candidateId) !== String(productType.id),
+      ),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (hasSavedOrder) {
+      updates[`productTypeOrders.${productType.id}`] = deleteField();
+    }
+
+    batch.update(householdDocument("stores", store.id), updates);
   });
 
   await batch.commit();
@@ -3054,6 +3099,20 @@ function storeProductTypeOrderContains(store, productTypeId) {
   );
 }
 
+function getStoreExcludedProductTypeIds(store) {
+  return Array.isArray(store?.excludedProductTypeIds)
+    ? store.excludedProductTypeIds.map((productTypeId) =>
+        String(productTypeId),
+      )
+    : [];
+}
+
+function storeExcludesProductType(store, productTypeId) {
+  return getStoreExcludedProductTypeIds(store).some(
+    (candidateId) => String(candidateId) === String(productTypeId),
+  );
+}
+
 function getStoreTypeNames(storeTypeIds) {
   const names = storeTypeIds
     .map((storeTypeId) => getStoreTypeName(storeTypeId))
@@ -3120,7 +3179,10 @@ function getProductTypesForStoreType(storeTypeId) {
 }
 
 function getOrderedProductTypesForShoppingTarget(storeTypeId, store = null) {
-  const productTypes = getProductTypesForStoreType(storeTypeId);
+  const productTypes = getProductTypesForStoreType(storeTypeId).filter(
+    (productType) =>
+      !store || !storeExcludesProductType(store, productType.id),
+  );
 
   return productTypes.sort(
     store
@@ -3129,7 +3191,22 @@ function getOrderedProductTypesForShoppingTarget(storeTypeId, store = null) {
   );
 }
 
-function createStoreProductTypeOrderRow(productType) {
+async function removeProductTypeFromStore(store, productType) {
+  const scrollY = window.scrollY;
+  const updates = {
+    excludedProductTypeIds: arrayUnion(String(productType.id)),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (storeProductTypeOrderContains(store, productType.id)) {
+    updates[`productTypeOrders.${productType.id}`] = deleteField();
+  }
+
+  await updateDoc(householdDocument("stores", store.id), updates);
+  restoreScrollPosition(scrollY);
+}
+
+function createStoreProductTypeOrderRow(productType, store) {
   const row = document.createElement("div");
   row.className =
     "settings-list-item settings-order-row store-product-type-order-row";
@@ -3148,7 +3225,30 @@ function createStoreProductTypeOrderRow(productType) {
   name.textContent = productType.name;
 
   text.append(name);
-  row.append(handle, text);
+
+  const actions = document.createElement("span");
+  actions.className = "settings-row-actions";
+
+  const deleteButton = createIconButton({
+    className: "settings-row-icon-button settings-row-delete-button",
+    icon: "🗑️",
+    label: `Remove ${productType.name} from ${store.name}`,
+    onClick: async (event) => {
+      event.stopPropagation();
+      deleteButton.disabled = true;
+
+      try {
+        await removeProductTypeFromStore(store, productType);
+      } catch (error) {
+        console.error("Could not remove product type from store:", error);
+        alert("The product type could not be removed from this store.");
+        deleteButton.disabled = false;
+      }
+    },
+  });
+
+  actions.append(deleteButton);
+  row.append(handle, text, actions);
 
   return row;
 }
@@ -3171,11 +3271,11 @@ function createStoreProductTypeOrderPanel(store) {
     return wrapper;
   }
 
-  const productTypesForStore = getProductTypesForStoreType(
+  const allProductTypesForStore = getProductTypesForStoreType(
     store.storeTypeId,
-  ).sort(sortProductTypesForStore(store, store.storeTypeId));
+  );
 
-  if (productTypesForStore.length === 0) {
+  if (allProductTypesForStore.length === 0) {
     const message = document.createElement("p");
     message.className = "settings-help-text";
     message.textContent =
@@ -3184,15 +3284,33 @@ function createStoreProductTypeOrderPanel(store) {
     return wrapper;
   }
 
-  const list = document.createElement("div");
-  list.className = "store-product-type-order-list";
-  list.dataset.storeId = store.id;
+  const productTypesForStore = allProductTypesForStore
+    .filter(
+      (productType) => !storeExcludesProductType(store, productType.id),
+    )
+    .sort(sortProductTypesForStore(store, store.storeTypeId));
 
-  productTypesForStore.forEach((productType) => {
-    list.append(createStoreProductTypeOrderRow(productType));
-  });
+  if (productTypesForStore.length > 0) {
+    const list = document.createElement("div");
+    list.className = "store-product-type-order-list";
+    list.dataset.storeId = store.id;
 
-  wrapper.append(list);
+    productTypesForStore.forEach((productType) => {
+      list.append(createStoreProductTypeOrderRow(productType, store));
+    });
+
+    wrapper.append(list);
+
+    queueMicrotask(() => {
+      enableStoreProductTypeOrdering(list, store);
+    });
+  } else {
+    const message = document.createElement("p");
+    message.className = "settings-help-text";
+    message.textContent =
+      "All product types have been removed from this store. Reset to restore the default list.";
+    wrapper.append(message);
+  }
 
   const resetButton = document.createElement("button");
   resetButton.type = "button";
@@ -3214,10 +3332,6 @@ function createStoreProductTypeOrderPanel(store) {
   });
 
   wrapper.append(resetButton);
-
-  queueMicrotask(() => {
-    enableStoreProductTypeOrdering(list, store);
-  });
 
   return wrapper;
 }
@@ -3248,6 +3362,7 @@ async function resetStoreProductTypeOrder(store) {
 
   await updateDoc(householdDocument("stores", store.id), {
     productTypeOrders: {},
+    excludedProductTypeIds: deleteField(),
     updatedAt: serverTimestamp(),
   });
 
@@ -3525,6 +3640,15 @@ function restoreScrollPosition(scrollY) {
   });
 }
 
+function settingsMenuOrdersMatch(firstOrder, secondOrder) {
+  return (
+    firstOrder.length === secondOrder.length &&
+    firstOrder.every(
+      (categoryName, index) => categoryName === secondOrder[index],
+    )
+  );
+}
+
 function applySavedSettingsMenuOrder() {
   if (!settingsHome) {
     return;
@@ -3539,6 +3663,10 @@ function applySavedSettingsMenuOrder() {
     console.warn("Could not read Settings menu order:", error);
   }
 
+  if (!Array.isArray(savedOrder)) {
+    savedOrder = [];
+  }
+
   const optionsByKey = new Map(
     Array.from(
       settingsHome.querySelectorAll(
@@ -3547,7 +3675,19 @@ function applySavedSettingsMenuOrder() {
     ).map((option) => [option.dataset.settingsCategory, option]),
   );
 
-  savedOrder.forEach((categoryName) => {
+  const validSavedOrder = savedOrder.filter((categoryName) =>
+    optionsByKey.has(categoryName),
+  );
+  const orderToApply =
+    validSavedOrder.length > 0 &&
+    !settingsMenuOrdersMatch(
+      validSavedOrder,
+      LEGACY_SETTINGS_MENU_DEFAULT_ORDER,
+    )
+      ? validSavedOrder
+      : SETTINGS_MENU_DEFAULT_ORDER;
+
+  orderToApply.forEach((categoryName) => {
     const option = optionsByKey.get(categoryName);
 
     if (option) {
@@ -3976,6 +4116,9 @@ function renderStores(stores) {
         productTypeOrders: storeTypeChanged
           ? {}
           : (store.productTypeOrders ?? {}),
+        excludedProductTypeIds: storeTypeChanged
+          ? deleteField()
+          : getStoreExcludedProductTypeIds(store),
         updatedAt: serverTimestamp(),
       });
     },
@@ -4033,18 +4176,32 @@ async function cleanStoreProductTypeOrdersForProductType(
   );
 
   currentStores.forEach((store) => {
-    if (!storeProductTypeOrderContains(store, productTypeId)) {
-      return;
-    }
-
     if (validStoreTypeIdSet.has(String(store.storeTypeId))) {
       return;
     }
 
-    batch.update(householdDocument("stores", store.id), {
-      [`productTypeOrders.${productTypeId}`]: deleteField(),
+    const excludedProductTypeIds = getStoreExcludedProductTypeIds(store);
+    const hasSavedOrder = storeProductTypeOrderContains(store, productTypeId);
+    const isExcluded = excludedProductTypeIds.some(
+      (candidateId) => String(candidateId) === String(productTypeId),
+    );
+
+    if (!hasSavedOrder && !isExcluded) {
+      return;
+    }
+
+    const updates = {
+      excludedProductTypeIds: excludedProductTypeIds.filter(
+        (candidateId) => String(candidateId) !== String(productTypeId),
+      ),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (hasSavedOrder) {
+      updates[`productTypeOrders.${productTypeId}`] = deleteField();
+    }
+
+    batch.update(householdDocument("stores", store.id), updates);
   });
 }
 
@@ -5626,6 +5783,14 @@ function neededRecordIsAvailableAtStore(record, storeId) {
     );
   }
 
+  if (
+    selectedStore &&
+    record.item.productTypeId &&
+    storeExcludesProductType(selectedStore, record.item.productTypeId)
+  ) {
+    return false;
+  }
+
   const specificStoreIds = Array.isArray(record.specificProduct?.storeIds)
     ? record.specificProduct.storeIds
     : [];
@@ -7156,14 +7321,7 @@ function wireNavigation() {
       oneOffItemPanel.hidden = false;
       oneOffItemPanel.scrollTop = 0;
       newItemButton.hidden = true;
-
-      requestAnimationFrame(() => {
-        try {
-          oneOffItemNameInput.focus({ preventScroll: true });
-        } catch (_error) {
-          oneOffItemNameInput.focus();
-        }
-      });
+      placeElementAtTop(oneOffItemPanel, oneOffItemNameInput);
       return;
     }
 
@@ -7244,13 +7402,12 @@ function wireNavigation() {
   });
 
   shoppingAtButton.addEventListener("click", () => {
-    recordAppNavigation();
-    const willOpen = shoppingAtPanel.hidden;
-    setShoppingLocationPanelOpen(willOpen);
-
-    if (!willOpen) {
-      renderGettingItems();
+    if (!shoppingAtPanel.hidden) {
+      return;
     }
+
+    recordAppNavigation();
+    resetGettingToShoppingList();
   });
 
   addLongPressHandler(
@@ -7417,6 +7574,7 @@ function wireForms() {
         name: storeName,
         storeTypeId,
         productTypeOrders: {},
+        excludedProductTypeIds: [],
         active: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

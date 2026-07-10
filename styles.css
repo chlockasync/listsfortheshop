@@ -3238,3 +3238,187 @@ body:has(#needing-home:not([hidden])) #needing-view {
 #rooms-list .room-button {
   font-weight: 400 !important;
 }
+
+/* ===== Device access and private sharing ===== */
+
+.access-gate {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: 2rem;
+  text-align: center;
+  background: white;
+}
+
+.access-gate h1 {
+  margin: 0 0 1rem;
+  font-size: 1.45rem;
+}
+
+.access-gate p {
+  max-width: 28rem;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+body.access-pending > .app-header,
+body.access-pending > main,
+body.access-pending > .bottom-action-bar,
+body.access-pending > #specific-product-panel,
+body.access-pending > #temporary-note-panel,
+body.access-pending > #compact-select-panel,
+body.access-denied > .app-header,
+body.access-denied > main,
+body.access-denied > .bottom-action-bar,
+body.access-denied > #specific-product-panel,
+body.access-denied > #temporary-note-panel,
+body.access-denied > #compact-select-panel {
+  display: none !important;
+}
+
+body.access-household > .access-gate,
+body.access-viewer > .access-gate {
+  display: none !important;
+}
+
+.access-settings-panel {
+  padding-bottom: 5rem;
+}
+
+.access-settings-section {
+  padding: 1rem;
+  border-bottom: 8px solid #f4f4f4;
+  background: white;
+}
+
+.access-settings-section:last-child {
+  border-bottom: 0;
+}
+
+.access-settings-section h3 {
+  margin: 0 0 0.5rem;
+}
+
+.access-settings-section h4 {
+  margin: 1.35rem 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.access-settings-explanation,
+.access-link-help {
+  margin: 0 0 1rem;
+  color: rgb(0 0 0 / 68%);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.access-link-help {
+  margin-top: 0.55rem;
+}
+
+.access-record-list {
+  margin: 0 0 1rem;
+  border-top: 1px solid #e2e2e2;
+}
+
+.access-record-list > p {
+  margin: 0;
+  padding: 0.9rem 0;
+  color: rgb(0 0 0 / 62%);
+}
+
+.access-record-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 58px;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #e2e2e2;
+}
+
+.access-record-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.access-record-text strong {
+  overflow-wrap: anywhere;
+}
+
+.access-record-text span {
+  color: rgb(0 0 0 / 62%);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.access-record-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+}
+
+.access-record-button {
+  min-height: 38px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #c8c8c8;
+  border-radius: 0.45rem;
+  background: #f2f2f2;
+  font-size: 0.82rem;
+}
+
+.access-record-button.is-danger {
+  border-color: #b9b9b9;
+}
+
+.access-link-result {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0;
+  padding: 0.85rem;
+  border: 1px solid #d3d3d3;
+  border-radius: 0.45rem;
+  background: #f7f7f7;
+}
+
+.access-link-result label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.access-link-result input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid #aaa;
+  border-radius: 0.45rem;
+  background: white;
+}
+
+/* Viewer devices retain normal navigation but never show mutating controls. */
+body.access-viewer .settings-shortcut,
+body.access-viewer #new-item-button,
+body.access-viewer #edit-items-from-needed-list,
+body.access-viewer #finish-shop-button,
+body.access-viewer .bottom-context-action,
+body.access-viewer .room-item-controls,
+body.access-viewer .collect-checkbox-button,
+body.access-viewer .settings-row-icon-button,
+body.access-viewer .settings-order-handle,
+body.access-viewer .form-heading-actions,
+body.access-viewer .settings-add-button {
+  display: none !important;
+}
+
+body.access-viewer .bottom-action-bar {
+  grid-template-columns: 1fr;
+}
+
+body.access-viewer .bottom-bar-status {
+  grid-column: 1;
+}

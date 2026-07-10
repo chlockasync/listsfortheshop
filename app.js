@@ -5783,6 +5783,29 @@ function neededRecordIsAvailableAtStore(record, storeId) {
     );
   }
 
+  const specificStoreIds = Array.isArray(record.specificProduct?.storeIds)
+    ? record.specificProduct.storeIds
+    : [];
+
+  /*
+   * An explicit Specific Product store assignment is more specific than the
+   * store's excluded Product type list. It remains available at its assigned
+   * stores even when its parent Product type has been removed from the store.
+   */
+  if (specificStoreIds.length > 0) {
+    return specificStoreIds.some(
+      (candidateId) => String(candidateId) === String(storeId),
+    );
+  }
+
+  /* The same exception applies to an Item assigned directly to this store. */
+  if (
+    record.item.storeId &&
+    String(record.item.storeId) === String(storeId)
+  ) {
+    return true;
+  }
+
   if (
     selectedStore &&
     record.item.productTypeId &&
@@ -5791,19 +5814,7 @@ function neededRecordIsAvailableAtStore(record, storeId) {
     return false;
   }
 
-  const specificStoreIds = Array.isArray(record.specificProduct?.storeIds)
-    ? record.specificProduct.storeIds
-    : [];
-
-  if (specificStoreIds.length > 0) {
-    return specificStoreIds.some(
-      (candidateId) => String(candidateId) === String(storeId),
-    );
-  }
-
-  return (
-    !record.item.storeId || String(record.item.storeId) === String(storeId)
-  );
+  return !record.item.storeId;
 }
 
 async function migrateLegacySpecificEntryBeforeGenericAdd(item) {

@@ -2534,6 +2534,16 @@ body {
   min-width: 0;
   margin: 0;
   font-size: 1.05rem;
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+}
+
+.form-heading-lead,
+.form-heading-context {
+  display: inline;
+}
+
+.form-heading-context {
   overflow-wrap: anywhere;
 }
 

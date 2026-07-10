@@ -522,6 +522,7 @@ let currentProductTypes = [];
 let currentItems = [];
 let currentSpecificProducts = [];
 let currentNeededEntries = new Map();
+const optimisticNeededAmounts = new Map();
 let quickSpecificProductItemId = null;
 let temporaryNoteEntryId = null;
 let lastNonSettingsView = "needing";
@@ -1011,9 +1012,8 @@ function showView(viewName) {
     updateBottomContextAction();
   }
 
-  if (viewName === "getting" && !selectedShoppingTarget) {
-    shoppingAtPanel.hidden = false;
-    shoppingAtButton.setAttribute("aria-expanded", "true");
+  if (viewName === "getting") {
+    setShoppingLocationPanelOpen(!selectedShoppingTarget);
   }
 
   if (viewName === "settings") {
@@ -1061,11 +1061,20 @@ function resetNeedingToRoomList() {
   showNeedingHome();
 }
 
+function setShoppingLocationPanelOpen(isOpen) {
+  shoppingAtPanel.hidden = !isOpen;
+  shoppingAtButton.setAttribute("aria-expanded", String(isOpen));
+  gettingItemsList.hidden = isOpen;
+
+  if (isOpen) {
+    finishShopButton.hidden = true;
+  }
+}
+
 function resetGettingToShoppingList() {
   selectedShoppingTarget = null;
   setContextButtonLabel(shoppingAtButton, "Shopping at");
-  shoppingAtPanel.hidden = false;
-  shoppingAtButton.setAttribute("aria-expanded", "true");
+  setShoppingLocationPanelOpen(true);
   renderGettingItems();
   updateBottomContextAction();
 }
@@ -2195,6 +2204,20 @@ function createFormField(field) {
   };
 }
 
+function setContextualFormHeading(heading, leadText, contextText) {
+  heading.replaceChildren();
+
+  const lead = document.createElement("span");
+  lead.className = "form-heading-lead";
+  lead.textContent = leadText;
+
+  const context = document.createElement("span");
+  context.className = "form-heading-context";
+  context.textContent = contextText;
+
+  heading.append(lead, document.createElement("br"), context);
+}
+
 function appendSettingsEditPanel({
   listElement,
   rowElement = null,
@@ -2225,7 +2248,12 @@ function appendSettingsEditPanel({
 
   const heading = document.createElement("h3");
   const itemHeading = String(item.name ?? item.symbol ?? "item").trim();
-  heading.textContent = itemHeading ? `Edit ${itemHeading}` : "Edit item";
+
+  if (itemHeading) {
+    setContextualFormHeading(heading, "Edit", itemHeading);
+  } else {
+    heading.textContent = "Edit item";
+  }
 
   const actions = document.createElement("div");
   actions.className = "form-heading-actions";
@@ -4416,7 +4444,7 @@ function appendSettingsItemEditPanel(item, listElement, rowElement) {
   headingRow.className = "form-heading-row";
 
   const heading = document.createElement("h3");
-  heading.textContent = `Edit ${item.name}`;
+  setContextualFormHeading(heading, "Edit item", item.name);
 
   const actions = document.createElement("div");
   actions.className = "form-heading-actions";
@@ -5059,7 +5087,11 @@ function getCheckedValues(container) {
 
 function prepareQuickSpecificProductForm(item) {
   quickSpecificProductItemId = item.id;
-  specificProductPanelTitle.textContent = `Add specific product to ${item.name}`;
+  setContextualFormHeading(
+    specificProductPanelTitle,
+    "Add specific product to",
+    item.name,
+  );
   addSpecificProductForm.reset();
 
   const productType = currentProductTypes.find(
@@ -5790,7 +5822,7 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
-  amountDisplay.textContent = formatAmount(entry.amount, entry.unitId);
+  setNeededAmountDisplay(amountDisplay, entry);
   details.append(amountDisplay);
 
   const controls = document.createElement("div");
@@ -5801,7 +5833,6 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
     icon: "+",
     label: `Increase ${item.name}`,
     onClick: async () => {
-      disableButtons([increaseButton, decreaseButton]);
       await changeNeededAmount(item, entry, 1);
     },
   });
@@ -5811,7 +5842,6 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
     icon: "−",
     label: `Decrease ${item.name}`,
     onClick: async () => {
-      disableButtons([increaseButton, decreaseButton]);
       await changeNeededAmount(item, entry, -1);
     },
   });
@@ -5933,17 +5963,13 @@ function renderRoomItems() {
 
     const amountDisplay = document.createElement("strong");
     amountDisplay.className = "room-current-quantity";
-    amountDisplay.textContent = formatAmount(
-      neededEntry.amount,
-      neededEntry.unitId,
-    );
+    setNeededAmountDisplay(amountDisplay, neededEntry);
 
     const increaseButton = createIconButton({
       className: "room-icon-button increase-needed-button",
       icon: "+",
       label: `Increase ${labelName}`,
       onClick: async () => {
-        disableButtons(controlButtons);
         await changeNeededAmount(
           item,
           neededEntry,
@@ -5958,7 +5984,6 @@ function renderRoomItems() {
       icon: "−",
       label: `Decrease ${labelName}`,
       onClick: async () => {
-        disableButtons(controlButtons);
         await changeNeededAmount(
           item,
           neededEntry,
@@ -5967,8 +5992,6 @@ function renderRoomItems() {
         );
       },
     });
-
-    const controlButtons = [increaseButton, decreaseButton];
 
     return {
       amountDisplay,
@@ -6105,12 +6128,6 @@ function renderRoomItems() {
     .forEach(appendRoomItemRow);
 }
 
-function disableButtons(buttons) {
-  buttons.forEach((button) => {
-    button.disabled = true;
-  });
-}
-
 function appendFullNeededStoreHeading(label) {
   const heading = document.createElement("div");
   heading.className = "full-needed-store-heading";
@@ -6152,7 +6169,7 @@ function appendFullNeededItemRow(record) {
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
-  amountDisplay.textContent = formatAmount(entry.amount, entry.unitId);
+  setNeededAmountDisplay(amountDisplay, entry);
   details.append(amountDisplay);
 
   const controls = document.createElement("div");
@@ -6163,7 +6180,6 @@ function appendFullNeededItemRow(record) {
     icon: "+",
     label: `Increase ${item.name}`,
     onClick: async () => {
-      disableButtons(buttons);
       await changeNeededAmount(
         item,
         entry,
@@ -6178,7 +6194,6 @@ function appendFullNeededItemRow(record) {
     icon: "−",
     label: `Decrease ${item.name}`,
     onClick: async () => {
-      disableButtons(buttons);
       await changeNeededAmount(
         item,
         entry,
@@ -6187,8 +6202,6 @@ function appendFullNeededItemRow(record) {
       );
     },
   });
-
-  const buttons = [increaseButton, decreaseButton];
 
   controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
@@ -6317,8 +6330,7 @@ function renderShoppingLocations() {
         shoppingAtButton,
         `Shopping at a ${storeType.name.trim()}`,
       );
-      shoppingAtPanel.hidden = true;
-      shoppingAtButton.setAttribute("aria-expanded", "false");
+      setShoppingLocationPanelOpen(false);
       renderGettingItems();
     });
 
@@ -6352,8 +6364,7 @@ function renderShoppingLocations() {
           shoppingAtButton,
           `Shopping at ${store.name.trim()}`,
         );
-        shoppingAtPanel.hidden = true;
-        shoppingAtButton.setAttribute("aria-expanded", "false");
+        setShoppingLocationPanelOpen(false);
         renderGettingItems();
       });
 
@@ -6366,6 +6377,7 @@ function renderShoppingLocations() {
 
 function renderGettingItems() {
   gettingItemsList.innerHTML = "";
+  gettingItemsList.hidden = !shoppingAtPanel.hidden;
   finishShopButton.hidden = true;
 
   if (!selectedShoppingTarget) {
@@ -6414,7 +6426,8 @@ function renderGettingItems() {
     (record) => record.entry.status === "collected",
   );
 
-  finishShopButton.hidden = collectedRecords.length === 0;
+  finishShopButton.hidden =
+    !shoppingAtPanel.hidden || collectedRecords.length === 0;
   updateBottomContextAction();
 
   const renderedEntryIds = new Set();
@@ -6445,7 +6458,7 @@ function renderGettingItems() {
 
     const amount = document.createElement("span");
     amount.className = "item-amount";
-    amount.textContent = formatAmount(entry.amount, entry.unitId);
+    setNeededAmountDisplay(amount, entry);
     details.append(amount);
 
     const collectButton = document.createElement("button");
@@ -6620,9 +6633,23 @@ const listenerDefinitions = [
     collectionName: "neededEntries",
     errorLabel: "Could not load needed items",
     applySnapshot(snapshot) {
-      currentNeededEntries = new Map(
+      const snapshotEntries = new Map(
         snapshotRecords(snapshot).map((entry) => [entry.id, entry]),
       );
+
+      optimisticNeededAmounts.forEach((optimisticAmount, entryId) => {
+        const snapshotEntry = snapshotEntries.get(entryId);
+        const snapshotAmount = Number(snapshotEntry?.amount);
+
+        if (
+          (optimisticAmount <= 0 && !snapshotEntry) ||
+          (snapshotEntry && snapshotAmount === optimisticAmount)
+        ) {
+          optimisticNeededAmounts.delete(entryId);
+        }
+      });
+
+      currentNeededEntries = snapshotEntries;
       refreshViews("roomItems", "fullNeededList", "gettingItems");
     },
   },
@@ -6662,6 +6689,32 @@ function formatAmount(amount, unitId) {
   }
 
   return `${amount} ${unit.symbol}`;
+}
+
+function neededAmountForDisplay(neededEntry) {
+  if (!neededEntry?.id) {
+    return neededEntry?.amount;
+  }
+
+  return optimisticNeededAmounts.has(neededEntry.id)
+    ? optimisticNeededAmounts.get(neededEntry.id)
+    : neededEntry.amount;
+}
+
+function setNeededAmountDisplay(element, neededEntry) {
+  element.dataset.neededEntryId = String(neededEntry.id);
+  element.textContent = formatAmount(
+    neededAmountForDisplay(neededEntry),
+    neededEntry.unitId,
+  );
+}
+
+function refreshNeededAmountDisplays(entryId, amount, unitId) {
+  $$('[data-needed-entry-id]').forEach((element) => {
+    if (element.dataset.neededEntryId === String(entryId)) {
+      element.textContent = formatAmount(amount, unitId);
+    }
+  });
 }
 
 function closeSpecificProductChoicePanel() {
@@ -6852,43 +6905,62 @@ async function changeNeededAmount(
     return;
   }
 
-  const neededEntryRef = householdDocument("neededEntries", neededEntryId);
+  const currentAmount = optimisticNeededAmounts.has(neededEntryId)
+    ? optimisticNeededAmounts.get(neededEntryId)
+    : Number(neededEntry.amount);
 
+  const requestedAmount = currentAmount + Number(change);
+  const nextAmount = Math.max(0, requestedAmount);
+  const appliedChange = nextAmount - currentAmount;
+
+  if (!Number.isFinite(nextAmount) || appliedChange === 0) {
+    return;
+  }
+
+  optimisticNeededAmounts.set(neededEntryId, nextAmount);
+  refreshNeededAmountDisplays(neededEntryId, nextAmount, neededEntry.unitId);
+
+  const neededEntryRef = householdDocument("neededEntries", neededEntryId);
   const itemRef = item.oneOff ? null : householdDocument("items", item.id);
+  const batch = writeBatch(db);
+
+  if (nextAmount <= 0) {
+    batch.delete(neededEntryRef);
+  } else if (currentAmount <= 0) {
+    const { id: _entryId, ...entryData } = neededEntry;
+
+    batch.set(
+      neededEntryRef,
+      {
+        ...entryData,
+        amount: nextAmount,
+        adjustedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } else {
+    batch.update(neededEntryRef, {
+      amount: increment(appliedChange),
+      adjustedAt: serverTimestamp(),
+    });
+  }
+
+  if (itemRef) {
+    batch.set(
+      itemRef,
+      {
+        lastAdjustedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
 
   try {
-    await runTransaction(db, async (transaction) => {
-      const neededSnapshot = await transaction.get(neededEntryRef);
-
-      if (!neededSnapshot.exists()) {
-        return;
-      }
-
-      const currentAmount = Number(neededSnapshot.data().amount);
-
-      const nextAmount = currentAmount + change;
-
-      if (nextAmount <= 0) {
-        transaction.delete(neededEntryRef);
-      } else {
-        transaction.update(neededEntryRef, {
-          amount: nextAmount,
-          adjustedAt: serverTimestamp(),
-        });
-      }
-
-      if (itemRef) {
-        transaction.set(
-          itemRef,
-          {
-            lastAdjustedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
-    });
+    await batch.commit();
   } catch (error) {
+    optimisticNeededAmounts.delete(neededEntryId);
+    refreshViews("roomItems", "fullNeededList", "gettingItems");
     console.error("Could not change quantity:", error);
     alert("The quantity could not be changed.");
   }
@@ -7174,8 +7246,11 @@ function wireNavigation() {
   shoppingAtButton.addEventListener("click", () => {
     recordAppNavigation();
     const willOpen = shoppingAtPanel.hidden;
-    shoppingAtPanel.hidden = !willOpen;
-    shoppingAtButton.setAttribute("aria-expanded", String(willOpen));
+    setShoppingLocationPanelOpen(willOpen);
+
+    if (!willOpen) {
+      renderGettingItems();
+    }
   });
 
   addLongPressHandler(

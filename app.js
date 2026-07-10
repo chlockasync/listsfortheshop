@@ -5,25 +5,69 @@ import { auth, db, HOUSEHOLD_ID } from "./firebase.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
 import {
-  addDoc,
+  addDoc as firestoreAddDoc,
   arrayUnion,
   collection,
-  deleteDoc,
+  deleteDoc as firestoreDeleteDoc,
   deleteField,
   doc,
   getDoc,
   increment,
   onSnapshot,
-  runTransaction,
+  runTransaction as firestoreRunTransaction,
   serverTimestamp,
-  setDoc,
-  updateDoc,
-  writeBatch,
+  setDoc as firestoreSetDoc,
+  updateDoc as firestoreUpdateDoc,
+  writeBatch as firestoreWriteBatch,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) =>
   Array.from(root.querySelectorAll(selector));
+
+const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
+
+function viewOnlyWriteError() {
+  const error = new Error("View-only access cannot save changes.");
+  error.code = VIEW_ONLY_WRITE_ERROR_CODE;
+  return error;
+}
+
+function assertHouseholdWriteAccess() {
+  if (currentAccessRole === "viewer") {
+    throw viewOnlyWriteError();
+  }
+}
+
+function addDoc(...args) {
+  assertHouseholdWriteAccess();
+  return firestoreAddDoc(...args);
+}
+
+function deleteDoc(...args) {
+  assertHouseholdWriteAccess();
+  return firestoreDeleteDoc(...args);
+}
+
+function runTransaction(...args) {
+  assertHouseholdWriteAccess();
+  return firestoreRunTransaction(...args);
+}
+
+function setDoc(...args) {
+  assertHouseholdWriteAccess();
+  return firestoreSetDoc(...args);
+}
+
+function updateDoc(...args) {
+  assertHouseholdWriteAccess();
+  return firestoreUpdateDoc(...args);
+}
+
+function writeBatch(...args) {
+  assertHouseholdWriteAccess();
+  return firestoreWriteBatch(...args);
+}
 
 function createItemFormFields({
   container,
@@ -335,7 +379,7 @@ function moveSettingsAddFormToPanelTop(form) {
 }
 
 function toggleCurrentSettingsAddForm() {
-  if (!canEditHousehold()) {
+  if (!canUseFullInterface()) {
     return;
   }
 
@@ -433,17 +477,15 @@ const settingsCategoryConfig = Object.fromEntries(
 /* Access and sharing */
 const accessGate = $("#access-gate");
 const accessGateMessage = $("#access-gate-message");
+const viewerArrivalNotice = $("#viewer-arrival-notice");
+const continueViewOnlyButton = $("#continue-view-only");
 const householdDevicesList = $("#household-devices-list");
 const householdInvitesList = $("#household-invites-list");
 const viewerInvitesList = $("#viewer-invites-list");
+const householdLinkRecipientInput = $("#household-link-recipient");
+const viewerLinkRecipientInput = $("#viewer-link-recipient");
 const createHouseholdLinkButton = $("#create-household-link");
 const createViewerLinkButton = $("#create-viewer-link");
-const householdLinkResult = $("#household-link-result");
-const householdLinkOutput = $("#household-link-output");
-const copyHouseholdLinkButton = $("#copy-household-link");
-const viewerLinkResult = $("#viewer-link-result");
-const viewerLinkOutput = $("#viewer-link-output");
-const copyViewerLinkButton = $("#copy-viewer-link");
 
 /* Needing room view */
 const roomSelectorButton = $("#room-selector-button");
@@ -577,6 +619,15 @@ const REGULAR_ROOM_ID = "__regular_stuff__";
 const ALL_STUFF_ROOM_ID = "__all_stuff__";
 const SETTINGS_MENU_ORDER_KEY = `listsForTheShop.settingsMenuOrder.${HOUSEHOLD_ID}`;
 const SETTINGS_MENU_DEFAULT_ORDER = [
+  "access",
+  "store-types",
+  "stores",
+  "product-types",
+  "rooms",
+  "units",
+  "items",
+];
+const PREVIOUS_SETTINGS_MENU_DEFAULT_ORDER = [
   "store-types",
   "stores",
   "product-types",
@@ -613,6 +664,44 @@ function normalizedAccessRole(role) {
 
 function canEditHousehold() {
   return currentAccessRole === "household";
+}
+
+function canUseFullInterface() {
+  return currentAccessRole === "household" || currentAccessRole === "viewer";
+}
+
+function notifyViewOnlyWriteAttempt() {
+  showBriefToast("View-only access: changes are not saved.");
+}
+
+function preventViewOnlyWrite() {
+  if (currentAccessRole !== "viewer") {
+    return false;
+  }
+
+  notifyViewOnlyWriteAttempt();
+  return true;
+}
+
+function showViewerArrivalNotice() {
+  if (!viewerArrivalNotice) {
+    return;
+  }
+
+  document.body.classList.add("viewer-notice-open");
+  viewerArrivalNotice.hidden = false;
+
+  requestAnimationFrame(() => {
+    continueViewOnlyButton?.focus({ preventScroll: true });
+  });
+}
+
+function closeViewerArrivalNotice() {
+  document.body.classList.remove("viewer-notice-open");
+
+  if (viewerArrivalNotice) {
+    viewerArrivalNotice.hidden = true;
+  }
 }
 
 function defaultDeviceName() {
@@ -760,6 +849,7 @@ async function copyTextToClipboard(value, button) {
 }
 
 function showAccessGate(message) {
+  closeViewerArrivalNotice();
   document.body.classList.remove("access-household", "access-viewer");
   document.body.classList.add("access-denied");
   accessGate.hidden = false;
@@ -782,8 +872,10 @@ function applyAccessMode(role) {
   connectionStatus.textContent =
     currentAccessRole === "viewer" ? "View only" : "Online";
 
-  if (currentAccessRole === "viewer" && !views.settings.hidden) {
-    showView("needing");
+  if (currentAccessRole === "viewer") {
+    showViewerArrivalNotice();
+  } else {
+    closeViewerArrivalNotice();
   }
 
   refreshViews("roomItems", "fullNeededList", "gettingItems");
@@ -862,7 +954,17 @@ function activeAccessInvite(invite, kind) {
 }
 
 function renderAccessSettings() {
-  if (!householdDevicesList || !canEditHousehold()) {
+  if (!householdDevicesList) {
+    return;
+  }
+
+  if (!canEditHousehold()) {
+    householdDevicesList.innerHTML =
+      "<p>Household device details are not available through a read-only link.</p>";
+    householdInvitesList.innerHTML =
+      "<p>Household device links can only be managed by a household device.</p>";
+    viewerInvitesList.innerHTML =
+      "<p>Read-only sharing links can only be managed by a household device.</p>";
     return;
   }
 
@@ -970,13 +1072,18 @@ function renderAccessSettings() {
         ),
       );
 
+      const uses = Number(invite.uses ?? 0);
+      const defaultTitle =
+        kind === "viewer" ? "Read-only sharing link" : "Household device link";
+      const useDetail =
+        uses === 0
+          ? "Unused"
+          : `Last used ${formatAccessDate(invite.lastUsedAt)}`;
+
       container.append(
         accessRecordRow({
-          title:
-            kind === "viewer"
-              ? "Read-only sharing link"
-              : "Household device link",
-          detail: `Expires ${formatAccessDate(invite.expiresAt)} · ${Number(invite.uses ?? 0)} use${Number(invite.uses ?? 0) === 1 ? "" : "s"}`,
+          title: String(invite.description ?? "").trim() || defaultTitle,
+          detail: `${useDetail} · expires ${formatAccessDate(invite.expiresAt)}`,
           actions,
         }),
       );
@@ -986,7 +1093,7 @@ function renderAccessSettings() {
   renderInviteList(
     householdInvitesList,
     "household",
-    "No pending device links.",
+    "No unused device links.",
   );
   renderInviteList(viewerInvitesList, "viewer", "No active sharing links.");
 }
@@ -1018,9 +1125,15 @@ function startAccessListListeners() {
   ];
 }
 
-async function createAccessInvite(kind) {
+async function createAccessInvite(kind, description) {
   if (!canEditHousehold() || !auth.currentUser) {
     throw new Error("This device cannot create access links.");
+  }
+
+  const cleanDescription = String(description ?? "").trim();
+
+  if (!cleanDescription) {
+    throw new Error("Enter the intended recipient or purpose for this link.");
   }
 
   const token = createPrivateToken();
@@ -1032,6 +1145,7 @@ async function createAccessInvite(kind) {
 
   await setDoc(householdDocument("accessInvites", inviteId), {
     kind,
+    description: cleanDescription,
     active: true,
     token,
     uses: 0,
@@ -1083,7 +1197,10 @@ async function redeemAccessInvite(token, user) {
       role: invite.kind,
       active: true,
       inviteId,
-      deviceName: existingMember.deviceName || defaultDeviceName(),
+      deviceName:
+        String(invite.description ?? "").trim() ||
+        existingMember.deviceName ||
+        defaultDeviceName(),
       createdAt: existingMember.createdAt || serverTimestamp(),
       lastSeenAt: serverTimestamp(),
     };
@@ -1160,13 +1277,15 @@ async function activateMemberAccess(user, member) {
   applyAccessMode(role);
   startListeners();
 
-  try {
-    await updateDoc(householdDocument("members", user.uid), {
-      deviceName: member.deviceName || defaultDeviceName(),
-      lastSeenAt: serverTimestamp(),
-    });
-  } catch (error) {
-    console.warn("Could not update device activity:", error);
+  if (role === "household") {
+    try {
+      await updateDoc(householdDocument("members", user.uid), {
+        deviceName: member.deviceName || defaultDeviceName(),
+        lastSeenAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn("Could not update device activity:", error);
+    }
   }
 
   if (role === "household") {
@@ -1572,7 +1691,7 @@ function scrollAppToTop() {
 }
 
 function openSettingsHomeFromShortcut() {
-  if (!canEditHousehold()) {
+  if (!canUseFullInterface()) {
     return;
   }
 
@@ -1585,7 +1704,7 @@ function openSettingsHomeFromShortcut() {
 }
 
 function openSettingsItemsFromShortcut() {
-  if (!canEditHousehold()) {
+  if (!canUseFullInterface()) {
     return;
   }
 
@@ -1612,7 +1731,7 @@ function updateBottomContextAction() {
     return;
   }
 
-  if (!canEditHousehold()) {
+  if (!canUseFullInterface()) {
     bottomContextAction.textContent = "";
     bottomContextAction.disabled = true;
     bottomContextAction.hidden = true;
@@ -1703,7 +1822,7 @@ function updateBottomContextAction() {
 }
 
 function openSettingsCategory(categoryName) {
-  if (!canEditHousehold()) {
+  if (!canUseFullInterface()) {
     return;
   }
 
@@ -3333,6 +3452,10 @@ This will permanently remove it from the app.${detail ? `\n\n${detail}` : ""}`,
 }
 
 async function deleteSettingsDocument(collectionName, id) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   await deleteDoc(householdDocument(collectionName, id));
 }
 
@@ -4064,6 +4187,11 @@ function createStoreProductTypeOrderPanel(store) {
 }
 
 async function saveStoreProductTypeOrder(groupList, store) {
+  if (currentAccessRole === "viewer") {
+    notifyViewOnlyWriteAttempt();
+    return;
+  }
+
   const scrollY = window.scrollY;
 
   const rows = Array.from(groupList.querySelectorAll(".settings-order-row"));
@@ -4085,6 +4213,11 @@ async function saveStoreProductTypeOrder(groupList, store) {
 }
 
 async function resetStoreProductTypeOrder(store) {
+  if (currentAccessRole === "viewer") {
+    notifyViewOnlyWriteAttempt();
+    return;
+  }
+
   const scrollY = window.scrollY;
 
   await updateDoc(householdDocument("stores", store.id), {
@@ -4309,6 +4442,11 @@ async function saveOneOffItem() {
 }
 
 async function saveSettingsOrder({ listElement, collectionName }) {
+  if (currentAccessRole === "viewer") {
+    notifyViewOnlyWriteAttempt();
+    return;
+  }
+
   const rows = Array.from(listElement.querySelectorAll(".settings-order-row"));
 
   const batch = writeBatch(db);
@@ -4329,6 +4467,11 @@ async function saveSettingsOrder({ listElement, collectionName }) {
 }
 
 async function saveProductTypeGroupOrder(groupList, storeTypeId) {
+  if (currentAccessRole === "viewer") {
+    notifyViewOnlyWriteAttempt();
+    return;
+  }
+
   const scrollY = window.scrollY;
 
   const rows = Array.from(groupList.querySelectorAll(".settings-order-row"));
@@ -4405,12 +4548,17 @@ function applySavedSettingsMenuOrder() {
   const validSavedOrder = savedOrder.filter((categoryName) =>
     optionsByKey.has(categoryName),
   );
-  const orderToApply =
-    validSavedOrder.length > 0 &&
-    !settingsMenuOrdersMatch(
+  const savedOrderIsPreviousDefault =
+    settingsMenuOrdersMatch(
+      validSavedOrder,
+      PREVIOUS_SETTINGS_MENU_DEFAULT_ORDER,
+    ) ||
+    settingsMenuOrdersMatch(
       validSavedOrder,
       LEGACY_SETTINGS_MENU_DEFAULT_ORDER,
-    )
+    );
+  const orderToApply =
+    validSavedOrder.length > 0 && !savedOrderIsPreviousDefault
       ? validSavedOrder
       : SETTINGS_MENU_DEFAULT_ORDER;
 
@@ -4429,6 +4577,12 @@ function applySavedSettingsMenuOrder() {
 }
 
 function saveSettingsMenuOrder() {
+  if (currentAccessRole === "viewer") {
+    notifyViewOnlyWriteAttempt();
+    applySavedSettingsMenuOrder();
+    return;
+  }
+
   const order = Array.from(
     settingsHome.querySelectorAll(
       ".settings-menu-order-row[data-settings-category]",
@@ -5135,6 +5289,10 @@ function showBriefToast(message) {
 }
 
 async function toggleItemRegularList(item) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   const nextValue = !itemIsRegular(item);
 
   try {
@@ -5993,7 +6151,7 @@ function prepareQuickSpecificProductForm(item) {
 }
 
 function openSpecificProductQuickAdd(item) {
-  if (!canEditHousehold()) {
+  if (!canUseFullInterface()) {
     return;
   }
 
@@ -6229,6 +6387,10 @@ function itemDocumentData(values) {
 }
 
 async function createCatalogueItem(values) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   await addDoc(householdCollection("items"), itemDocumentData(values));
 }
 
@@ -6650,7 +6812,7 @@ function closeTemporaryNotePanel() {
 }
 
 function openTemporaryNotePanel(item, neededEntry, specificProduct = null) {
-  if (!canEditHousehold()) {
+  if (!canUseFullInterface()) {
     return;
   }
 
@@ -6686,6 +6848,10 @@ function openTemporaryNotePanel(item, neededEntry, specificProduct = null) {
 }
 
 async function saveTemporaryNote() {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   if (!temporaryNoteEntryId) {
     return;
   }
@@ -7714,6 +7880,10 @@ async function addOrSelectSpecificProduct(item, specificProduct) {
 }
 
 async function addItemToNeededList(item) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   if (genericNeededEntryForItem(item.id)) {
     alert(`${item.name} is already on the needed list.`);
     return;
@@ -7754,6 +7924,10 @@ async function addItemToNeededList(item) {
 }
 
 async function addSpecificProductToNeededList(item, specificProduct) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   if (specificNeededEntryForProduct(specificProduct.id)) {
     alert(
       `${combinedItemSpecificProductName(
@@ -7805,6 +7979,9 @@ async function changeNeededAmount(
   change,
   specificProduct = null,
 ) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
   const neededEntryId = neededEntryDocumentIdFor(
     item,
     specificProduct,
@@ -7877,6 +8054,10 @@ async function changeNeededAmount(
 }
 
 async function removeNeededItem(neededEntry) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   const neededEntryRef = householdDocument("neededEntries", neededEntry.id);
 
   try {
@@ -7888,6 +8069,10 @@ async function removeNeededItem(neededEntry) {
 }
 
 async function setNeededItemCollected(item, neededEntry, isCollected) {
+  if (preventViewOnlyWrite()) {
+    return;
+  }
+
   const neededEntryRef = householdDocument("neededEntries", neededEntry.id);
 
   try {
@@ -7903,6 +8088,11 @@ async function setNeededItemCollected(item, neededEntry, isCollected) {
 }
 
 async function finishCurrentShop() {
+  if (currentAccessRole === "viewer") {
+    notifyViewOnlyWriteAttempt();
+    return;
+  }
+
   if (!selectedShoppingTarget) {
     updateBottomContextAction();
     return;
@@ -8478,15 +8668,88 @@ function startListeners() {
   listenerDefinitions.forEach(startCollectionListener);
 }
 
+const VIEW_ONLY_MUTATION_SELECTOR = [
+  ".settings-row-delete-button",
+  ".settings-row-regular-button",
+  ".increase-needed-button",
+  ".decrease-needed-button",
+  ".add-needed-button",
+  ".remove-needed-button",
+  "#getting-items-list .collect-checkbox-button",
+  ".specific-product-choice-row",
+  "#clear-temporary-note",
+  "#finish-shop-button",
+  "#create-household-link",
+  "#create-viewer-link",
+  ".access-record-button.is-danger",
+  ".store-product-type-reset-button",
+].join(",");
+
+function setupViewerWriteGuards() {
+  document.addEventListener(
+    "submit",
+    (event) => {
+      if (currentAccessRole !== "viewer") {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      notifyViewOnlyWriteAttempt();
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (
+        currentAccessRole !== "viewer" ||
+        !event.target.closest?.(VIEW_ONLY_MUTATION_SELECTOR)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      notifyViewOnlyWriteAttempt();
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (
+        currentAccessRole !== "viewer" ||
+        !event.target.closest?.(".settings-order-handle")
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      notifyViewOnlyWriteAttempt();
+    },
+    true,
+  );
+}
+
 function wireAccessControls() {
   createHouseholdLinkButton?.addEventListener("click", async () => {
+    const description = householdLinkRecipientInput?.value.trim() ?? "";
+
+    if (!description) {
+      householdLinkRecipientInput?.focus();
+      alert("Enter the intended recipient or device before creating the link.");
+      return;
+    }
+
     createHouseholdLinkButton.disabled = true;
 
     try {
-      const link = await createAccessInvite("household");
-      householdLinkOutput.value = link;
-      householdLinkResult.hidden = false;
-      householdLinkOutput.select();
+      await createAccessInvite("household", description);
+      householdLinkRecipientInput.value = "";
     } catch (error) {
       console.error("Could not create household device link:", error);
       alert(error.message || "The household device link could not be created.");
@@ -8496,13 +8759,21 @@ function wireAccessControls() {
   });
 
   createViewerLinkButton?.addEventListener("click", async () => {
+    const description = viewerLinkRecipientInput?.value.trim() ?? "";
+
+    if (!description) {
+      viewerLinkRecipientInput?.focus();
+      alert(
+        "Enter the intended recipient or purpose before creating the link.",
+      );
+      return;
+    }
+
     createViewerLinkButton.disabled = true;
 
     try {
-      const link = await createAccessInvite("viewer");
-      viewerLinkOutput.value = link;
-      viewerLinkResult.hidden = false;
-      viewerLinkOutput.select();
+      await createAccessInvite("viewer", description);
+      viewerLinkRecipientInput.value = "";
     } catch (error) {
       console.error("Could not create read-only sharing link:", error);
       alert(
@@ -8513,18 +8784,10 @@ function wireAccessControls() {
     }
   });
 
-  copyHouseholdLinkButton?.addEventListener("click", async () => {
-    await copyTextToClipboard(
-      householdLinkOutput.value,
-      copyHouseholdLinkButton,
-    );
-  });
-
-  copyViewerLinkButton?.addEventListener("click", async () => {
-    await copyTextToClipboard(viewerLinkOutput.value, copyViewerLinkButton);
-  });
+  continueViewOnlyButton?.addEventListener("click", closeViewerArrivalNotice);
 }
 
+setupViewerWriteGuards();
 wireNavigation();
 wireForms();
 wireAccessControls();
@@ -8540,6 +8803,7 @@ onAuthStateChanged(auth, async (user) => {
   currentAccessRole = null;
 
   if (!user) {
+    closeViewerArrivalNotice();
     document.body.classList.remove(
       "access-denied",
       "access-household",

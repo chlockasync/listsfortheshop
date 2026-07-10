@@ -13,8 +13,8 @@
     <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-192.png?v=1651" />
 
-    <link rel="stylesheet" href="styles.css?v=202607101657" />
-    <script type="module" src="app.js?v=202607101657"></script>
+    <link rel="stylesheet" href="styles.css?v=202607101735" />
+    <script type="module" src="app.js?v=202607101735"></script>
 
     <title>Lists for the Shop</title>
   </head>
@@ -23,6 +23,21 @@
     <section id="access-gate" class="access-gate" aria-live="polite">
       <h1>Lists for the Shop</h1>
       <p id="access-gate-message">Checking this device’s access…</p>
+    </section>
+    <section id="viewer-arrival-notice" class="viewer-arrival-notice" hidden>
+      <div
+        class="viewer-arrival-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="viewer-arrival-title"
+      >
+        <h1 id="viewer-arrival-title">View-only access</h1>
+        <p>
+          You can explore the complete app, including its settings, forms and
+          controls. Any changes you make will not be saved.
+        </p>
+        <button type="button" id="continue-view-only">View app</button>
+      </div>
     </section>
     <header class="app-header">
       <nav class="main-tabs" aria-label="Main navigation">
@@ -212,6 +227,15 @@
           <button
             type="button"
             class="settings-category-option shopping-location-option settings-menu-order-row"
+            data-settings-category="access"
+          >
+            <span class="settings-order-handle" aria-hidden="true">☰</span>
+            <span class="settings-menu-option-label">Access and sharing</span>
+          </button>
+
+          <button
+            type="button"
+            class="settings-category-option shopping-location-option settings-menu-order-row"
             data-settings-category="store-types"
           >
             <span class="settings-order-handle" aria-hidden="true">☰</span>
@@ -263,15 +287,6 @@
             <span class="settings-menu-option-label"
               >Items and Specific Products</span
             >
-          </button>
-
-          <button
-            type="button"
-            class="settings-category-option shopping-location-option settings-menu-order-row"
-            data-settings-category="access"
-          >
-            <span class="settings-order-handle" aria-hidden="true">☰</span>
-            <span class="settings-menu-option-label">Access and sharing</span>
           </button>
         </div>
 
@@ -510,6 +525,21 @@
                 <p>Loading household devices…</p>
               </div>
 
+              <label
+                class="access-recipient-field"
+                for="household-link-recipient"
+              >
+                Intended recipient or device
+                <input
+                  type="text"
+                  id="household-link-recipient"
+                  required
+                  maxlength="80"
+                  autocomplete="off"
+                  placeholder="e.g. Kitchen tablet or Sarah's phone"
+                />
+              </label>
+
               <button
                 type="button"
                 id="create-household-link"
@@ -522,26 +552,9 @@
                 The link can be used once and expires after 24 hours.
               </p>
 
-              <div id="household-link-result" class="access-link-result" hidden>
-                <label for="household-link-output">Household device link</label>
-                <input
-                  type="text"
-                  id="household-link-output"
-                  readonly
-                  autocomplete="off"
-                />
-                <button
-                  type="button"
-                  id="copy-household-link"
-                  class="settings-add-button"
-                >
-                  Copy link
-                </button>
-              </div>
-
-              <h4>Pending device links</h4>
+              <h4>Household device links</h4>
               <div id="household-invites-list" class="access-record-list">
-                <p>No pending device links.</p>
+                <p>No unused device links.</p>
               </div>
             </div>
 
@@ -552,6 +565,18 @@
                 people. It expires after 14 days and can be revoked at any time.
               </p>
 
+              <label class="access-recipient-field" for="viewer-link-recipient">
+                Intended recipient or purpose
+                <input
+                  type="text"
+                  id="viewer-link-recipient"
+                  required
+                  maxlength="80"
+                  autocomplete="off"
+                  placeholder="e.g. Show Alex the populated app"
+                />
+              </label>
+
               <button
                 type="button"
                 id="create-viewer-link"
@@ -560,24 +585,7 @@
                 Create read-only sharing link
               </button>
 
-              <div id="viewer-link-result" class="access-link-result" hidden>
-                <label for="viewer-link-output">Read-only sharing link</label>
-                <input
-                  type="text"
-                  id="viewer-link-output"
-                  readonly
-                  autocomplete="off"
-                />
-                <button
-                  type="button"
-                  id="copy-viewer-link"
-                  class="settings-add-button"
-                >
-                  Copy link
-                </button>
-              </div>
-
-              <h4>Active sharing links</h4>
+              <h4>Read-only sharing links</h4>
               <div id="viewer-invites-list" class="access-record-list">
                 <p>No active sharing links.</p>
               </div>
@@ -733,7 +741,7 @@
       </button>
 
       <div class="bottom-bar-status">
-        <span id="app-build" title="Build 202607101657">v1.1.058</span>
+        <span id="app-build" title="Build 202607101735">v1.1.059</span>
         <span id="connection-status">Connecting…</span>
       </div>
 

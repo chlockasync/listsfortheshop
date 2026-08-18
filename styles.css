@@ -400,6 +400,12 @@ section {
   padding-bottom: 3.25rem;
 }
 
+#needing-home-search-results {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 #rooms-list {
   display: flex;
   flex-direction: column;
@@ -440,6 +446,7 @@ section {
 }
 
 #room-items-list,
+#needing-home-search-results,
 #full-needed-items {
   width: 100%;
   margin: 0;
@@ -447,6 +454,7 @@ section {
 }
 
 #room-items-list .item-row,
+#needing-home-search-results .item-row,
 #full-needed-items .item-row {
   min-height: 52px;
   margin: 0;
@@ -456,6 +464,7 @@ section {
 }
 
 #room-items-list > p,
+#needing-home-search-results > p,
 #full-needed-items > p {
   margin: 0;
   padding: 1rem;
@@ -2061,6 +2070,7 @@ main,
 
 /* Room and full needed lists use the same row rhythm. */
 #room-items-list .item-row,
+#needing-home-search-results .item-row,
 #full-needed-items .item-row {
   min-height: 48px !important;
   padding: 0.5rem 0.85rem !important;

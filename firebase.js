@@ -6,7 +6,11 @@ import {
   signInAnonymously,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
-import { getFirestore } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyASVJaQSTIe2h6zRa1CIaZucvteYEv59cY",
@@ -19,9 +23,31 @@ const firebaseConfig = {
 
 const HOUSEHOLD_ID = "NqzkJ_wy0X82dwhybYzXmM6tyOL-u-au";
 
+const HOUSEHOLD_WARM_START_KEY =
+  `listsForTheShop.householdWarmStart.${HOUSEHOLD_ID}`;
+
+let usePersistentHouseholdCache = false;
+
+try {
+  usePersistentHouseholdCache = Boolean(
+    window.localStorage.getItem(HOUSEHOLD_WARM_START_KEY),
+  );
+} catch (_error) {
+  /* Memory-only Firestore remains available when local storage is blocked. */
+}
+
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+const db = initializeFirestore(
+  firebaseApp,
+  usePersistentHouseholdCache
+    ? {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      }
+    : {},
+);
 
 /*
  * Authentication remains invisible to the user. Each browser installation

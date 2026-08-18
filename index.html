@@ -14,8 +14,8 @@
     <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-192.png?v=1651" />
 
-    <link rel="stylesheet" href="styles.css?v=202607101910" />
-    <script type="module" src="app.js?v=202607101910"></script>
+    <link rel="stylesheet" href="styles.css?v=202608181544" />
+    <script type="module" src="app.js?v=202608181544"></script>
 
     <title>Lists for the Shop</title>
   </head>
@@ -83,6 +83,16 @@
         </button>
 
         <div id="needing-home">
+          <input
+            type="search"
+            id="needing-home-search"
+            class="list-search-input"
+            placeholder="Search all items"
+            autocomplete="off"
+          />
+
+          <div id="needing-home-search-results" hidden></div>
+
           <div id="rooms-list"></div>
 
           <button type="button" id="view-needed-list">
@@ -737,7 +747,7 @@
       </button>
 
       <div class="bottom-bar-status">
-        <span id="app-build" title="Build 202607101910">v1.1.062</span>
+        <span id="app-build" title="Build 202608181544">v1.1.063</span>
         <span id="connection-status">Connecting…</span>
       </div>
 

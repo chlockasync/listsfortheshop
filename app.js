@@ -1,6 +1,6 @@
 import Sortable from "https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/modular/sortable.core.esm.js";
 
-import { auth, db, HOUSEHOLD_ID } from "./firebase.js";
+import { auth, db, HOUSEHOLD_ID } from "./firebase.js?v=202608181544";
 
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
@@ -495,6 +495,8 @@ const createViewerLinkButton = $("#create-viewer-link");
 /* Needing room view */
 const roomSelectorButton = $("#room-selector-button");
 const needingHome = $("#needing-home");
+const needingHomeSearch = $("#needing-home-search");
+const needingHomeSearchResults = $("#needing-home-search-results");
 const roomView = $("#room-view");
 const roomViewTitle = $("#room-view-title");
 const backToRoomsButton = $("#back-to-rooms");
@@ -653,8 +655,47 @@ const LEGACY_SETTINGS_MENU_DEFAULT_ORDER = [
 
 const HOUSEHOLD_INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const VIEWER_INVITE_LIFETIME_MS = 14 * 24 * 60 * 60 * 1000;
+const HOUSEHOLD_WARM_START_KEY =
+  `listsForTheShop.householdWarmStart.${HOUSEHOLD_ID}`;
 
 /* ===== Device access and private sharing ===== */
+
+function rememberHouseholdWarmStart(userId) {
+  try {
+    window.localStorage.setItem(HOUSEHOLD_WARM_START_KEY, String(userId));
+  } catch (_error) {
+    /* Warm-starting is optional when storage is unavailable. */
+  }
+}
+
+function forgetHouseholdWarmStart(userId = null) {
+  try {
+    if (
+      userId &&
+      window.localStorage.getItem(HOUSEHOLD_WARM_START_KEY) !== String(userId)
+    ) {
+      return;
+    }
+
+    window.localStorage.removeItem(HOUSEHOLD_WARM_START_KEY);
+  } catch (_error) {
+    /* Warm-starting is optional when storage is unavailable. */
+  }
+}
+
+function canWarmStartHouseholdData(user) {
+  if (!user) {
+    return false;
+  }
+
+  try {
+    return (
+      window.localStorage.getItem(HOUSEHOLD_WARM_START_KEY) === String(user.uid)
+    );
+  } catch (_error) {
+    return false;
+  }
+}
 
 function normalizedAccessRole(role) {
   if (role === "household" || role === "editor" || role === "owner") {
@@ -973,7 +1014,12 @@ function applyAccessMode(role) {
     closeViewerArrivalNotice();
   }
 
-  refreshViews("roomItems", "fullNeededList", "gettingItems");
+  refreshViews(
+    "needingHomeSearch",
+    "roomItems",
+    "fullNeededList",
+    "gettingItems",
+  );
   updateBottomContextAction();
 }
 
@@ -1525,6 +1571,11 @@ async function activateMemberAccess(user, member) {
   }
 
   currentMemberRecord = { id: user.uid, ...member };
+
+  if (role === "household") {
+    rememberHouseholdWarmStart(user.uid);
+  }
+
   applyAccessMode(role);
   startListeners();
 
@@ -1553,6 +1604,7 @@ function monitorCurrentMembership(user) {
     householdDocument("members", user.uid),
     async (snapshot) => {
       if (!snapshot.exists()) {
+        forgetHouseholdWarmStart(user.uid);
         stopDataListeners();
         stopAccessListListeners();
         showAccessGate(
@@ -1565,6 +1617,7 @@ function monitorCurrentMembership(user) {
       const nextRole = normalizedAccessRole(member.role);
 
       if (!nextRole || member.active === false) {
+        forgetHouseholdWarmStart(user.uid);
         stopDataListeners();
         stopAccessListListeners();
         showAccessGate("Access for this device has been revoked.");
@@ -1652,6 +1705,7 @@ async function initializeDeviceAccess(user) {
           return;
         }
       } else {
+        forgetHouseholdWarmStart(user.uid);
         showAccessGate(
           "This device does not have access. Open a household device or read-only sharing link on this device.",
         );
@@ -6672,7 +6726,28 @@ async function createCatalogueItem(values) {
     return;
   }
 
-  await addDoc(householdCollection("items"), itemDocumentData(values));
+  const itemRef = await addDoc(
+    householdCollection("items"),
+    itemDocumentData(values),
+  );
+
+  return {
+    id: itemRef.id,
+    name: values.name,
+    defaultAmount: values.defaultAmount,
+    unitId: values.unitId,
+    increment: values.increment,
+  };
+}
+
+async function offerNewItemToCurrentWantedList(item) {
+  if (!item) {
+    return;
+  }
+
+  if (window.confirm("Add to current wanted list?")) {
+    await addItemToNeededList(item);
+  }
 }
 
 function orderedProductTypesForDefaultRoomView() {
@@ -7483,6 +7558,161 @@ function renderRoomItems() {
     .forEach(appendRoomItemRow);
 }
 
+function itemMatchesNeedingHomeSearch(item, searchText) {
+  if (!searchText) {
+    return true;
+  }
+
+  const productType = currentProductTypes.find(
+    (candidate) => String(candidate.id) === String(item.productTypeId),
+  );
+
+  const specificProductText = specificProductsForItem(item.id)
+    .flatMap((product) => [product.name, specificProductDetailText(product)])
+    .join(" ");
+
+  return `${item.name} ${item.specificAttributes ?? ""} ${productType?.name ?? ""} ${specificProductText}`
+    .toLowerCase()
+    .includes(searchText);
+}
+
+function appendNeedingHomeSearchResult(item, specificProduct = null) {
+  const neededEntry = specificProduct
+    ? specificNeededEntryForProduct(specificProduct.id)
+    : genericNeededEntryForItem(item.id);
+  const isNeeded = Boolean(neededEntry);
+  const labelName = specificProduct
+    ? `${item.name} ${specificProduct.name}`
+    : item.name;
+
+  const row = document.createElement("div");
+  row.className = "item-row room-item-row needing-home-search-result";
+  row.classList.add(isNeeded ? "is-needed" : "is-available");
+
+  if (specificProduct) {
+    row.classList.add("specific-product-offer-row");
+  }
+
+  const details = document.createElement("div");
+  details.className = "item-row-details";
+  details.append(
+    createItemNameDisplay(item, specificProduct, {
+      temporaryNote: neededEntry?.temporaryNote,
+    }),
+  );
+
+  const controls = document.createElement("div");
+  controls.className = "room-item-controls";
+
+  if (!isNeeded) {
+    const addButton = createIconButton({
+      className: "room-icon-button room-add-button add-needed-button",
+      icon: "Add",
+      label: `Add ${labelName} to needed list`,
+      onClick: async () => {
+        if (specificProduct) {
+          await addSpecificProductToNeededList(item, specificProduct);
+        } else {
+          await addItemToNeededList(item);
+        }
+      },
+    });
+
+    controls.append(addButton);
+  } else {
+    const amountDisplay = document.createElement("strong");
+    amountDisplay.className = "room-current-quantity";
+    setNeededAmountDisplay(amountDisplay, neededEntry);
+    details.append(amountDisplay);
+
+    const increaseButton = createIconButton({
+      className: "room-icon-button increase-needed-button",
+      icon: "+",
+      label: `Increase ${labelName}`,
+      onClick: async () => {
+        await changeNeededAmount(
+          item,
+          neededEntry,
+          item.increment ?? 1,
+          specificProduct,
+        );
+      },
+    });
+
+    const decreaseButton = createIconButton({
+      className: "room-icon-button decrease-needed-button",
+      icon: "−",
+      label: `Decrease ${labelName}`,
+      onClick: async () => {
+        await changeNeededAmount(
+          item,
+          neededEntry,
+          -(item.increment ?? 1),
+          specificProduct,
+        );
+      },
+    });
+
+    controls.append(increaseButton, decreaseButton);
+  }
+
+  row.append(details, controls);
+
+  addScrollableHoldHandler(row, () => {
+    openSpecificProductQuickAdd(item);
+  });
+
+  if (isNeeded) {
+    addDoubleTapHandler(row, () => {
+      openTemporaryNotePanel(item, neededEntry, specificProduct);
+    });
+  }
+
+  needingHomeSearchResults.append(row);
+}
+
+function renderNeedingHomeSearchResults() {
+  if (!needingHomeSearch || !needingHomeSearchResults) {
+    return;
+  }
+
+  const searchText = needingHomeSearch.value.trim().toLowerCase();
+  needingHomeSearchResults.innerHTML = "";
+
+  if (!searchText) {
+    needingHomeSearchResults.hidden = true;
+    return;
+  }
+
+  needingHomeSearchResults.hidden = false;
+
+  const matchingItems = currentItems
+    .filter((item) => item.active !== false)
+    .filter((item) => itemMatchesNeedingHomeSearch(item, searchText))
+    .sort((a, b) => {
+      const needDifference =
+        Number(!itemHasAnyNeededEntry(a.id)) -
+        Number(!itemHasAnyNeededEntry(b.id));
+
+      return (
+        needDifference ||
+        String(a.name ?? "").localeCompare(String(b.name ?? ""))
+      );
+    });
+
+  if (matchingItems.length === 0) {
+    needingHomeSearchResults.innerHTML = "<p>No matching items.</p>";
+    return;
+  }
+
+  matchingItems.forEach((item) => {
+    appendNeedingHomeSearchResult(item);
+    specificProductsForItem(item.id).forEach((specificProduct) => {
+      appendNeedingHomeSearchResult(item, specificProduct);
+    });
+  });
+}
+
 function appendFullNeededStoreHeading(label) {
   const heading = document.createElement("div");
   heading.className = "full-needed-store-heading";
@@ -7867,6 +8097,7 @@ function renderGettingItems() {
 
 const viewRefreshers = {
   rooms: () => renderRooms(currentRooms),
+  needingHomeSearch: renderNeedingHomeSearchResults,
   units: () => renderUnits(currentUnits),
   storeTypes: () => renderStoreTypes(currentStoreTypes),
   stores: () => renderStores(currentStores),
@@ -7917,6 +8148,7 @@ const listenerDefinitions = [
       currentUnits = activeSortedRecords(snapshot);
       refreshViews(
         "units",
+        "needingHomeSearch",
         "roomItems",
         "fullNeededList",
         "settingsItems",
@@ -7948,7 +8180,7 @@ const listenerDefinitions = [
     errorLabel: "Could not load product types",
     applySnapshot(snapshot) {
       currentProductTypes = activeSortedRecords(snapshot);
-      refreshViews("productTypes");
+      refreshViews("productTypes", "needingHomeSearch");
     },
   },
   {
@@ -7958,6 +8190,7 @@ const listenerDefinitions = [
     applySnapshot(snapshot) {
       currentItems = snapshotRecords(snapshot);
       refreshViews(
+        "needingHomeSearch",
         "roomItems",
         "fullNeededList",
         "settingsItems",
@@ -7976,6 +8209,7 @@ const listenerDefinitions = [
           String(a.name ?? "").localeCompare(String(b.name ?? "")),
         );
       refreshViews(
+        "needingHomeSearch",
         "roomItems",
         "fullNeededList",
         "settingsItems",
@@ -8005,7 +8239,12 @@ const listenerDefinitions = [
       });
 
       currentNeededEntries = snapshotEntries;
-      refreshViews("roomItems", "fullNeededList", "gettingItems");
+      refreshViews(
+        "needingHomeSearch",
+        "roomItems",
+        "fullNeededList",
+        "gettingItems",
+      );
     },
   },
 ];
@@ -8021,7 +8260,18 @@ function startCollectionListener(definition) {
     householdCollection(definition.collectionName),
     definition.applySnapshot,
     (error) => {
+      startedListeners.delete(definition.key);
+      dataListenerUnsubscribes.delete(definition.key);
       console.error(`${definition.errorLabel}:`, error);
+
+      /* A speculative listener can be denied just before an invitation or
+       * first-device registration finishes. Once access is visibly active,
+       * retry only that missing listener. */
+      window.setTimeout(() => {
+        if (accessGate.hidden && canUseFullInterface()) {
+          startCollectionListener(definition);
+        }
+      }, 250);
     },
   );
 
@@ -8328,7 +8578,12 @@ async function changeNeededAmount(
     await batch.commit();
   } catch (error) {
     optimisticNeededAmounts.delete(neededEntryId);
-    refreshViews("roomItems", "fullNeededList", "gettingItems");
+    refreshViews(
+      "needingHomeSearch",
+      "roomItems",
+      "fullNeededList",
+      "gettingItems",
+    );
     console.error("Could not change quantity:", error);
     alert("The quantity could not be changed.");
   }
@@ -8649,6 +8904,12 @@ function wireNavigation() {
     renderFullNeededList();
   });
 
+  if (needingHomeSearch) {
+    needingHomeSearch.addEventListener("input", () => {
+      renderNeedingHomeSearchResults();
+    });
+  }
+
   if (roomItemsSearch) {
     roomItemsSearch.addEventListener("input", () => {
       renderRoomItems();
@@ -8851,7 +9112,8 @@ function wireForms() {
         return;
       }
 
-      await createCatalogueItem(values);
+      const newItem = await createCatalogueItem(values);
+      await offerNewItemToCurrentWantedList(newItem);
       resetSettingsItemAddForm();
       clearFormPositioningScrollSpace();
       addSettingsItemForm.hidden = true;
@@ -8926,7 +9188,8 @@ function wireForms() {
         return;
       }
 
-      await createCatalogueItem(values);
+      const newItem = await createCatalogueItem(values);
+      await offerNewItemToCurrentWantedList(newItem);
 
       itemNameInput.value = "";
 
@@ -9115,6 +9378,15 @@ onAuthStateChanged(auth, async (user) => {
     accessGateMessage.textContent = "Connecting securely…";
     connectionStatus.textContent = "Connecting…";
     return;
+  }
+
+  /* Start household collection reads in parallel with the access check. The
+   * access gate remains closed until initializeDeviceAccess() verifies the
+   * membership, and Firestore rules still decide whether these reads are
+   * permitted. New invitation links wait until redemption to avoid expected
+   * permission-denied reads. */
+  if (!inviteTokenFromLocation() || canWarmStartHouseholdData(user)) {
+    startListeners();
   }
 
   await initializeDeviceAccess(user);

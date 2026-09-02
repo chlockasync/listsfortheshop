@@ -1,6 +1,6 @@
 import Sortable from "https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/modular/sortable.core.esm.js";
 
-import { auth, db, HOUSEHOLD_ID } from "./firebase.js?v=202609021323";
+import { auth, db, HOUSEHOLD_ID } from "./firebase.js?v=202609021347";
 
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
@@ -2282,6 +2282,7 @@ function updateBottomContextAction() {
       return;
     }
 
+    const showAllShopping = selectedShoppingTarget.kind === "all";
     const selectedStore =
       selectedShoppingTarget.kind === "store"
         ? currentStores.find((store) => store.id === selectedShoppingTarget.id)
@@ -2290,11 +2291,17 @@ function updateBottomContextAction() {
     const selectedStoreTypeId =
       selectedShoppingTarget.kind === "store"
         ? selectedShoppingTarget.storeTypeId
-        : selectedShoppingTarget.id;
+        : selectedShoppingTarget.kind === "storeType"
+          ? selectedShoppingTarget.id
+          : null;
 
     const hasCollectedVisibleItems = currentNeededRecords().some((record) => {
       if (record.entry.status !== "collected") {
         return false;
+      }
+
+      if (showAllShopping) {
+        return true;
       }
 
       if (!neededRecordBelongsToStoreType(record, selectedStoreTypeId)) {
@@ -8142,6 +8149,26 @@ function renderShoppingLocations() {
 
     shoppingLocationOptions.append(group);
   });
+
+  const allShoppingButton = document.createElement("button");
+  allShoppingButton.type = "button";
+  allShoppingButton.className = "shopping-location-option";
+  allShoppingButton.textContent = "Show all shopping";
+
+  allShoppingButton.addEventListener("click", () => {
+    recordAppNavigation();
+    selectedShoppingTarget = {
+      kind: "all",
+      id: "__all_shopping__",
+      name: "Show all shopping",
+    };
+
+    setContextButtonLabel(shoppingAtButton, "All shopping");
+    setShoppingLocationPanelOpen(false);
+    renderGettingItems();
+  });
+
+  shoppingLocationOptions.append(allShoppingButton);
 }
 
 function renderGettingItems() {
@@ -8154,6 +8181,7 @@ function renderGettingItems() {
     return;
   }
 
+  const showAllShopping = selectedShoppingTarget.kind === "all";
   const selectedStore =
     selectedShoppingTarget.kind === "store"
       ? currentStores.find((store) => store.id === selectedShoppingTarget.id)
@@ -8162,31 +8190,38 @@ function renderGettingItems() {
   const selectedStoreTypeId =
     selectedShoppingTarget.kind === "store"
       ? selectedShoppingTarget.storeTypeId
-      : selectedShoppingTarget.id;
+      : selectedShoppingTarget.kind === "storeType"
+        ? selectedShoppingTarget.id
+        : null;
 
-  if (!selectedStoreTypeId) {
+  if (!showAllShopping && !selectedStoreTypeId) {
     gettingItemsList.innerHTML = "<p>Choose where you are shopping.</p>";
     updateBottomContextAction();
     return;
   }
 
-  const matchingRecords = currentNeededRecords().filter((record) => {
-    if (!neededRecordBelongsToStoreType(record, selectedStoreTypeId)) {
-      return false;
-    }
+  const allNeededRecords = currentNeededRecords();
+  const matchingRecords = showAllShopping
+    ? allNeededRecords
+    : allNeededRecords.filter((record) => {
+        if (!neededRecordBelongsToStoreType(record, selectedStoreTypeId)) {
+          return false;
+        }
 
-    if (
-      selectedStore &&
-      !neededRecordIsAvailableAtStore(record, selectedStore.id)
-    ) {
-      return false;
-    }
+        if (
+          selectedStore &&
+          !neededRecordIsAvailableAtStore(record, selectedStore.id)
+        ) {
+          return false;
+        }
 
-    return true;
-  });
+        return true;
+      });
 
   if (matchingRecords.length === 0) {
-    gettingItemsList.innerHTML = "<p>No needed items for this shop.</p>";
+    gettingItemsList.innerHTML = showAllShopping
+      ? "<p>No items are currently needed.</p>"
+      : "<p>No needed items for this shop.</p>";
     updateBottomContextAction();
     return;
   }
@@ -8254,6 +8289,52 @@ function renderGettingItems() {
     row.append(details, collectButton);
     gettingItemsList.append(row);
     renderedEntryIds.add(entry.id);
+  }
+
+  if (showAllShopping) {
+    currentStoreTypes.forEach((storeType) => {
+      const storeTypeRecords = matchingRecords.filter(
+        (record) =>
+          !renderedEntryIds.has(record.entry.id) &&
+          neededRecordBelongsToStoreType(record, storeType.id),
+      );
+
+      const orderedProductTypes = getOrderedProductTypesForShoppingTarget(
+        storeType.id,
+      );
+
+      orderedProductTypes.forEach((productType) => {
+        storeTypeRecords
+          .filter(
+            (record) =>
+              !renderedEntryIds.has(record.entry.id) &&
+              !record.item.oneOff &&
+              String(record.item.productTypeId) === String(productType.id),
+          )
+          .sort(compareNeededRecords)
+          .forEach(appendGettingRecord);
+      });
+
+      storeTypeRecords
+        .filter(
+          (record) =>
+            !renderedEntryIds.has(record.entry.id) && record.item.oneOff,
+        )
+        .sort(compareNeededRecords)
+        .forEach(appendGettingRecord);
+
+      storeTypeRecords
+        .filter((record) => !renderedEntryIds.has(record.entry.id))
+        .sort(compareNeededRecords)
+        .forEach(appendGettingRecord);
+    });
+
+    matchingRecords
+      .filter((record) => !renderedEntryIds.has(record.entry.id))
+      .sort(compareNeededRecords)
+      .forEach(appendGettingRecord);
+
+    return;
   }
 
   const orderedProductTypes = getOrderedProductTypesForShoppingTarget(
@@ -8834,6 +8915,7 @@ async function finishCurrentShop() {
     return;
   }
 
+  const showAllShopping = selectedShoppingTarget.kind === "all";
   const selectedStore =
     selectedShoppingTarget.kind === "store"
       ? currentStores.find((store) => store.id === selectedShoppingTarget.id)
@@ -8842,11 +8924,17 @@ async function finishCurrentShop() {
   const selectedStoreTypeId =
     selectedShoppingTarget.kind === "store"
       ? selectedShoppingTarget.storeTypeId
-      : selectedShoppingTarget.id;
+      : selectedShoppingTarget.kind === "storeType"
+        ? selectedShoppingTarget.id
+        : null;
 
   const collectedRecords = currentNeededRecords().filter((record) => {
     if (record.entry.status !== "collected") {
       return false;
+    }
+
+    if (showAllShopping) {
+      return true;
     }
 
     if (!neededRecordBelongsToStoreType(record, selectedStoreTypeId)) {

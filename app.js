@@ -29,6 +29,8 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
+const LISTS_APP_RELEASE = "v1.1.068";
+
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
   error.code = VIEW_ONLY_WRITE_ERROR_CODE;
@@ -8152,7 +8154,7 @@ function renderShoppingLocations() {
 
   const allShoppingButton = document.createElement("button");
   allShoppingButton.type = "button";
-  allShoppingButton.className = "shopping-location-option";
+  allShoppingButton.className = "shopping-location-option all-shopping-option";
   allShoppingButton.textContent = "Show all shopping";
 
   allShoppingButton.addEventListener("click", () => {

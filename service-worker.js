@@ -1,4 +1,4 @@
-const CACHE_NAME = "listsfortheshop-v1.1.067-202609021432";
+const CACHE_NAME = "listsfortheshop-v1.1.068-202609021443";
 
 const PRECACHE_URLS = [
   "./",
@@ -53,6 +53,18 @@ self.addEventListener("activate", (event) => {
           .map((name) => caches.delete(name)),
       );
       await self.clients.claim();
+
+      /* A newly deployed worker must not leave an already-open installed PWA
+       * running the previous cached app.js. Refresh controlled windows once
+       * after activation so the matching app shell is loaded immediately. */
+      const windowClients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      await Promise.allSettled(
+        windowClients.map((client) => client.navigate(client.url)),
+      );
     })(),
   );
 });

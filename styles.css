@@ -688,6 +688,11 @@ body:has(#room-view:not([hidden]) #new-item-button:not([hidden]))
   background: #eeeeee;
 }
 
+#shopping-location-options > .all-shopping-option {
+  margin-top: 10px;
+  border-top: 1px solid #d6d6d6;
+}
+
 #getting-items-list {
   width: 100%;
   margin: 0;

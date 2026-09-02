@@ -14,8 +14,8 @@
     <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-192.png?v=1651" />
 
-    <link rel="stylesheet" href="styles.css?v=202609021432" />
-    <script type="module" src="app.js?v=202609021432"></script>
+    <link rel="stylesheet" href="styles.css?v=202609021443" />
+    <script type="module" src="app.js?v=202609021443"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", async () => {
@@ -25,6 +25,16 @@
               { updateViaCache: "none" },
             );
             registration.update().catch(() => {});
+
+            let reloadingForServiceWorkerUpdate = false;
+            navigator.serviceWorker.addEventListener("controllerchange", () => {
+              if (reloadingForServiceWorkerUpdate) {
+                return;
+              }
+
+              reloadingForServiceWorkerUpdate = true;
+              window.location.reload();
+            });
 
             document.addEventListener("visibilitychange", () => {
               if (!document.hidden) {
@@ -768,7 +778,7 @@
       </button>
 
       <div class="bottom-bar-status">
-        <span id="app-build" title="Build 202609021432">v1.1.067</span>
+        <span id="app-build" title="Build 202609021443">v1.1.068</span>
         <span id="connection-status">Connecting…</span>
       </div>
 

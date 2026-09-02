@@ -1,6 +1,6 @@
 import Sortable from "https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/modular/sortable.core.esm.js";
 
-import { auth, db, HOUSEHOLD_ID } from "./firebase.js?v=202608181544";
+import { auth, db, HOUSEHOLD_ID } from "./firebase.js?v=202609021323";
 
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
@@ -12,6 +12,8 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocFromCache,
+  getDocFromServer,
   increment,
   onSnapshot,
   runTransaction as firestoreRunTransaction,
@@ -609,6 +611,7 @@ let currentAccessMembers = [];
 let currentAccessInvites = [];
 let currentMemberRecord = null;
 let currentAccessRole = null;
+let serverAccessConfirmed = false;
 let accessTextPromptResolver = null;
 let accessMemberUnsubscribe = null;
 let viewerInviteUnsubscribe = null;
@@ -993,8 +996,36 @@ function showAccessGate(message) {
   connectionStatus.textContent = "No access";
 }
 
-function applyAccessMode(role) {
+function cachedConnectionLabel() {
+  return navigator.onLine ? "Cached" : "Offline";
+}
+
+function updateConnectionStatus() {
+  if (!canUseFullInterface()) {
+    return;
+  }
+
+  if (!navigator.onLine) {
+    connectionStatus.textContent = "Offline";
+    return;
+  }
+
+  if (!serverAccessConfirmed) {
+    connectionStatus.textContent = "Cached";
+    return;
+  }
+
+  connectionStatus.textContent =
+    currentAccessRole === "viewer" ? "View only" : "Online";
+}
+
+function applyAccessMode(role, { source = "server" } = {}) {
   currentAccessRole = normalizedAccessRole(role);
+
+  if (source === "server") {
+    serverAccessConfirmed = true;
+  }
+
   document.body.classList.remove(
     "access-pending",
     "access-denied",
@@ -1005,8 +1036,7 @@ function applyAccessMode(role) {
     currentAccessRole === "viewer" ? "access-viewer" : "access-household",
   );
   accessGate.hidden = true;
-  connectionStatus.textContent =
-    currentAccessRole === "viewer" ? "View only" : "Online";
+  updateConnectionStatus();
 
   if (currentAccessRole === "viewer") {
     showViewerArrivalNotice();
@@ -1416,56 +1446,65 @@ async function redeemAccessInvite(token, user) {
   const inviteRef = householdDocument("accessInvites", inviteId);
   const memberRef = householdDocument("members", user.uid);
 
-  await runTransaction(db, async (transaction) => {
-    const inviteSnapshot = await transaction.get(inviteRef);
-    const memberSnapshot = await transaction.get(memberRef);
+  /* Invitation redemption must be checked against the live server. It is the
+   * one place where an offline queued write would be unsafe: an expired,
+   * revoked or already-used household link must not create local access. */
+  const [inviteSnapshot, memberSnapshot] = await Promise.all([
+    getDocFromServer(inviteRef),
+    getDocFromServer(memberRef),
+  ]);
 
-    if (!inviteSnapshot.exists()) {
-      throw new Error("This access link is not valid.");
-    }
+  if (!inviteSnapshot.exists()) {
+    throw new Error("This access link is not valid.");
+  }
 
-    const invite = inviteSnapshot.data();
-    const expiresAt = firestoreDate(invite.expiresAt);
+  const invite = inviteSnapshot.data();
+  const expiresAt = firestoreDate(invite.expiresAt);
 
-    if (
-      invite.active !== true ||
-      !expiresAt ||
-      expiresAt.getTime() <= Date.now()
-    ) {
-      throw new Error("This access link has expired or been revoked.");
-    }
+  if (
+    invite.active !== true ||
+    !expiresAt ||
+    expiresAt.getTime() <= Date.now()
+  ) {
+    throw new Error("This access link has expired or been revoked.");
+  }
 
-    if (!["household", "viewer"].includes(invite.kind)) {
-      throw new Error("This access link is not valid.");
-    }
+  if (!["household", "viewer"].includes(invite.kind)) {
+    throw new Error("This access link is not valid.");
+  }
 
-    const uses = Number(invite.uses ?? 0);
+  const uses = Number(invite.uses ?? 0);
 
-    if (invite.kind === "household" && uses >= 1) {
-      throw new Error("This household device link has already been used.");
-    }
+  if (invite.kind === "household" && uses >= 1) {
+    throw new Error("This household device link has already been used.");
+  }
 
-    const existingMember = memberSnapshot.exists() ? memberSnapshot.data() : {};
-    const memberData = {
-      role: invite.kind,
-      active: true,
-      inviteId,
-      deviceName:
-        String(invite.description ?? "").trim() ||
-        existingMember.deviceName ||
-        defaultDeviceName(),
-      createdAt: existingMember.createdAt || serverTimestamp(),
-      lastSeenAt: serverTimestamp(),
-    };
+  const existingMember = memberSnapshot.exists() ? memberSnapshot.data() : {};
+  const memberData = {
+    role: invite.kind,
+    active: true,
+    inviteId,
+    deviceName:
+      String(invite.description ?? "").trim() ||
+      existingMember.deviceName ||
+      defaultDeviceName(),
+    createdAt: existingMember.createdAt || serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+  };
 
-    transaction.set(memberRef, memberData);
-    transaction.update(inviteRef, {
-      uses: uses + 1,
-      active: invite.kind === "household" ? false : true,
-      lastUsedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+  /* Keep membership creation and invite consumption atomic, but avoid a
+   * Firestore transaction. The security rules validate the matching invite
+   * update with getAfter(), and the single-use household rule makes a second
+   * concurrent redemption fail. */
+  const batch = firestoreWriteBatch(db);
+  batch.set(memberRef, memberData);
+  batch.update(inviteRef, {
+    uses: uses + 1,
+    active: invite.kind === "household" ? false : true,
+    lastUsedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
+  await batch.commit();
 }
 
 function monitorViewerInvite(inviteId) {
@@ -1563,7 +1602,11 @@ async function createFirstHouseholdDevice(user, deviceName) {
   });
 }
 
-async function activateMemberAccess(user, member) {
+async function activateMemberAccess(
+  user,
+  member,
+  { source = "server", updateActivity = true } = {},
+) {
   const role = normalizedAccessRole(member.role);
 
   if (!role || member.active === false) {
@@ -1572,29 +1615,68 @@ async function activateMemberAccess(user, member) {
 
   currentMemberRecord = { id: user.uid, ...member };
 
-  if (role === "household") {
+  if (role === "household" && source === "server") {
     rememberHouseholdWarmStart(user.uid);
   }
 
-  applyAccessMode(role);
+  applyAccessMode(role, { source });
   startListeners();
 
-  if (role === "household") {
-    try {
-      await updateDoc(householdDocument("members", user.uid), {
+  if (role === "household" && source === "server") {
+    startAccessListListeners();
+
+    if (updateActivity) {
+      updateDoc(householdDocument("members", user.uid), {
         deviceName: member.deviceName || defaultDeviceName(),
         lastSeenAt: serverTimestamp(),
+      }).catch((error) => {
+        console.warn("Could not update device activity:", error);
       });
-    } catch (error) {
-      console.warn("Could not update device activity:", error);
     }
-  }
-
-  if (role === "household") {
-    startAccessListListeners();
-  } else {
+  } else if (role === "viewer" && source === "server") {
     monitorViewerInvite(member.inviteId);
   }
+}
+
+async function activateCachedHouseholdAccess(user) {
+  if (!canWarmStartHouseholdData(user)) {
+    return false;
+  }
+
+  let cachedMember = null;
+
+  try {
+    const cachedSnapshot = await getDocFromCache(
+      householdDocument("members", user.uid),
+    );
+
+    if (cachedSnapshot.exists()) {
+      const candidate = cachedSnapshot.data();
+
+      if (
+        normalizedAccessRole(candidate.role) === "household" &&
+        candidate.active !== false
+      ) {
+        cachedMember = candidate;
+      }
+    }
+  } catch (_error) {
+    /* The warm-start marker is enough to open the already-authorised device;
+     * collection listeners will independently load whatever IndexedDB data is
+     * available. */
+  }
+
+  await activateMemberAccess(
+    user,
+    cachedMember || {
+      role: "household",
+      active: true,
+      deviceName: defaultDeviceName(),
+    },
+    { source: "cache", updateActivity: false },
+  );
+
+  return true;
 }
 
 function monitorCurrentMembership(user) {
@@ -1602,8 +1684,19 @@ function monitorCurrentMembership(user) {
 
   accessMemberUnsubscribe = onSnapshot(
     householdDocument("members", user.uid),
+    { includeMetadataChanges: true },
     async (snapshot) => {
+      const fromCache = snapshot.metadata.fromCache;
+
       if (!snapshot.exists()) {
+        /* An empty cache does not mean access has been revoked. Only a server
+         * result is authoritative enough to close an already-cached app. */
+        if (fromCache) {
+          updateConnectionStatus();
+          return;
+        }
+
+        serverAccessConfirmed = false;
         forgetHouseholdWarmStart(user.uid);
         stopDataListeners();
         stopAccessListListeners();
@@ -1617,6 +1710,9 @@ function monitorCurrentMembership(user) {
       const nextRole = normalizedAccessRole(member.role);
 
       if (!nextRole || member.active === false) {
+        /* A cached inactive record represents a previously confirmed revoke,
+         * so it is safe to honour it immediately. */
+        serverAccessConfirmed = false;
         forgetHouseholdWarmStart(user.uid);
         stopDataListeners();
         stopAccessListListeners();
@@ -1627,61 +1723,104 @@ function monitorCurrentMembership(user) {
       const roleChanged = nextRole !== currentAccessRole;
       currentMemberRecord = { id: user.uid, ...member };
 
-      if (roleChanged) {
-        applyAccessMode(nextRole);
+      if (fromCache) {
+        if (!currentAccessRole || roleChanged) {
+          await activateMemberAccess(user, member, {
+            source: "cache",
+            updateActivity: false,
+          });
+        } else {
+          updateConnectionStatus();
+        }
+        return;
+      }
 
+      const wasServerConfirmed = serverAccessConfirmed;
+      serverAccessConfirmed = true;
+
+      if (!currentAccessRole || roleChanged) {
+        await activateMemberAccess(user, member, {
+          source: "server",
+          updateActivity: !wasServerConfirmed,
+        });
+      } else {
         if (nextRole === "household") {
-          viewerInviteUnsubscribe?.();
-          viewerInviteUnsubscribe = null;
+          rememberHouseholdWarmStart(user.uid);
           startAccessListListeners();
         } else {
           stopAccessListListeners();
           monitorViewerInvite(member.inviteId);
         }
+
+        updateConnectionStatus();
       }
     },
     (error) => {
       console.error("Could not monitor device access:", error);
-      stopDataListeners();
-      showAccessGate("This device no longer has access to the household.");
+
+      /* Network loss, a temporarily unavailable database, or a rules problem
+       * must not erase the useful cached household copy. A later successful
+       * server snapshot is still authoritative and can revoke access. */
+      serverAccessConfirmed = false;
+
+      if (canUseFullInterface()) {
+        updateConnectionStatus();
+        return;
+      }
+
+      showAccessGate(
+        "The app could not verify this device’s access and no cached household copy is available.",
+      );
     },
   );
 }
 
 async function initializeDeviceAccess(user) {
-  connectionStatus.textContent = "Checking access…";
-  accessGate.hidden = false;
-  accessGateMessage.textContent = "Checking this device’s access…";
+  const warmStarted = canUseFullInterface();
+
+  if (!warmStarted) {
+    connectionStatus.textContent = "Checking access…";
+    accessGate.hidden = false;
+    accessGateMessage.textContent = "Checking this device’s access…";
+  } else {
+    updateConnectionStatus();
+  }
 
   const memberRef = householdDocument("members", user.uid);
-  const inviteToken = inviteTokenFromLocation();
+  let inviteToken = inviteTokenFromLocation();
 
-  try {
-    let memberSnapshot = await getDoc(memberRef);
-    const existingRole = memberSnapshot.exists()
-      ? normalizedAccessRole(memberSnapshot.data().role)
-      : null;
+  /* A known full household device does not need to redeem another link just to
+   * open the app. This also prevents a viewer link from downgrading it. */
+  if (inviteToken && currentAccessRole === "household") {
+    clearInviteFromLocation();
+    inviteToken = "";
+  }
 
-    /* A full household device must never be downgraded by opening a viewer
-     * link. Viewer devices may still use a household link to become a full
-     * household device. */
-    if (inviteToken && existingRole === "household") {
+  if (inviteToken) {
+    try {
+      await redeemAccessInvite(inviteToken, user);
       clearInviteFromLocation();
-    } else if (inviteToken) {
-      try {
-        await redeemAccessInvite(inviteToken, user);
-        clearInviteFromLocation();
-        memberSnapshot = await getDoc(memberRef);
-      } catch (error) {
-        console.error("Could not redeem access link:", error);
-        clearInviteFromLocation();
-        showAccessGate(error.message || "This access link could not be used.");
+    } catch (error) {
+      console.error("Could not redeem access link:", error);
+
+      /* Keep the invite token in session storage on failure so the same link can
+       * be retried after connectivity/rules are fixed. */
+      if (canUseFullInterface()) {
+        serverAccessConfirmed = false;
+        updateConnectionStatus();
         return;
       }
+
+      showAccessGate(error.message || "This access link could not be used.");
+      return;
     }
+  }
+
+  try {
+    const memberSnapshot = await getDocFromServer(memberRef);
 
     if (!memberSnapshot.exists()) {
-      const householdSnapshot = await getDoc(householdRootDocument());
+      const householdSnapshot = await getDocFromServer(householdRootDocument());
 
       if (!householdSnapshot.exists()) {
         const deviceName = await requestAccessText({
@@ -1696,7 +1835,12 @@ async function initializeDeviceAccess(user) {
 
         try {
           await createFirstHouseholdDevice(user, deviceName);
-          memberSnapshot = await getDoc(memberRef);
+          const createdMemberSnapshot = await getDocFromServer(memberRef);
+          await activateMemberAccess(user, createdMemberSnapshot.data(), {
+            source: "server",
+          });
+          monitorCurrentMembership(user);
+          return;
         } catch (error) {
           console.error("Could not start new household:", error);
           showAccessGate(
@@ -1704,20 +1848,60 @@ async function initializeDeviceAccess(user) {
           );
           return;
         }
-      } else {
-        forgetHouseholdWarmStart(user.uid);
-        showAccessGate(
-          "This device does not have access. Open a household device or read-only sharing link on this device.",
-        );
-        return;
       }
+
+      /* This is a successful server answer, not a connectivity failure. */
+      serverAccessConfirmed = false;
+      forgetHouseholdWarmStart(user.uid);
+      stopDataListeners();
+      stopAccessListListeners();
+      showAccessGate(
+        "This device does not have access. Open a household device or read-only sharing link on this device.",
+      );
+      return;
     }
 
-    await activateMemberAccess(user, memberSnapshot.data());
+    await activateMemberAccess(user, memberSnapshot.data(), {
+      source: "server",
+    });
     monitorCurrentMembership(user);
   } catch (error) {
-    console.error("Could not check device access:", error);
-    showAccessGate("The app could not verify this device’s access.");
+    console.error("Could not check device access against the server:", error);
+    serverAccessConfirmed = false;
+
+    /* A previously authorised household device remains usable from its
+     * persistent Firestore cache. Writes made while genuinely offline are
+     * queued by Firestore and synchronised when the network returns. */
+    if (canUseFullInterface()) {
+      updateConnectionStatus();
+      monitorCurrentMembership(user);
+      return;
+    }
+
+    try {
+      const cachedMemberSnapshot = await getDocFromCache(memberRef);
+
+      if (
+        cachedMemberSnapshot.exists() &&
+        normalizedAccessRole(cachedMemberSnapshot.data().role) &&
+        cachedMemberSnapshot.data().active !== false
+      ) {
+        await activateMemberAccess(user, cachedMemberSnapshot.data(), {
+          source: "cache",
+          updateActivity: false,
+        });
+        monitorCurrentMembership(user);
+        return;
+      }
+    } catch (_cacheError) {
+      /* No cached membership is available. */
+    }
+
+    showAccessGate(
+      navigator.onLine
+        ? "The app could not verify this device’s access and no cached household copy is available."
+        : "This device is offline and does not yet have a cached household copy.",
+    );
   }
 }
 
@@ -8258,20 +8442,36 @@ function startCollectionListener(definition) {
 
   const unsubscribe = onSnapshot(
     householdCollection(definition.collectionName),
-    definition.applySnapshot,
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      definition.applySnapshot(snapshot);
+
+      if (!snapshot.metadata.fromCache && canUseFullInterface()) {
+        updateConnectionStatus();
+      } else if (snapshot.metadata.fromCache && !serverAccessConfirmed) {
+        updateConnectionStatus();
+      }
+    },
     (error) => {
       startedListeners.delete(definition.key);
       dataListenerUnsubscribes.delete(definition.key);
       console.error(`${definition.errorLabel}:`, error);
 
-      /* A speculative listener can be denied just before an invitation or
-       * first-device registration finishes. Once access is visibly active,
-       * retry only that missing listener. */
-      window.setTimeout(() => {
-        if (accessGate.hidden && canUseFullInterface()) {
-          startCollectionListener(definition);
-        }
-      }, 250);
+      /* Keep the last cached records on screen. Firestore automatically retries
+       * transient network failures; explicit listener failures get a restrained
+       * retry rather than the previous 250 ms loop. */
+      if (canUseFullInterface()) {
+        serverAccessConfirmed = false;
+        updateConnectionStatus();
+      }
+
+      if (navigator.onLine) {
+        window.setTimeout(() => {
+          if (accessGate.hidden && canUseFullInterface()) {
+            startCollectionListener(definition);
+          }
+        }, 5000);
+      }
     },
   );
 
@@ -9365,6 +9565,7 @@ onAuthStateChanged(auth, async (user) => {
   stopDataListeners();
   currentMemberRecord = null;
   currentAccessRole = null;
+  serverAccessConfirmed = false;
 
   if (!user) {
     closeViewerArrivalNotice();
@@ -9380,16 +9581,30 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
-  /* Start household collection reads in parallel with the access check. The
-   * access gate remains closed until initializeDeviceAccess() verifies the
-   * membership, and Firestore rules still decide whether these reads are
-   * permitted. New invitation links wait until redemption to avoid expected
-   * permission-denied reads. */
-  if (!inviteTokenFromLocation() || canWarmStartHouseholdData(user)) {
-    startListeners();
+  /* A previously verified household device opens from its local cache first.
+   * Server verification then runs in parallel and can update/revoke that state.
+   * This is what makes a repeat launch fast and keeps the lists usable without
+   * database connectivity. */
+  if (!inviteTokenFromLocation()) {
+    await activateCachedHouseholdAccess(user);
   }
 
   await initializeDeviceAccess(user);
+});
+
+window.addEventListener("offline", () => {
+  serverAccessConfirmed = false;
+  updateConnectionStatus();
+});
+
+window.addEventListener("online", () => {
+  if (!auth.currentUser || !canUseFullInterface()) {
+    return;
+  }
+
+  updateConnectionStatus();
+  startListeners();
+  monitorCurrentMembership(auth.currentUser);
 });
 
 showView("needing");

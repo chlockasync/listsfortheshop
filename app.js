@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.005";
+const LISTS_APP_RELEASE = "v1.2.006";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -2409,6 +2409,9 @@ function resetNeedingToRoomList() {
 
 function setShoppingLocationPanelOpen(isOpen) {
   shoppingAtPanel.hidden = !isOpen;
+  // The location choices already identify the screen; show this button only
+  // after selection, where it lets shoppers change their chosen location.
+  shoppingAtButton.hidden = isOpen;
   shoppingAtButton.setAttribute("aria-expanded", String(isOpen));
   gettingItemsList.hidden = isOpen;
 
@@ -7112,6 +7115,9 @@ function renderGettingItems() {
     });
 
     row.append(details, collectButton);
+    // Same contextual actions as Needing. Holding the checkbox still only
+    // collects/uncollects because wireItemActions ignores nested buttons.
+    wireItemActions(row, item, entry, specificProduct);
     gettingItemsList.append(row);
   }
 

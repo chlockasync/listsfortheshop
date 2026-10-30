@@ -4394,7 +4394,7 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar { border-top-color: #f
   letter-spacing: -0.018em;
   background: #e7f2eb !important;
   border: 1px solid #c8dfd1 !important;
-  box-shadow: inset 4px 0 #9ac5af, var(--pastel-shadow);
+  box-shadow: var(--pastel-shadow);
   color: #334f46 !important;
 }
 #shopping-location-options .shopping-location-option.store-type-location-option:hover {
@@ -4420,19 +4420,6 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar { border-top-color: #f
   background: var(--room-fill) !important;
   border-color: var(--room-line) !important;
   color: #41324c !important;
-}
-#rooms-list .room-button[data-room-colour] {
-  display: flex;
-  align-items: center;
-  gap: .72rem;
-}
-#rooms-list .room-button[data-room-colour]::before {
-  content: "";
-  width: 11px;
-  height: 25px;
-  border-radius: 999px;
-  flex: 0 0 11px;
-  background: var(--room-accent);
 }
 #rooms-list .room-button[data-room-colour]:hover {
   filter: brightness(.982);
@@ -4540,3 +4527,10 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar { border-top-color: #f
 }
 /* The palette's value input is a data carrier, not a visible form control. */
 .room-colour-picker input[type="hidden"] { display: none !important; }
+
+/* ===== v1.2.006: focused visual and Getting action refinements ===== */
+/* Only the special room shortcuts are emphasised; room colours remain as chosen. */
+#rooms-list .room-button.one-off-room-button,
+#rooms-list .room-button.regular-room-button {
+  font-weight: 800 !important;
+}

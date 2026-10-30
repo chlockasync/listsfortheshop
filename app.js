@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.009";
+const LISTS_APP_RELEASE = "v1.2.010";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -2012,6 +2012,8 @@ function closeFullNeededListToPreviousView() {
 }
 
 function handleAppBackButton() {
+  if (newProductTypeDialog?.open) { newProductTypeDialog.close(); return true; }
+  if (productTypePickerDialog?.open) { productTypePickerDialog.close(); return true; }
   if (!itemEditor.hidden) { closeItemEditor(); return true; }
   if (document.querySelector(".item-action-menu")) { closeItemActions(); return true; }
   if (compactSelectPanel && !compactSelectPanel.hidden) {
@@ -5756,6 +5758,160 @@ function populateProductTypeSelect(selectElement, selectedProductTypeId = "") {
   }
 }
 
+/* ===== Searchable product type chooser for new/edit catalogue items =====
+ * The underlying select remains the source of truth for validation and writes.
+ * These dialogs are stacked over the item editor so unfinished fields survive.
+ */
+const productTypePickerDialog = $("#item-product-type-picker");
+const productTypePickerSearch = $("#item-product-type-search");
+const productTypePickerResults = $("#item-product-type-results");
+const newProductTypeDialog = $("#item-new-product-type");
+const newProductTypeForm = $("#item-new-product-type-form");
+const newProductTypeName = $("#item-new-product-type-name");
+const newProductTypeStoreTypes = $("#item-new-product-type-store-types");
+const newProductTypeError = $("#item-new-product-type-error");
+let activeItemProductTypeSelect = null;
+
+function refreshItemProductTypeButton(select) {
+  const button = select?._itemProductTypeButton;
+  if (!button) return;
+  const label = Array.from(select.options).find(option => option.value === select.value);
+  button.textContent = select.value ? (label?.textContent || "Choose a product type") : "Choose a product type";
+  button.classList.toggle("is-placeholder", !select.value);
+}
+
+function enhanceItemProductTypeSelect(select) {
+  // This is used only by the item editor, not by unrelated Settings controls.
+  select.required = false; // validateItemFormValues() checks this explicitly.
+  select.classList.add("item-product-type-source");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = `${select.id}-picker`;
+  button.className = "item-product-type-trigger";
+  button.setAttribute("aria-haspopup", "dialog");
+  button.addEventListener("click", () => openItemProductTypePicker(select));
+  select.insertAdjacentElement("afterend", button);
+  const label = document.querySelector(`label[for="${CSS.escape(select.id)}"]`);
+  if (label) label.htmlFor = button.id;
+  select._itemProductTypeButton = button;
+  select.addEventListener("change", () => refreshItemProductTypeButton(select));
+  refreshItemProductTypeButton(select);
+}
+
+function renderItemProductTypeOptions() {
+  const select = activeItemProductTypeSelect;
+  if (!select) return;
+  const term = productTypePickerSearch.value.trim().toLocaleLowerCase();
+  productTypePickerResults.replaceChildren();
+  let matchCount = 0;
+
+  // Retain the stored product type / store type ordering, without the roomy
+  // generic select rows. Group headings keep long lists easy to scan.
+  const groups = Array.from(select.children).map(child =>
+    child.tagName === "OPTGROUP"
+      ? { name: child.label, options: Array.from(child.children) }
+      : { name: "", options: [child] });
+  groups.forEach(group => {
+    const options = group.options.filter(option => option.value && !option.disabled &&
+      option.textContent.toLocaleLowerCase().includes(term));
+    if (!options.length) return;
+    if (group.name) {
+      const title = document.createElement("div");
+      title.className = "item-type-group-title";
+      title.textContent = group.name;
+      productTypePickerResults.append(title);
+    }
+    options.forEach(option => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "item-type-option";
+      button.textContent = option.textContent;
+      if (option.value === select.value) {
+        button.classList.add("is-selected");
+        button.setAttribute("aria-current", "true");
+      }
+      button.addEventListener("click", () => {
+        select.value = option.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        productTypePickerDialog.close();
+        select._itemProductTypeButton?.focus({ preventScroll: true });
+      });
+      productTypePickerResults.append(button);
+      matchCount++;
+    });
+  });
+  if (!matchCount) {
+    const empty = document.createElement("p");
+    empty.className = "item-type-empty";
+    empty.textContent = "No matching product types";
+    productTypePickerResults.append(empty);
+  }
+}
+
+function openItemProductTypePicker(select) {
+  activeItemProductTypeSelect = select;
+  productTypePickerSearch.value = "";
+  renderItemProductTypeOptions();
+  productTypePickerDialog.showModal();
+  productTypePickerSearch.focus({ preventScroll: true });
+}
+
+function openNewItemProductType() {
+  if (!activeItemProductTypeSelect || !canEditHousehold()) return;
+  newProductTypeForm.reset();
+  newProductTypeError.textContent = "";
+  const typed = productTypePickerSearch.value.trim();
+  if (typed) newProductTypeName.value = typed.slice(0, 50);
+  createStoreTypeCheckboxList(newProductTypeStoreTypes);
+  newProductTypeDialog.showModal();
+  newProductTypeName.focus({ preventScroll: true });
+}
+
+function setupItemProductTypeDialogs() {
+  $("#item-product-type-create")?.addEventListener("click", openNewItemProductType);
+  $("#item-product-type-close")?.addEventListener("click", () => productTypePickerDialog.close());
+  $("#item-new-product-type-cancel")?.addEventListener("click", () => newProductTypeDialog.close());
+  productTypePickerSearch?.addEventListener("input", renderItemProductTypeOptions);
+  // Keep the active selection while the user cancels, searches, or retries.
+  newProductTypeForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!activeItemProductTypeSelect) return;
+    const name = newProductTypeName.value.trim();
+    const storeTypeIds = getCheckedValues(newProductTypeStoreTypes);
+    if (!name || storeTypeIds.length === 0) {
+      newProductTypeError.textContent = "Enter a name and select at least one store type.";
+      return;
+    }
+    if (currentProductTypes.some(type => type.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      newProductTypeError.textContent = "This product type already exists. Choose it from the list instead.";
+      return;
+    }
+    const submit = newProductTypeForm.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    newProductTypeError.textContent = "";
+    try {
+      const record = {name, storeTypeIds, storeTypeOrders: {}, parentId: null,
+        active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp()};
+      const reference = await addDoc(householdCollection("productTypes"), record);
+      // onSnapshot will refresh currentProductTypes; explicitly update now so
+      // the new type can immediately be selected even before that callback.
+      if (!currentProductTypes.some(type => type.id === reference.id)) {
+        currentProductTypes.push({id: reference.id, ...record});
+      }
+      const select = activeItemProductTypeSelect;
+      populateProductTypeSelect(select, reference.id);
+      select.value = reference.id;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      newProductTypeDialog.close();
+      productTypePickerDialog.close();
+      select._itemProductTypeButton?.focus({ preventScroll: true });
+    } catch (error) {
+      console.error("Could not create product type from item editor:", error);
+      newProductTypeError.textContent = "Could not add this product type. Please try again.";
+    } finally { submit.disabled = false; }
+  });
+}
+
 function readItemFormValues({
   nameInput,
   roomSelect,
@@ -7625,9 +7781,11 @@ function switchShoppingView(viewName) {
   if (viewName !== "needing" && viewName !== "getting") return;
   const previousView = !views.needing.hidden ? "needing" :
     !views.getting.hidden ? "getting" : null;
-  if (previousView === viewName || !previousView || !canUseFullInterface()) return;
+  if (previousView === viewName || !canUseFullInterface()) return;
 
-  shoppingViewScrollY[previousView] = window.scrollY;
+  // Settings is not a shopping tab. Return directly to the requested tab
+  // without overwriting either shopping tab's saved scroll position.
+  if (previousView) shoppingViewScrollY[previousView] = window.scrollY;
   recordAppNavigation();
   showView(viewName, { preserveListState: true });
 
@@ -7742,6 +7900,7 @@ function wireShoppingViewSwipes() {
 /* ===== Event wiring and startup ===== */
 
 function wireNavigation() {
+  setupItemProductTypeDialogs();
   const needingTabButton = $(".main-tabs button[data-view='needing']");
 
   const gettingTabButton = $(".main-tabs button[data-view='getting']");
@@ -8301,6 +8460,9 @@ function wireItemActions(row, item, entry = null, product = null) {
 }
 
 function closeItemEditor() {
+  if (newProductTypeDialog?.open) newProductTypeDialog.close();
+  if (productTypePickerDialog?.open) productTypePickerDialog.close();
+  activeItemProductTypeSelect = null;
   if (itemEditor.open) itemEditor.close();
   itemEditor.hidden = true;
   editingItemContext = null;
@@ -8349,6 +8511,7 @@ function openItemEditor(item, entry = null, product = null, {isNew = false} = {}
     const fields = createItemFormFields({container, idPrefix: "edit-item", values: item});
     populateRoomSelect(fields.roomSelect, item.locationId);
     populateProductTypeSelect(fields.productTypeSelect, item.productTypeId);
+    enhanceItemProductTypeSelect(fields.productTypeSelect);
     populateUnitSelect(fields.unitSelect, item.unitId);
     populateItemStoreSelect(fields.storeSelect, item.productTypeId, itemStoreIds(item));
     wireItemFormDependencies(fields);

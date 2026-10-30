@@ -1,4 +1,4 @@
-const CACHE_NAME = "listsfortheshop-v1.2.000-202610301200";
+const CACHE_NAME = "listsfortheshop-v1.2.001-202610301600";
 
 const PRECACHE_URLS = [
   "./",

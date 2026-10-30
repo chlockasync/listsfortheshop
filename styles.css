@@ -3528,7 +3528,7 @@ body.access-viewer .bottom-bar-status {
 
 /* Functional controls; visual theme intentionally unchanged in this release. */
 .item-action-menu { display:flex; gap:.35rem; padding:.5rem; overflow-x:auto; }
-.item-action-menu button { flex:1 0 auto; padding:.6rem .45rem; font-size:.82rem; }
+.item-action-menu button { flex:1 1 0; min-width:0; white-space:normal; overflow-wrap:anywhere; padding:.6rem .45rem; font-size:.82rem; }
 .if-on-sale { font-size:.8em; color:#a43c0b; font-weight:600; white-space:nowrap; text-decoration:none; }
 #item-editor { width:min(94vw, 35rem); max-height:88dvh; overflow:auto; padding:1rem; border:1px solid #777; border-radius:.5rem; }
 #item-editor::backdrop { background:#0007; }

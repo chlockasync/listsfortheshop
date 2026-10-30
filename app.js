@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.000";
+const LISTS_APP_RELEASE = "v1.2.001";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -245,12 +245,6 @@ function createItemFormFields({
     incrementInput,
   };
 }
-
-createItemFormFields({
-  container: $("#item-form-fields"),
-  idPrefix: "item",
-  roomHidden: true,
-});
 
 function submitButtonFor(form) {
   return form?.querySelector('button[type="submit"]') ?? null;
@@ -480,25 +474,6 @@ const roomView = $("#room-view");
 const roomViewTitle = $("#room-view-title");
 const backToRoomsButton = $("#back-to-rooms");
 const newItemButton = $("#new-item-button");
-const newItemPanel = $("#new-item-panel");
-const cancelNewItemButton = $("#cancel-new-item");
-const itemProductTypeSelect = $("#item-product-type");
-const itemStoreSelect = $("#item-store");
-const itemSpecificAttributesInput = $("#item-specific-attributes");
-const itemUnitSelect = $("#item-unit");
-const itemIncrementInput = $("#item-increment");
-const addItemForm = $("#add-item-form");
-const itemNameInput = $("#item-name");
-const itemRoomLabel = $("#item-room-label");
-const itemRoomSelect = $("#item-room");
-const itemDefaultAmountInput = $("#item-default-amount");
-const oneOffItemPanel = $("#one-off-item-panel");
-const addOneOffItemForm = $("#add-one-off-item-form");
-const oneOffItemNameInput = $("#one-off-item-name");
-const oneOffItemAttributesInput = $("#one-off-item-attributes");
-const oneOffShoppingTargets = $("#one-off-shopping-targets");
-const oneOffItemRoomSelect = $("#one-off-item-room");
-const cancelOneOffItemButton = $("#cancel-one-off-item");
 const roomItemsList = $("#room-items-list");
 const roomItemsSearch = $("#room-items-search");
 const specificProductPanel = $("#specific-product-panel");
@@ -533,22 +508,6 @@ const compactSelectTitle = $("#compact-select-title");
 const compactSelectOptions = $("#compact-select-options");
 const closeCompactSelectButton = $("#close-compact-select");
 let activeCompactSelect = null;
-
-const itemFormContexts = {
-  room: {
-    form: addItemForm,
-    fields: {
-      nameInput: itemNameInput,
-      roomSelect: itemRoomSelect,
-      productTypeSelect: itemProductTypeSelect,
-      storeSelect: itemStoreSelect,
-      attributesInput: itemSpecificAttributesInput,
-      amountInput: itemDefaultAmountInput,
-      unitSelect: itemUnitSelect,
-      incrementInput: itemIncrementInput,
-    },
-  },
-};
 
 const settingsSortables = new Map();
 
@@ -2002,27 +1961,6 @@ function handleAppBackButton() {
     return true;
   }
 
-  if (oneOffItemPanel && !oneOffItemPanel.hidden) {
-    oneOffItemPanel.hidden = true;
-
-    if (newItemButton) {
-      newItemButton.hidden = false;
-    }
-
-    return true;
-  }
-
-  if (newItemPanel && !newItemPanel.hidden) {
-    clearFormPositioningScrollSpace();
-    newItemPanel.hidden = true;
-
-    if (newItemButton) {
-      newItemButton.hidden = false;
-    }
-
-    return true;
-  }
-
   const openSettingsAddForm = getOpenSettingsAddForm();
 
   if (openSettingsAddForm) {
@@ -2393,14 +2331,6 @@ function showNeedingHome() {
 function resetNeedingToRoomList() {
   selectedRoomId = null;
 
-  if (newItemPanel) {
-    newItemPanel.hidden = true;
-  }
-
-  if (oneOffItemPanel) {
-    oneOffItemPanel.hidden = true;
-  }
-
   if (newItemButton) {
     newItemButton.hidden = false;
   }
@@ -2439,14 +2369,6 @@ function openRoomView({ id, name, newItemLabel = "New item" }) {
   fullNeededView.hidden = true;
   roomView.hidden = false;
   roomViewTitle.textContent = name;
-
-  if (newItemPanel) {
-    newItemPanel.hidden = true;
-  }
-
-  if (oneOffItemPanel) {
-    oneOffItemPanel.hidden = true;
-  }
 
   if (newItemButton) {
     newItemButton.hidden = false;
@@ -4601,138 +4523,6 @@ function createStoreTypeCheckboxList(container, selectedStoreTypeIds = []) {
   });
 }
 
-function populateOneOffRoomSelect() {
-  if (!oneOffItemRoomSelect) {
-    return;
-  }
-
-  const selectedValue = oneOffItemRoomSelect.value;
-  oneOffItemRoomSelect.innerHTML =
-    '<option value="">No additional room</option>';
-
-  currentRooms.forEach((room) => {
-    const option = document.createElement("option");
-    option.value = room.id;
-    option.textContent = room.name;
-    oneOffItemRoomSelect.append(option);
-  });
-
-  if (currentRooms.some((room) => String(room.id) === String(selectedValue))) {
-    oneOffItemRoomSelect.value = selectedValue;
-  }
-
-  refreshCompactSelect(oneOffItemRoomSelect);
-}
-
-function renderOneOffShoppingTargets({ preserveSelection = true } = {}) {
-  if (!oneOffShoppingTargets) {
-    return;
-  }
-
-  const selectedValues = preserveSelection
-    ? new Set(
-        Array.from(
-          oneOffShoppingTargets.querySelectorAll(
-            "input[type='checkbox']:checked",
-          ),
-        ).map((checkbox) => checkbox.value),
-      )
-    : new Set();
-
-  oneOffShoppingTargets.innerHTML = "";
-
-  if (currentStoreTypes.length === 0) {
-    oneOffShoppingTargets.innerHTML = "<p>No store types are available.</p>";
-    return;
-  }
-
-  currentStoreTypes.forEach((storeType) => {
-    const group = document.createElement("div");
-    group.className = "one-off-shopping-target-group";
-
-    const storeTypeChoice = createSettingsCheckboxOption({
-      value: `storeType:${storeType.id}`,
-      text: storeType.name,
-      checked: selectedValues.has(`storeType:${storeType.id}`),
-    });
-    storeTypeChoice.optionLabel.classList.add("one-off-shopping-target-option");
-    group.append(storeTypeChoice.optionLabel);
-
-    currentStores
-      .filter((store) => String(store.storeTypeId) === String(storeType.id))
-      .sort(sortBySavedOrderThenName)
-      .forEach((store) => {
-        const storeChoice = createSettingsCheckboxOption({
-          value: `store:${store.id}`,
-          text: store.name,
-          checked: selectedValues.has(`store:${store.id}`),
-        });
-        storeChoice.optionLabel.classList.add("one-off-shopping-target-option");
-        group.append(storeChoice.optionLabel);
-      });
-
-    oneOffShoppingTargets.append(group);
-  });
-}
-
-function selectedOneOffShoppingTargets() {
-  const storeTypeIds = [];
-  const storeIds = [];
-
-  oneOffShoppingTargets
-    .querySelectorAll("input[type='checkbox']:checked")
-    .forEach((checkbox) => {
-      const [kind, id] = checkbox.value.split(":");
-
-      if (kind === "storeType" && id) {
-        storeTypeIds.push(id);
-      }
-
-      if (kind === "store" && id) {
-        storeIds.push(id);
-      }
-    });
-
-  return { storeTypeIds, storeIds };
-}
-
-function resetOneOffItemForm() {
-  addOneOffItemForm?.reset();
-  renderOneOffShoppingTargets({ preserveSelection: false });
-  populateOneOffRoomSelect();
-}
-
-async function saveOneOffItem() {
-  const name = oneOffItemNameInput.value.trim();
-  const specificAttributes = oneOffItemAttributesInput.value.trim();
-  const roomId = oneOffItemRoomSelect.value || null;
-  const { storeTypeIds, storeIds } = selectedOneOffShoppingTargets();
-
-  if (!name) {
-    throw new Error("Please enter an item name.");
-  }
-
-  if (storeTypeIds.length === 0 && storeIds.length === 0) {
-    throw new Error("Please choose at least one store type or store.");
-  }
-
-  await addDoc(householdCollection("neededEntries"), {
-    oneOff: true,
-    itemName: name,
-    specificAttributes,
-    roomId,
-    storeTypeIds,
-    storeIds,
-    amount: 1,
-    unitId: null,
-    status: "needed",
-    addedAt: serverTimestamp(),
-    adjustedAt: serverTimestamp(),
-    statusChangedAt: serverTimestamp(),
-    collectedAt: null,
-  });
-}
-
 async function saveSettingsOrder({ listElement, collectionName }) {
   if (currentAccessRole === "viewer") {
     notifyViewOnlyWriteAttempt();
@@ -5083,7 +4873,7 @@ function renderSettingsLists() {
 
 function renderRooms(rooms) {
   currentRooms = rooms;
-  populateOneOffRoomSelect();
+
 
   renderSettingsRows({
     settingsKey: "rooms",
@@ -5198,7 +4988,6 @@ function renderUnits(units) {
     onDelete: deactivateUnit,
   });
 
-  populateUnitDropdown();
 }
 
 function renderStoreTypes(storeTypes) {
@@ -5238,7 +5027,7 @@ function renderStoreTypes(storeTypes) {
   renderStores(currentStores);
   renderProductTypes(currentProductTypes);
   renderShoppingLocations();
-  renderOneOffShoppingTargets();
+
 }
 
 function renderStores(stores) {
@@ -5297,12 +5086,7 @@ function renderStores(stores) {
   });
 
   renderShoppingLocations();
-  renderOneOffShoppingTargets();
-  populateItemStoreSelect(
-    itemStoreSelect,
-    itemProductTypeSelect?.value,
-    null,
-  );
+
 }
 
 function productTypeEditFields(productTypes) {
@@ -5461,7 +5245,6 @@ function renderProductTypes(productTypes) {
     settingsProductTypesList.innerHTML =
       "<p>No product types have been created yet.</p>";
 
-    populateProductTypeDropdown();
     renderRoomItems();
       renderGettingItems();
     return;
@@ -5497,7 +5280,6 @@ function renderProductTypes(productTypes) {
     });
   }
 
-  populateProductTypeDropdown();
   renderRoomItems();
   renderGettingItems();
 }
@@ -5813,9 +5595,6 @@ function openSpecificProductQuickAdd(item) {
   clearFormPositioningScrollSpace();
   recordAppNavigation();
 
-  if (newItemPanel) {
-    newItemPanel.hidden = true;
-  }
 
   prepareQuickSpecificProductForm(item);
   specificProductPanel.hidden = false;
@@ -5917,52 +5696,6 @@ function populateProductTypeSelect(selectElement, selectedProductTypeId = "") {
   }
 }
 
-function populateProductTypeDropdown() {
-  Object.values(itemFormContexts).forEach(({ fields }) => {
-    const { productTypeSelect, storeSelect } = fields;
-
-    if (!productTypeSelect) {
-      return;
-    }
-
-    populateProductTypeSelect(productTypeSelect, productTypeSelect.value);
-    populateItemStoreSelect(
-      storeSelect,
-      productTypeSelect.value,
-      null,
-    );
-  });
-}
-
-function selectedItemUnitIncrement() {
-  return selectedUnitIncrement(itemUnitSelect);
-}
-
-function applyDefaultItemUnit() {
-  if (currentUnits.length === 0) {
-    itemUnitSelect.innerHTML = "";
-    return;
-  }
-
-  itemUnitSelect.value = currentUnits[0].id;
-  itemIncrementInput.value = selectedItemUnitIncrement();
-}
-
-function populateUnitDropdown(selectedUnitId = itemUnitSelect.value) {
-  const hasSelectedUnit = populateUnitSelect(itemUnitSelect, selectedUnitId);
-
-  if (!hasSelectedUnit && currentUnits.length > 0) {
-    updateIncrementFromUnit(itemUnitSelect, itemIncrementInput);
-  }
-
-}
-
-function resetNewItemForm() {
-  addItemForm.reset();
-  itemDefaultAmountInput.value = 1;
-  applyDefaultItemUnit();
-}
-
 function readItemFormValues({
   nameInput,
   roomSelect,
@@ -6020,6 +5753,8 @@ function itemDocumentData(values) {
   return {
     name: values.name,
     active: true,
+    regularList: values.regularList === true,
+    ifOnSale: values.ifOnSale === true,
     locationId: values.locationId,
     productTypeId: values.productTypeId,
     storeIds: values.storeIds ?? [],
@@ -6936,6 +6671,7 @@ function renderNeedingHomeSearchResults() {
 
   const searchText = needingHomeSearch.value.trim().toLowerCase();
   needingHomeSearchResults.innerHTML = "";
+  needingRoomsList.hidden = Boolean(searchText);
 
   if (!searchText) {
     needingHomeSearchResults.hidden = true;
@@ -7907,56 +7643,15 @@ function wireNavigation() {
   });
 
   newItemButton.addEventListener("click", () => {
-    recordAppNavigation();
-
-    if (isOneOffRoomSelected()) {
-      clearFormPositioningScrollSpace();
-      closeSpecificProductQuickAdd();
-      newItemPanel.hidden = true;
-      resetOneOffItemForm();
-      oneOffItemPanel.hidden = false;
-      oneOffItemPanel.scrollTop = 0;
-      newItemButton.hidden = true;
-      placeElementAtTop(oneOffItemPanel, oneOffItemNameInput);
-      return;
-    }
-
     closeSpecificProductQuickAdd();
-
-    const chooseRoom = isAllStuffSelected() || isRegularRoomSelected();
-    itemRoomLabel.hidden = !chooseRoom;
-    itemRoomSelect.hidden = !chooseRoom;
-    itemRoomSelect.required = chooseRoom;
-    populateRoomSelect(itemRoomSelect);
-    populateProductTypeSelect(
-      itemProductTypeSelect,
-      itemProductTypeSelect.value,
-    );
-    populateItemStoreSelect(
-      itemStoreSelect,
-      itemProductTypeSelect.value,
-      null,
-    );
-
-    if (!itemUnitSelect.value) {
-      applyDefaultItemUnit();
-    }
-
-    newItemPanel.hidden = false;
-    newItemButton.hidden = true;
-
-    placeElementAtTop(newItemPanel, itemNameInput);
-  });
-
-  cancelNewItemButton.addEventListener("click", () => {
-    clearFormPositioningScrollSpace();
-    newItemPanel.hidden = true;
-    newItemButton.hidden = false;
-  });
-
-  cancelOneOffItemButton?.addEventListener("click", () => {
-    oneOffItemPanel.hidden = true;
-    newItemButton.hidden = false;
+    const unit = currentUnits[0];
+    openItemEditor({
+      name: "", specificAttributes: "", storeIds: [], storeTypeIds: [],
+      storeAssignmentVersion: 2, oneOff: isOneOffRoomSelected(),
+      locationId: currentRooms.some(room => room.id === selectedRoomId) ? selectedRoomId : "",
+      defaultAmount: 1, unitId: unit?.id ?? "", increment: unit?.defaultIncrement ?? 1,
+      regularList: isRegularRoomSelected(), ifOnSale: false,
+    }, null, null, {isNew: true});
   });
 
   if (cancelSpecificProductButton) {
@@ -8067,9 +7762,6 @@ function wireItemFormDependencies({
 }
 
 function wireForms() {
-  Object.values(itemFormContexts).forEach(({ fields }) => {
-    wireItemFormDependencies(fields);
-  });
 
   wireAsyncForm(
     addRoomForm,
@@ -8248,56 +7940,7 @@ function wireForms() {
     },
   );
 
-  wireAsyncForm(
-    addOneOffItemForm,
-    async () => {
-      await saveOneOffItem();
-      resetOneOffItemForm();
-      oneOffItemPanel.hidden = true;
-      newItemButton.hidden = false;
-    },
-    {
-      errorLabel: "Could not add one-off item",
-      errorMessage: (error) =>
-        error.message || "The one-off item could not be added.",
-    },
-  );
 
-  wireAsyncForm(
-    addItemForm,
-    async () => {
-      const values = readItemFormValues({
-        ...itemFormContexts.room.fields,
-        locationId: (isAllStuffSelected() || isRegularRoomSelected())
-          ? itemRoomSelect.value
-          : selectedRoomId,
-      });
-
-      const validationMessage = validateItemFormValues(values);
-
-      if (validationMessage) {
-        alert(validationMessage);
-        return;
-      }
-
-      const newItem = await createCatalogueItem(values);
-      await offerNewItemToCurrentWantedList(newItem);
-
-      itemNameInput.value = "";
-
-      if (itemSpecificAttributesInput) {
-        itemSpecificAttributesInput.value = "";
-      }
-
-      clearFormPositioningScrollSpace();
-      newItemPanel.hidden = true;
-      newItemButton.hidden = false;
-    },
-    {
-      errorLabel: "Could not add item",
-      errorMessage: "The item could not be saved.",
-    },
-  );
 }
 
 function startListeners() {
@@ -8306,13 +7949,11 @@ function startListeners() {
 
 const VIEW_ONLY_MUTATION_SELECTOR = [
   ".settings-row-delete-button",
-  ".settings-row-regular-button",
   ".increase-needed-button",
   ".decrease-needed-button",
   ".add-needed-button",
   ".remove-needed-button",
   "#getting-items-list .collect-checkbox-button",
-  ".specific-product-choice-row",
   "#clear-temporary-note",
   "#finish-shop-button",
   "#create-household-link",
@@ -8481,9 +8122,9 @@ function wireItemActions(row, item, entry = null, product = null) {
       button.addEventListener("click", () => { closeItemActions(); callback(); });
       menu.append(button);
     };
+    if (entry) action("Add temporary note", () => openTemporaryNotePanel(item, entry, product));
     if (!product && !item.oneOff) action("New specific item", () => openSpecificProductQuickAdd(item));
     action("Edit item", () => openItemEditor(item, entry, product));
-    if (entry) action("Add temporary note", () => openTemporaryNotePanel(item, entry, product));
     row.after(menu);
     row.setAttribute("aria-expanded", "true");
   };
@@ -8502,13 +8143,17 @@ function closeItemEditor() {
   readEditedItem = null;
 }
 
-function openItemEditor(item, entry = null, product = null) {
+function openItemEditor(item, entry = null, product = null, {isNew = false} = {}) {
   if (!canEditHousehold()) return;
   recordAppNavigation();
-  editingItemContext = { item, entry, product };
+  closeItemActions();
+  editingItemContext = { item, entry, product, isNew };
   const container = $("#item-editor-fields");
   container.replaceChildren();
-  $("#item-editor-title").textContent = `Edit ${combinedItemSpecificProductName(item, product)}`;
+  $("#item-editor-title").textContent = isNew
+    ? (item.oneOff ? "New one-off item" : "New item")
+    : `Edit ${combinedItemSpecificProductName(item, product)}`;
+  $("#delete-edited-item").hidden = isNew;
   function field(labelText, value = "", options = null, required = false) {
     const label = document.createElement("label");
     label.textContent = labelText;
@@ -8562,17 +8207,32 @@ function openItemEditor(item, entry = null, product = null) {
 }
 
 async function saveEditedItem(context, values) {
-  const {item, entry, product} = context;
+  const {item, entry, product, isNew} = context;
   if (!values.name) throw new Error("Please enter a name.");
   if (product) {
     await saveSpecificProduct(values, product);
   } else if (item.oneOff) {
     if (!values.storeIds.length && !values.storeTypeIds.length) throw new Error("Choose at least one store or store type.");
-    await updateDoc(householdDocument("neededEntries", entry.id), {
+    const data = {
       itemName: values.name, specificAttributes: values.specificAttributes,
       roomId: values.roomId, storeIds: values.storeIds, storeTypeIds: values.storeTypeIds,
       ifOnSale: values.ifOnSale, adjustedAt: serverTimestamp(),
-    });
+    };
+    if (isNew) {
+      await addDoc(householdCollection("neededEntries"), {
+        ...data, oneOff: true, amount: 1, unitId: null, status: "needed",
+        addedAt: serverTimestamp(), statusChangedAt: serverTimestamp(), collectedAt: null,
+      });
+    } else {
+      await updateDoc(householdDocument("neededEntries", entry.id), data);
+    }
+  } else if (isNew) {
+    const validation = validateItemFormValues(values);
+    if (validation) throw new Error(validation);
+    const created = await createCatalogueItem(values);
+    // Close once creation succeeds, before the separate add-to-list action.
+    closeItemEditor();
+    await offerNewItemToCurrentWantedList(created);
   } else {
     await saveCatalogueItem(values, item);
   }

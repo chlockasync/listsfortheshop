@@ -3757,6 +3757,8 @@ input::placeholder, textarea::placeholder { color: #9e91ad; }
 .shopping-location-group { gap: 6px; }
 .shopping-location-group + .shopping-location-group { margin-top: 5px; border-top: 0; }
 .shopping-location-group .shopping-location-option:not(:first-child) { padding-left: 1.55rem; }
+/* Store types are headings within the Getting store selector. */
+#shopping-location-options .shopping-location-option.store-type-location-option { font-weight: 700; }
 #shopping-location-options > .all-shopping-option { margin-top: 0; border-top: 1px solid var(--space-edge) !important; }
 .settings-menu-order-row { gap: .55rem; }
 .settings-order-handle { color: #a28db7; opacity: .8; }

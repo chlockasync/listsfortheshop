@@ -3525,3 +3525,24 @@ body.access-viewer > .access-gate {
 body.access-viewer .bottom-bar-status {
   min-width: 0;
 }
+
+/* Functional controls; visual theme intentionally unchanged in this release. */
+.item-action-menu { display:flex; gap:.35rem; padding:.5rem; overflow-x:auto; }
+.item-action-menu button { flex:1 0 auto; padding:.6rem .45rem; font-size:.82rem; }
+.if-on-sale { font-size:.8em; color:#a43c0b; font-weight:600; white-space:nowrap; text-decoration:none; }
+#item-editor { width:min(94vw, 35rem); max-height:88dvh; overflow:auto; padding:1rem; border:1px solid #777; border-radius:.5rem; }
+#item-editor::backdrop { background:#0007; }
+#item-editor[hidden] { display:none; }
+.item-editor-actions { display:flex; gap:.5rem; justify-content:space-between; margin-top:1rem; }
+.item-editor-toggle { display:flex !important; align-items:center; gap:.6rem; }
+.item-editor-toggle input { width:auto; }
+.item-store-choices { display:flex; flex-direction:column; gap:.4rem; }
+.recent-shop { margin-bottom:2.5rem; }
+.recent-shop .item-row { justify-content:space-between; gap:1rem; }
+
+.item-specific-product-detail, .item-temporary-note { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
+
+#item-editor-fields input:not([type="checkbox"]), #item-editor-fields select { width:100%; min-height:40px; padding:.45rem; }
+#item-editor-fields .amount-unit-step-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.5rem; }
+#item-editor-fields .amount-unit-step-row label { min-width:0; }
+#item-editor .item-editor-actions { position:sticky; bottom:-1rem; background:white; padding:.6rem 0; }

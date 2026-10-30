@@ -1,4 +1,5 @@
-const CACHE_NAME = "listsfortheshop-v1.2.006-202610301814";
+/* ListsForTheShop v1.2.007: prefer current app files online, retain them offline. */
+const CACHE_NAME = "listsfortheshop-v1.2.007-202610301827";
 
 const PRECACHE_URLS = [
   "./",
@@ -20,21 +21,31 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-
-      /* A third-party CDN being temporarily unavailable must not prevent the
-       * service worker itself from installing. Each asset is cached
-       * independently and will also be captured by the fetch handler later. */
+      // Carry forward last-known-good assets before deleting the old release.
+      // This also preserves CDN modules if a release installs on a poor connection.
       await Promise.allSettled(
         PRECACHE_URLS.map(async (url) => {
           const request = new Request(url, { cache: "reload" });
-          const response = await fetch(request);
+          const matchOptions = new URL(request.url).origin === self.location.origin
+            ? { ignoreSearch: true }
+            : undefined;
+          const previous = await caches.match(request, matchOptions);
+          if (previous) await cache.put(request, previous.clone());
 
-          if (response.ok || response.type === "opaque") {
-            await cache.put(request, response.clone());
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
+          try {
+            const response = await fetch(request, { signal: controller.signal });
+            if (response.ok || response.type === "opaque") {
+              await cache.put(request, response.clone());
+            }
+          } catch (_error) {
+            // The cached copy will remain available offline.
+          } finally {
+            clearTimeout(timeout);
           }
         }),
       );
-
       await self.skipWaiting();
     })(),
   );
@@ -43,90 +54,83 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      const cacheNames = await caches.keys();
+      const names = await caches.keys();
       await Promise.all(
-        cacheNames
-          .filter(
-            (name) =>
-              name.startsWith("listsfortheshop-") && name !== CACHE_NAME,
-          )
+        names
+          .filter((name) => name.startsWith("listsfortheshop-") && name !== CACHE_NAME)
           .map((name) => caches.delete(name)),
       );
+      // Existing pages listen for controllerchange and reload once. Do not
+      // additionally navigate clients here: two competing reloads can occur.
       await self.clients.claim();
-
-      /* A newly deployed worker must not leave an already-open installed PWA
-       * running the previous cached app.js. Refresh controlled windows once
-       * after activation so the matching app shell is loaded immediately. */
-      const windowClients = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      });
-
-      await Promise.allSettled(
-        windowClients.map((client) => client.navigate(client.url)),
-      );
     })(),
   );
 });
+
+const APP_SHELL_PATHS = new Set(["", "index.html", "styles.css", "app.js", "firebase.js"]);
 
 function isSameOrigin(request) {
   return new URL(request.url).origin === self.location.origin;
 }
 
-function cacheMatchOptions(request) {
-  return isSameOrigin(request) ? { ignoreSearch: true } : undefined;
+function isAppShellRequest(request) {
+  if (!isSameOrigin(request)) return false;
+  if (request.mode === "navigate") return true;
+
+  const url = new URL(request.url);
+  const scope = new URL(self.registration.scope);
+  if (!url.pathname.startsWith(scope.pathname)) return false;
+  const localPath = url.pathname.slice(scope.pathname.length);
+  return APP_SHELL_PATHS.has(localPath);
 }
 
-async function updateCachedResponse(request) {
+async function fetchAndStore(cache, request, fresh) {
   try {
-    const response = await fetch(request);
-
+    // Bypass the browser HTTP cache for the HTML, CSS and JavaScript shell.
+    // GitHub Pages and installed PWAs can otherwise keep reusing old files.
+    const response = await fetch(request, fresh ? { cache: "no-store" } : undefined);
     if (response.ok || response.type === "opaque") {
-      const cache = await caches.open(CACHE_NAME);
       await cache.put(request, response.clone());
+      return response;
     }
-
-    return response;
-  } catch (error) {
+    // Retain a usable cached copy if a deployment temporarily returns 404/5xx.
+    return null;
+  } catch (_error) {
     return null;
   }
 }
 
 self.addEventListener("fetch", (event) => {
-  const { request } = event;
-
-  if (request.method !== "GET") {
-    return;
-  }
+  const request = event.request;
+  if (request.method !== "GET") return;
 
   event.respondWith(
     (async () => {
-      const cached = await caches.match(request, cacheMatchOptions(request));
+      // Always read only THIS release's cache, not older release caches.
+      const cache = await caches.open(CACHE_NAME);
+      const matchOptions = isSameOrigin(request) ? { ignoreSearch: true } : undefined;
+      const cached = await cache.match(request, matchOptions);
 
-      /* The app shell and already-used Firebase/CDN modules are served from
-       * cache immediately. A network refresh happens in the background, so
-       * launching the installed PWA does not wait for GitHub Pages or a CDN. */
-      if (cached) {
-        event.waitUntil(updateCachedResponse(request));
-        return cached;
-      }
-
-      const networkResponse = await updateCachedResponse(request);
-
-      if (networkResponse) {
-        return networkResponse;
+      if (isAppShellRequest(request)) {
+        // Network-first keeps the UI coherent on every online open/refresh;
+        // cached copies provide a fully functional offline fallback.
+        const fresh = await fetchAndStore(cache, request, true);
+        if (fresh) return fresh;
+        if (cached) return cached;
+      } else {
+        // External libraries, icons and manifests stay fast and offline-ready.
+        if (cached) {
+          event.waitUntil(fetchAndStore(cache, request, false));
+          return cached;
+        }
+        const fresh = await fetchAndStore(cache, request, false);
+        if (fresh) return fresh;
       }
 
       if (request.mode === "navigate") {
-        const fallback = await caches.match("./index.html", {
-          ignoreSearch: true,
-        });
-
-        if (fallback) {
-          return fallback;
-        }
+        const fallback = await cache.match("./index.html", { ignoreSearch: true });
+        if (fallback) return fallback;
       }
-
       return new Response("Offline", {
         status: 503,
         statusText: "Offline",

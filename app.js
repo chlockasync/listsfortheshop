@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.006";
+const LISTS_APP_RELEASE = "v1.2.007";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");

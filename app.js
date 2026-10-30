@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.008";
+const LISTS_APP_RELEASE = "v1.2.009";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -611,6 +611,8 @@ const dataListenerUnsubscribes = new Map();
 const optimisticNeededAmounts = new Map();
 let temporaryNoteEntryId = null;
 let lastNonSettingsView = "needing";
+// Independent scroll positions while switching between the two shopping tabs.
+const shoppingViewScrollY = { needing: 0, getting: 0 };
 let appHistoryDepth = 0;
 let suppressAppHistory = false;
 
@@ -2330,7 +2332,7 @@ function openSettingsCategory(categoryName) {
   }
 }
 
-function showView(viewName) {
+function showView(viewName, { preserveListState = false } = {}) {
   closeItemActions();
   closeItemEditor();
   clearFormPositioningScrollSpace();
@@ -2350,9 +2352,14 @@ function showView(viewName) {
   });
 
   if (viewName === "needing") {
-    fullNeededView.hidden = true;
+    if (!preserveListState) fullNeededView.hidden = true;
 
-    if (selectedRoomId) {
+    if (preserveListState && !fullNeededView.hidden) {
+      // A full needed list should remain open when we return from Getting.
+      roomSelectorButton.hidden = true;
+      needingHome.hidden = true;
+      roomView.hidden = true;
+    } else if (selectedRoomId) {
       roomSelectorButton.hidden = false;
       needingHome.hidden = true;
       roomView.hidden = false;
@@ -7612,6 +7619,126 @@ async function finishCurrentShop() {
   }
 }
 
+/* ===== Switching between Needing and Getting ===== */
+
+function switchShoppingView(viewName) {
+  if (viewName !== "needing" && viewName !== "getting") return;
+  const previousView = !views.needing.hidden ? "needing" :
+    !views.getting.hidden ? "getting" : null;
+  if (previousView === viewName || !previousView || !canUseFullInterface()) return;
+
+  shoppingViewScrollY[previousView] = window.scrollY;
+  recordAppNavigation();
+  showView(viewName, { preserveListState: true });
+
+  // The page, not each tab, is the scroll container. Restore its position
+  // after the destination tab has been laid out at its own height.
+  const savedY = shoppingViewScrollY[viewName] ?? 0;
+  ignoreHeaderAutoHideUntil = performance.now() + 400;
+  $(".app-header")?.classList.remove("is-hidden");
+  window.scrollTo({ top: savedY, left: 0, behavior: "instant" });
+  requestAnimationFrame(() => {
+    if (!views[viewName].hidden) {
+      window.scrollTo({ top: savedY, left: 0, behavior: "instant" });
+    }
+  });
+}
+
+function wireShoppingViewSwipes() {
+  const swipeArea = $("#app");
+  if (!swipeArea) return;
+
+  const MIN_SWIPE_PX = 65;
+  const MAX_VERTICAL_PX = 55;
+  const MAX_SWIPE_DURATION_MS = 1200;
+  let gesture = null;
+  let suppressClickUntil = 0;
+
+  function swipeAllowed(event) {
+    if (!canUseFullInterface() || !itemEditor.hidden ||
+        !temporaryNotePanel.hidden ||
+        document.querySelector("dialog[open]") ||
+        (compactSelectPanel && !compactSelectPanel.hidden) ||
+        ($("#specific-product-panel") && !$("#specific-product-panel").hidden) ||
+        ($("#one-off-item-panel") && !$("#one-off-item-panel").hidden) ||
+        document.querySelector(".item-action-menu")) return false;
+
+    // Let horizontal swipes begin on room and store-choice pills too: these
+    // fill most of their screens. Inputs, quantity/collect buttons and menus
+    // still keep their own interactions.
+    const interactive = event.target.closest(
+      'button, input, select, textarea, a, [contenteditable="true"], [role="slider"], .item-action-menu'
+    );
+    if (interactive && !interactive.matches(
+      '#rooms-list button, #shopping-location-options button, #room-selector-button, #shopping-at-button'
+    )) return false;
+    return Boolean(event.target.closest(
+      !views.needing.hidden ? "#needing-view" :
+      !views.getting.hidden ? "#getting-view" : ".no-shopping-view"
+    ));
+  }
+
+  swipeArea.addEventListener("touchstart", (event) => {
+    gesture = null;
+    if (event.touches.length !== 1 || !swipeAllowed(event)) return;
+    const touch = event.changedTouches[0];
+    gesture = {
+      id: touch.identifier,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      currentX: touch.clientX,
+      currentY: touch.clientY,
+      started: performance.now(),
+      view: !views.needing.hidden ? "needing" : "getting",
+      cancelled: false,
+    };
+  }, { passive: true });
+
+  swipeArea.addEventListener("touchmove", (event) => {
+    if (!gesture) return;
+    if (event.touches.length !== 1) { gesture = null; return; }
+    const touch = Array.from(event.changedTouches).find(t => t.identifier === gesture.id);
+    if (!touch) return;
+    gesture.currentX = touch.clientX;
+    gesture.currentY = touch.clientY;
+    const dx = Math.abs(touch.clientX - gesture.startX);
+    const dy = Math.abs(touch.clientY - gesture.startY);
+    // Once the user starts vertical scrolling, it cannot become a tab swipe.
+    if (dy > 16 && dy > dx) gesture.cancelled = true;
+    if (dy > MAX_VERTICAL_PX) gesture.cancelled = true;
+  }, { passive: true });
+
+  swipeArea.addEventListener("touchend", (event) => {
+    if (!gesture) return;
+    const touch = Array.from(event.changedTouches).find(t => t.identifier === gesture.id);
+    if (!touch) return;
+    const swipe = gesture;
+    gesture = null;
+    const dx = touch.clientX - swipe.startX;
+    const dy = touch.clientY - swipe.startY;
+    if (swipe.cancelled ||
+        Math.abs(dx) < MIN_SWIPE_PX ||
+        Math.abs(dy) > MAX_VERTICAL_PX ||
+        Math.abs(dx) < Math.abs(dy) * 1.6 ||
+        performance.now() - swipe.started > MAX_SWIPE_DURATION_MS) return;
+
+    const destination = dx < 0 ? "getting" : "needing";
+    if (swipe.view === destination || views[swipe.view].hidden) return;
+    event.preventDefault();
+    suppressClickUntil = performance.now() + 450;
+    switchShoppingView(destination);
+  }, { passive: false });
+
+  swipeArea.addEventListener("touchcancel", () => { gesture = null; }, { passive: true });
+  swipeArea.addEventListener("click", (event) => {
+    if (performance.now() < suppressClickUntil) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      suppressClickUntil = 0;
+    }
+  }, true);
+}
+
 /* ===== Event wiring and startup ===== */
 
 function wireNavigation() {
@@ -7621,17 +7748,9 @@ function wireNavigation() {
 
   const settingsShortcutButton = $(".settings-shortcut[data-view='settings']");
 
-  needingTabButton.addEventListener("click", () => {
-    recordAppNavigation();
-    resetNeedingToRoomList();
-    showView("needing");
-  });
+  needingTabButton.addEventListener("click", () => switchShoppingView("needing"));
 
-  gettingTabButton.addEventListener("click", () => {
-    recordAppNavigation();
-    resetGettingToShoppingList();
-    showView("getting");
-  });
+  gettingTabButton.addEventListener("click", () => switchShoppingView("getting"));
 
   settingsShortcutButton.addEventListener("click", () => {
     recordAppNavigation();
@@ -8150,8 +8269,18 @@ function wireItemActions(row, item, entry = null, product = null) {
     const action = (label, callback) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = label;
-      button.addEventListener("click", () => { closeItemActions(); callback(); });
+    const caption = document.createElement("span");
+    if (label === "Add specific sub-item") {
+      caption.append("Add specific ");
+      const joinedWord = document.createElement("span");
+      joinedWord.className = "item-action-nowrap";
+      joinedWord.textContent = "sub-item";
+      caption.append(joinedWord);
+    } else {
+      caption.textContent = label;
+    }
+    button.append(caption);
+    button.addEventListener("click", () => { closeItemActions(); callback(); });
       menu.append(button);
     };
     if (entry) action("Add temporary note", () => openTemporaryNotePanel(item, entry, product));
@@ -8359,6 +8488,7 @@ function renderRecentShops(shops = currentRecentShops) {
 
 setupViewerWriteGuards();
 wireNavigation();
+wireShoppingViewSwipes();
 wireForms();
 wireAccessControls();
 setupCompactSelects();

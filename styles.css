@@ -4534,3 +4534,10 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar { border-top-color: #f
 #rooms-list .room-button.regular-room-button {
   font-weight: 800 !important;
 }
+
+/* Keep the hyphenated name intact; wrap at the space before "sub-item". */
+.item-action-menu .item-action-nowrap {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}

@@ -1,5 +1,5 @@
-/* ListsForTheShop v1.2.007: prefer current app files online, retain them offline. */
-const CACHE_NAME = "listsfortheshop-v1.2.007-202610301827";
+/* ListsForTheShop v1.2.008: prefer current app files online, retain them offline. */
+const CACHE_NAME = "listsfortheshop-v1.2.008-202610301837";
 
 const PRECACHE_URLS = [
   "./",

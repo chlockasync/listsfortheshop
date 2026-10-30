@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.007";
+const LISTS_APP_RELEASE = "v1.2.008";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -2820,16 +2820,17 @@ function addScrollableHoldHandler(
   handler,
   {
     duration = 450,
-    moveTolerance = 20,
+    moveTolerance = 8,
     ignoreSelector = "button, input, select, textarea, a",
   } = {},
 ) {
   let timer = null;
   let active = false;
-  let fired = false;
+  let pressReady = false;
   let startX = 0;
   let startY = 0;
   let activeTouchId = null;
+  let mouseIsDown = false;
   let suppressNextClick = false;
   let recentTouchUntil = 0;
 
@@ -2838,128 +2839,126 @@ function addScrollableHoldHandler(
   }
 
   function cancelHold() {
-    if (timer) {
+    if (timer !== null) {
       clearTimeout(timer);
       timer = null;
     }
-
     active = false;
+    pressReady = false;
     activeTouchId = null;
+    mouseIsDown = false;
     element.classList.remove("is-long-pressing");
+    document.removeEventListener("scroll", cancelHold, true);
+    window.removeEventListener("blur", cancelHold);
   }
 
   function beginHold(x, y) {
     cancelHold();
     active = true;
-    fired = false;
     startX = x;
     startY = y;
     element.classList.add("is-long-pressing");
 
-    timer = window.setTimeout(async () => {
+    // A hold is eligible only after the delay. Do not open the menu until
+    // release, since the user's finger may still be about to scroll the list.
+    timer = window.setTimeout(() => {
       timer = null;
-
-      if (!active || fired) {
-        return;
-      }
-
-      fired = true;
-      suppressNextClick = true;
-      element.classList.remove("is-long-pressing");
-      await handler();
+      if (active) pressReady = true;
     }, duration);
+
+    // Scroll events can occur even when the browser coalesces touchmove events.
+    document.addEventListener("scroll", cancelHold, true);
+    window.addEventListener("blur", cancelHold);
   }
 
   function movedTooFar(x, y) {
-    return Math.hypot(x - startX, y - startY) > moveTolerance;
+    return Math.abs(x - startX) > moveTolerance ||
+      Math.abs(y - startY) > moveTolerance;
+  }
+
+  async function finishHold(event) {
+    const shouldActivate = active && pressReady;
+    cancelHold();
+    if (!shouldActivate) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    // Suppress any compatibility click synthesised after touchend / mouseup.
+    suppressNextClick = true;
+    window.setTimeout(() => { suppressNextClick = false; }, 500);
+    await handler();
   }
 
   element.classList.add("has-long-press", "long-press-allows-scroll");
 
-  element.addEventListener(
-    "touchstart",
-    (event) => {
-      if (
-        element.disabled ||
-        shouldIgnore(event) ||
-        event.touches.length !== 1
-      ) {
-        return;
-      }
-
-      const touch = event.changedTouches[0];
-      recentTouchUntil = Date.now() + 900;
-      activeTouchId = touch.identifier;
-      beginHold(touch.clientX, touch.clientY);
-      activeTouchId = touch.identifier;
-    },
-    { passive: true },
-  );
-
-  element.addEventListener(
-    "touchmove",
-    (event) => {
-      if (!active || activeTouchId === null) {
-        return;
-      }
-
-      const touch = Array.from(event.changedTouches).find(
-        (candidate) => candidate.identifier === activeTouchId,
-      );
-
-      if (touch && movedTooFar(touch.clientX, touch.clientY)) {
-        cancelHold();
-      }
-    },
-    { passive: true },
-  );
-
-  element.addEventListener("touchend", cancelHold, {
-    passive: true,
-  });
-  element.addEventListener("touchcancel", cancelHold, {
-    passive: true,
-  });
-
-  element.addEventListener("mousedown", (event) => {
-    if (
-      Date.now() < recentTouchUntil ||
-      event.button !== 0 ||
-      element.disabled ||
-      shouldIgnore(event)
-    ) {
+  element.addEventListener("touchstart", (event) => {
+    if (element.disabled || shouldIgnore(event) || event.touches.length !== 1) {
       return;
     }
+    const touch = event.changedTouches[0];
+    recentTouchUntil = Date.now() + 900;
+    beginHold(touch.clientX, touch.clientY);
+    activeTouchId = touch.identifier;
+  }, { passive: true });
 
-    beginHold(event.clientX, event.clientY);
-  });
-
-  element.addEventListener("mousemove", (event) => {
-    if (active && movedTooFar(event.clientX, event.clientY)) {
+  element.addEventListener("touchmove", (event) => {
+    if (!active || activeTouchId === null) return;
+    if (event.touches.length !== 1) {
       cancelHold();
-    }
-  });
-
-  element.addEventListener("mouseup", cancelHold);
-  element.addEventListener("mouseleave", cancelHold);
-
-  element.addEventListener("contextmenu", (event) => {
-    if (!shouldIgnore(event)) {
-      event.preventDefault();
-    }
-  });
-
-  element.addEventListener("click", (event) => {
-    if (!suppressNextClick) {
       return;
     }
+    const touch = Array.from(event.changedTouches).find(
+      (candidate) => candidate.identifier === activeTouchId,
+    );
+    if (touch && movedTooFar(touch.clientX, touch.clientY)) cancelHold();
+  }, { passive: true });
 
+  element.addEventListener("touchend", async (event) => {
+    if (!active || activeTouchId === null) return;
+    const touch = Array.from(event.changedTouches).find(
+      (candidate) => candidate.identifier === activeTouchId,
+    );
+    if (!touch) return;
+    // Also check the release position, in case touchmove events were coalesced.
+    if (movedTooFar(touch.clientX, touch.clientY)) {
+      cancelHold();
+      return;
+    }
+    await finishHold(event);
+  }, { passive: false });
+  element.addEventListener("touchcancel", cancelHold, { passive: true });
+
+  // Ignore mouse compatibility events fired immediately after touch.
+  element.addEventListener("mousedown", (event) => {
+    if (Date.now() < recentTouchUntil || event.button !== 0 ||
+        element.disabled || shouldIgnore(event)) return;
+    beginHold(event.clientX, event.clientY);
+    mouseIsDown = true;
+  });
+  element.addEventListener("mousemove", (event) => {
+    if (mouseIsDown && movedTooFar(event.clientX, event.clientY)) cancelHold();
+  });
+  element.addEventListener("mouseup", async (event) => {
+    if (!mouseIsDown) return;
+    if (movedTooFar(event.clientX, event.clientY)) {
+      cancelHold();
+      return;
+    }
+    await finishHold(event);
+  });
+  element.addEventListener("mouseleave", () => {
+    if (mouseIsDown) cancelHold();
+  });
+  element.addEventListener("contextmenu", (event) => {
+    if (!shouldIgnore(event)) event.preventDefault();
+  });
+  element.addEventListener("click", (event) => {
+    if (!suppressNextClick) return;
     event.preventDefault();
     event.stopPropagation();
     suppressNextClick = false;
   });
 }
-
 
 /* ===== Compact select controls ===== */
 
@@ -8156,10 +8155,10 @@ function wireItemActions(row, item, entry = null, product = null) {
       menu.append(button);
     };
     if (entry) action("Add temporary note", () => openTemporaryNotePanel(item, entry, product));
-    if (!product && !item.oneOff) action("New specific item", () => openItemEditor(item, null, {
+    action("Edit this item", () => openItemEditor(item, entry, product));
+    if (!product && !item.oneOff) action("Add specific sub-item", () => openItemEditor(item, null, {
       itemId: item.id, name: "", specificAttributes: "", storeIds: [], ifOnSale: false,
     }, {isNew: true}));
-    action("Edit item", () => openItemEditor(item, entry, product));
     row.after(menu);
     row.setAttribute("aria-expanded", "true");
     updateBottomContextAction();

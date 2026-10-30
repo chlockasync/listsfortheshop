@@ -4383,3 +4383,160 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar { border-top-color: #f
   position: static;
   top: auto;
 }
+
+/* ===== v1.2.005: clearer store types and room colour choices ===== */
+
+/* The store-type pill is the parent grouping in Getting. A restrained mint
+   fill + heavier face distinguish it from the specific stores beneath it. */
+#shopping-location-options .shopping-location-option.store-type-location-option {
+  font-weight: 900 !important;
+  font-size: 1.065rem;
+  letter-spacing: -0.018em;
+  background: #e7f2eb !important;
+  border: 1px solid #c8dfd1 !important;
+  box-shadow: inset 4px 0 #9ac5af, var(--pastel-shadow);
+  color: #334f46 !important;
+}
+#shopping-location-options .shopping-location-option.store-type-location-option:hover {
+  background: #deeee4 !important;
+}
+
+/* Nine deliberately gentle choices, including the neutral default. Named
+   data values rather than arbitrary hex values keep stored data theme-safe. */
+[data-room-colour="default"]  { --room-fill: #fff;    --room-line: #e7dff0; --room-accent: #c5b7d4; }
+[data-room-colour="lavender"] { --room-fill: #f1eafb; --room-line: #ddd0f0; --room-accent: #a48bc9; }
+[data-room-colour="rose"]     { --room-fill: #fbeaf1; --room-line: #efd0dd; --room-accent: #c58ca7; }
+[data-room-colour="peach"]    { --room-fill: #fff0e6; --room-line: #efddcf; --room-accent: #d4a382; }
+[data-room-colour="butter"]   { --room-fill: #fff5dd; --room-line: #eadfc0; --room-accent: #c5ad70; }
+[data-room-colour="sage"]     { --room-fill: #eef3e9; --room-line: #d9e5d2; --room-accent: #91ad89; }
+[data-room-colour="mint"]     { --room-fill: #e8f5ef; --room-line: #cfe7dc; --room-accent: #80baa2; }
+[data-room-colour="sky"]      { --room-fill: #eaf4fc; --room-line: #d2e3ef; --room-accent: #89b0cf; }
+[data-room-colour="bluebell"] { --room-fill: #eeeffb; --room-line: #d9dbee; --room-accent: #9b9fce; }
+
+/* Colour the actual room pills and active-room selector, not the special
+   One-off, Regular and All stuff entries. Those retain the neutral scheme. */
+#rooms-list .room-button[data-room-colour],
+#room-selector-button[data-room-colour]:not([data-room-colour="default"]) {
+  background: var(--room-fill) !important;
+  border-color: var(--room-line) !important;
+  color: #41324c !important;
+}
+#rooms-list .room-button[data-room-colour] {
+  display: flex;
+  align-items: center;
+  gap: .72rem;
+}
+#rooms-list .room-button[data-room-colour]::before {
+  content: "";
+  width: 11px;
+  height: 25px;
+  border-radius: 999px;
+  flex: 0 0 11px;
+  background: var(--room-accent);
+}
+#rooms-list .room-button[data-room-colour]:hover {
+  filter: brightness(.982);
+  background: var(--room-fill) !important;
+}
+#room-view-title[data-room-colour]:not([data-room-colour="default"]) {
+  border-radius: 10px;
+  padding: .25rem .55rem;
+  background: var(--room-fill);
+  color: #4b3957;
+}
+
+/* Small preview beside each saved room in Settings. */
+.settings-room-row .settings-order-name {
+  display: inline-flex;
+  align-items: center;
+  gap: .62rem;
+}
+.settings-room-row .settings-order-name::before {
+  content: "";
+  display: inline-block;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  border: 1px solid var(--room-line);
+  border-radius: 6px;
+  background: var(--room-accent);
+}
+
+/* Touch-friendly radio colour cards, keyboard-usable without a dependency. */
+.room-colour-picker {
+  min-width: 0;
+  margin: .3rem 0 .15rem;
+  padding: 0;
+  border: 0;
+}
+.room-colour-picker legend {
+  margin-bottom: .65rem;
+  padding: 0;
+  color: #645374;
+  font-size: .85rem;
+  font-weight: 700;
+}
+.room-colour-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+}
+.room-colour-choice {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 57px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+  margin: 0;
+  padding: .45rem .15rem;
+  border: 1px solid #e4d9ed;
+  border-radius: 13px;
+  background: #fff;
+  color: #574767;
+  cursor: pointer;
+}
+.room-colour-choice input[type="radio"] {
+  position: absolute;
+  width: 100% !important;
+  height: 100% !important;
+  inset: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0;
+  cursor: pointer;
+}
+.room-colour-swatch {
+  display: block;
+  width: 26px;
+  height: 18px;
+  border: 1px solid var(--room-line);
+  border-radius: 7px;
+  background: var(--room-fill);
+  box-shadow: inset 0 -4px var(--room-accent);
+  pointer-events: none;
+}
+.room-colour-choice-label {
+  font-size: .73rem;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.room-colour-choice:has(input:checked) {
+  border: 2px solid #977ecb;
+  padding: calc(.45rem - 1px) calc(.15rem - 1px);
+  background: #f8f4fd;
+  box-shadow: 0 0 0 2px #ede5f8;
+}
+.room-colour-choice:has(input:focus-visible) {
+  outline: 3px solid #9176c9;
+  outline-offset: 2px;
+}
+@media (max-width: 340px) {
+  .room-colour-choices { gap: .35rem; }
+  .room-colour-choice-label { font-size: .69rem; }
+}
+/* The palette's value input is a data carrier, not a visible form control. */
+.room-colour-picker input[type="hidden"] { display: none !important; }

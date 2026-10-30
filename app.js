@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.004";
+const LISTS_APP_RELEASE = "v1.2.005";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -397,6 +397,80 @@ function toggleCurrentSettingsAddForm() {
     form.hidden = true;
     clearFormPositioningScrollSpace();
   }
+}
+
+/* Room colours are fixed tokens so the saved setting stays theme-safe and
+   existing households without a colour continue using the original neutral. */
+const ROOM_COLOURS = [
+  { id: "default", label: "Default" },
+  { id: "lavender", label: "Lavender" },
+  { id: "rose", label: "Rose" },
+  { id: "peach", label: "Peach" },
+  { id: "butter", label: "Butter" },
+  { id: "sage", label: "Sage" },
+  { id: "mint", label: "Mint" },
+  { id: "sky", label: "Sky" },
+  { id: "bluebell", label: "Bluebell" },
+];
+
+function normaliseRoomColour(value) {
+  return ROOM_COLOURS.some((colour) => colour.id === value)
+    ? value
+    : "default";
+}
+
+function createRoomColourPicker(value, groupName) {
+  const fieldset = document.createElement("fieldset");
+  fieldset.className = "room-colour-picker";
+
+  const legend = document.createElement("legend");
+  legend.textContent = "Room colour";
+  fieldset.append(legend);
+
+  const choices = document.createElement("div");
+  choices.className = "room-colour-choices";
+
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.value = normaliseRoomColour(value);
+  input.dataset.roomColourValue = "";
+
+  ROOM_COLOURS.forEach((colour) => {
+    const choice = document.createElement("label");
+    choice.className = "room-colour-choice";
+    choice.dataset.roomColour = colour.id;
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = groupName;
+    radio.value = colour.id;
+    radio.checked = input.value === colour.id;
+
+    const swatch = document.createElement("span");
+    swatch.className = "room-colour-swatch";
+    swatch.setAttribute("aria-hidden", "true");
+
+    const label = document.createElement("span");
+    label.className = "room-colour-choice-label";
+    label.textContent = colour.label;
+
+    radio.addEventListener("change", () => {
+      if (radio.checked) input.value = colour.id;
+    });
+    choice.append(radio, swatch, label);
+    choices.append(choice);
+  });
+
+  fieldset.append(choices, input);
+  return { fieldset, input };
+}
+
+function setRoomColour(element, value) {
+  if (element) element.dataset.roomColour = normaliseRoomColour(value);
+}
+
+function colourForSelectedRoom() {
+  return currentRooms.find((room) => room.id === selectedRoomId)?.colour;
 }
 
 /* Rooms */
@@ -2358,6 +2432,8 @@ function openRoomView({ id, name, newItemLabel = "New item" }) {
 
   roomSelectorButton.hidden = false;
   setRoomSelectorLabel(name);
+  setRoomColour(roomSelectorButton, colourForSelectedRoom());
+  setRoomColour(roomViewTitle, colourForSelectedRoom());
   roomSelectorButton.setAttribute("aria-expanded", "false");
 
   needingHome.hidden = true;
@@ -2426,6 +2502,8 @@ function updateSelectedRoomLabel() {
   const roomName = getSelectedRoomName();
   setRoomSelectorLabel(roomName);
   roomViewTitle.textContent = roomName;
+  setRoomColour(roomSelectorButton, colourForSelectedRoom());
+  setRoomColour(roomViewTitle, colourForSelectedRoom());
 
   if (newItemButton) {
     newItemButton.textContent = isRegularRoomSelected()
@@ -3252,6 +3330,15 @@ function createCheckboxField(field) {
 }
 
 function createFormField(field) {
+  if (field.type === "room-colour") {
+    const { fieldset, input } = createRoomColourPicker(
+      field.value(),
+      `edit-room-colour-${editingSettingsId}`,
+    );
+    input.dataset.fieldKey = field.key;
+    return { label: fieldset, input };
+  }
+
   if (field.type === "checkboxes") {
     return createCheckboxField(field);
   }
@@ -4885,6 +4972,12 @@ function renderRooms(rooms) {
         value: () =>
           rooms.find((room) => room.id === editingSettingsId)?.name ?? "",
       },
+      {
+        key: "colour",
+        type: "room-colour",
+        value: () =>
+          rooms.find((room) => room.id === editingSettingsId)?.colour,
+      },
     ],
     onSave: async (values, room) => {
       if (!values.name) {
@@ -4893,10 +4986,19 @@ function renderRooms(rooms) {
 
       await updateDoc(householdDocument("locations", room.id), {
         name: values.name,
+        colour: normaliseRoomColour(values.colour),
         updatedAt: serverTimestamp(),
       });
     },
     onDelete: deactivateRoom,
+  });
+
+  settingsRoomsList.querySelectorAll(".settings-order-row").forEach((row) => {
+    const room = rooms.find((entry) => entry.id === row.dataset.documentId);
+    if (room) {
+      row.classList.add("settings-room-row");
+      setRoomColour(row, room.colour);
+    }
   });
 
   needingRoomsList.innerHTML = "";
@@ -4928,6 +5030,7 @@ function renderRooms(rooms) {
     roomButton.type = "button";
     roomButton.className = "room-button shopping-location-option";
     roomButton.textContent = `${room.name} stuff`;
+    setRoomColour(roomButton, room.colour);
     roomButton.addEventListener("click", () => {
       recordAppNavigation();
       openRoom(room);
@@ -7703,6 +7806,17 @@ function wireItemFormDependencies({
 }
 
 function wireForms() {
+  const newRoomColourField = createRoomColourPicker("default", "new-room-colour");
+  $("#add-room-colour-picker")?.append(newRoomColourField.fieldset);
+  addRoomForm.addEventListener("reset", () => {
+    // Radio defaults are restored by the browser; keep the collected token in sync.
+    queueMicrotask(() => {
+      const selected = newRoomColourField.fieldset.querySelector(
+        'input[type="radio"]:checked',
+      );
+      newRoomColourField.input.value = selected?.value ?? "default";
+    });
+  });
 
   wireAsyncForm(
     addRoomForm,
@@ -7715,6 +7829,7 @@ function wireForms() {
 
       await addDoc(householdCollection("locations"), {
         name: roomName,
+        colour: normaliseRoomColour(newRoomColourField.input.value),
         parentId: null,
         level: "room",
         active: true,

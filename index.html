@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#eee7fa" />
     <meta name="referrer" content="no-referrer" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Lists" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <link rel="manifest" href="manifest.webmanifest?v=1651" />
-    <link rel="icon" href="favicon.svg?v=1651" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon-192.png?v=1651" />
+    <link rel="manifest" href="manifest.webmanifest?v=202610301635" />
+    <link rel="icon" href="favicon.svg?v=202610301635" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-192.png?v=202610301635" />
 
-    <link rel="stylesheet" href="styles.css?v=202610301609" />
-    <script type="module" src="app.js?v=202610301609"></script>
+    <link rel="stylesheet" href="styles.css?v=202610301635" />
+    <script type="module" src="app.js?v=202610301635"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", async () => {
@@ -100,6 +100,10 @@
       </form>
     </section>
     <header class="app-header">
+      <div class="app-brand" aria-label="Lists for the Shop">
+        <img class="app-brand-mark" src="favicon.svg?v=202610301635" alt="" width="38" height="38" />
+        <span>Lists for the Shop</span>
+      </div>
       <nav class="main-tabs" aria-label="Main navigation">
         <button type="button" data-view="needing">Needing</button>
 
@@ -562,9 +566,17 @@
     </section>
 
     <dialog id="item-editor" hidden aria-labelledby="item-editor-title">
-      <form id="item-editor-form"><h3 id="item-editor-title">Edit item</h3>
+      <form id="item-editor-form">
+        <div class="item-editor-heading">
+          <div class="item-editor-heading-icon" aria-hidden="true">✦</div>
+          <h3 id="item-editor-title">Edit item</h3>
+        </div>
         <div id="item-editor-fields" class="settings-form-fields"></div>
-        <div class="item-editor-actions"><button type="button" id="delete-edited-item">Delete item</button><button type="button" id="cancel-item-editor">Cancel</button><button type="submit">Save</button></div>
+        <div class="item-editor-actions">
+          <button type="button" id="delete-edited-item">Delete item</button>
+          <button type="button" id="cancel-item-editor">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
       </form>
     </dialog>
     <nav class="bottom-action-bar" aria-label="App actions">
@@ -579,7 +591,7 @@
       </button>
 
       <div class="bottom-bar-status">
-        <span id="app-build" title="Build 202610301609">v1.2.002</span>
+        <span id="app-build" title="Build 202610301635">v1.2.003</span>
         <span id="connection-status">Connecting…</span>
       </div>
 

@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
-  "background_color": "#f4f4f4",
-  "theme_color": "#ffffff",
+  "background_color": "#f8f5fd",
+  "theme_color": "#eee7fa",
   "orientation": "portrait",
   "icons": [
     {

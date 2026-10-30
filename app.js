@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.001";
+const LISTS_APP_RELEASE = "v1.2.002";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -476,13 +476,6 @@ const backToRoomsButton = $("#back-to-rooms");
 const newItemButton = $("#new-item-button");
 const roomItemsList = $("#room-items-list");
 const roomItemsSearch = $("#room-items-search");
-const specificProductPanel = $("#specific-product-panel");
-const specificProductPanelTitle = $("#specific-product-panel-title");
-const addSpecificProductForm = $("#add-specific-product-form");
-const specificProductNameInput = $("#specific-product-name");
-const specificProductAttributesInput = $("#specific-product-attributes");
-const specificProductStoresContainer = $("#specific-product-stores");
-const cancelSpecificProductButton = $("#cancel-specific-product");
 const viewNeededListButton = $("#view-needed-list");
 const fullNeededView = $("#full-needed-view");
 const backFromNeededListButton = $("#back-from-needed-list");
@@ -542,7 +535,6 @@ let viewerExpiryTimer = null;
 let accessListsUnsubscribes = [];
 const dataListenerUnsubscribes = new Map();
 const optimisticNeededAmounts = new Map();
-let quickSpecificProductItemId = null;
 let temporaryNoteEntryId = null;
 let lastNonSettingsView = "needing";
 let appHistoryDepth = 0;
@@ -1956,10 +1948,6 @@ function handleAppBackButton() {
     return true;
   }
 
-  if (!specificProductPanel?.hidden) {
-    closeSpecificProductQuickAdd();
-    return true;
-  }
 
   const openSettingsAddForm = getOpenSettingsAddForm();
 
@@ -1982,6 +1970,12 @@ function handleAppBackButton() {
   if (!views.needing.hidden && selectedRoomId) {
     showNeedingHome();
     updateBottomContextAction();
+    return true;
+  }
+
+  if (!views.needing.hidden && !needingHome.hidden && needingHomeSearch.value.trim()) {
+    needingHomeSearch.value = "";
+    renderNeedingHomeSearchResults();
     return true;
   }
 
@@ -2144,10 +2138,11 @@ function updateBottomContextAction() {
   }
 
   if (!views.needing.hidden) {
-    bottomContextAction.textContent = "Full list";
-    bottomContextAction.disabled = false;
+    bottomContextAction.textContent = "Back";
+    bottomContextAction.disabled = roomView.hidden && fullNeededView.hidden
+      && !needingHomeSearch.value.trim() && !document.querySelector(".item-action-menu");
     bottomContextAction.hidden = false;
-    bottomContextAction.setAttribute("aria-label", "Open full needed list");
+    bottomContextAction.setAttribute("aria-label", "Go back");
     return;
   }
 
@@ -5397,16 +5392,23 @@ function recordedStoreNames(storeIds = []) {
     .join(", ");
 }
 
-async function saveSpecificProduct(values, product) {
+async function saveSpecificProduct(values, product = null) {
   if (!values.itemId || !values.name || !activeCatalogueItems().some(item => item.id === values.itemId)) {
     throw new Error("Please choose an item and enter a product name.");
   }
-  const batch = writeBatch(db);
-  batch.update(householdDocument("specificProducts", product.id), {
+  const data = {
     itemId: values.itemId, name: values.name,
     specificAttributes: values.specificAttributes ?? "", storeIds: values.storeIds ?? [],
     ifOnSale: values.ifOnSale === true, updatedAt: serverTimestamp(),
-  });
+  };
+  if (!product) {
+    await addDoc(householdCollection("specificProducts"), {
+      ...data, active: true, createdAt: serverTimestamp(),
+    });
+    return;
+  }
+  const batch = writeBatch(db);
+  batch.update(householdDocument("specificProducts", product.id), data);
   if (values.itemId !== product.itemId) {
     allNeededEntries().filter(entry => entry.specificProductId === product.id).forEach(entry => {
       batch.update(householdDocument("neededEntries", entry.id), { itemId: values.itemId, adjustedAt: serverTimestamp() });
@@ -5558,60 +5560,6 @@ function getCheckedValues(container) {
   return Array.from(
     container.querySelectorAll("input[type='checkbox']:checked"),
   ).map((checkbox) => checkbox.value);
-}
-
-function prepareQuickSpecificProductForm(item) {
-  quickSpecificProductItemId = item.id;
-  setContextualFormHeading(
-    specificProductPanelTitle,
-    "Add specific product to",
-    item.name,
-  );
-  addSpecificProductForm.reset();
-
-  const productType = currentProductTypes.find(
-    (candidate) => candidate.id === item.productTypeId,
-  );
-
-  const allowedStoreTypeIds = productType
-    ? productTypeStoreTypeIds(productType)
-    : [];
-
-  createStoreCheckboxList(specificProductStoresContainer, [], {
-    allowedStoreTypeIds,
-    emptyMessage: "No stores are available for this item's product type.",
-  });
-}
-
-function openSpecificProductQuickAdd(item) {
-  if (!canUseFullInterface()) {
-    return;
-  }
-
-  if (!specificProductPanel || !addSpecificProductForm) {
-    return;
-  }
-
-  clearFormPositioningScrollSpace();
-  recordAppNavigation();
-
-
-  prepareQuickSpecificProductForm(item);
-  specificProductPanel.hidden = false;
-  specificProductPanel.scrollTop = 0;
-}
-
-function closeSpecificProductQuickAdd() {
-  quickSpecificProductItemId = null;
-  addSpecificProductForm?.reset();
-
-  if (specificProductStoresContainer) {
-    specificProductStoresContainer.innerHTML = "";
-  }
-
-  if (specificProductPanel) {
-    specificProductPanel.hidden = true;
-  }
 }
 
 function appendProductTypeOptionsForStoreType({
@@ -6199,7 +6147,7 @@ function openTemporaryNotePanel(item, neededEntry, specificProduct = null) {
   }
 
   recordAppNavigation();
-  closeSpecificProductQuickAdd();
+
 
   temporaryNoteEntryId = entryId;
   temporaryNoteItemName.textContent = temporaryNoteItemLabel(
@@ -6672,6 +6620,7 @@ function renderNeedingHomeSearchResults() {
   const searchText = needingHomeSearch.value.trim().toLowerCase();
   needingHomeSearchResults.innerHTML = "";
   needingRoomsList.hidden = Boolean(searchText);
+  updateBottomContextAction();
 
   if (!searchText) {
     needingHomeSearchResults.hidden = true;
@@ -7584,10 +7533,8 @@ function wireNavigation() {
   if (bottomContextAction) {
     bottomContextAction.addEventListener("click", () => {
       if (!views.needing.hidden) {
-        recordAppNavigation();
-
-        openFullNeededList();
-
+        runWithoutHistory(() => handleAppBackButton());
+        updateBottomContextAction();
         return;
       }
 
@@ -7643,7 +7590,7 @@ function wireNavigation() {
   });
 
   newItemButton.addEventListener("click", () => {
-    closeSpecificProductQuickAdd();
+
     const unit = currentUnits[0];
     openItemEditor({
       name: "", specificAttributes: "", storeIds: [], storeTypeIds: [],
@@ -7653,12 +7600,6 @@ function wireNavigation() {
       regularList: isRegularRoomSelected(), ifOnSale: false,
     }, null, null, {isNew: true});
   });
-
-  if (cancelSpecificProductButton) {
-    cancelSpecificProductButton.addEventListener("click", () => {
-      closeSpecificProductQuickAdd();
-    });
-  }
 
   cancelTemporaryNoteButton?.addEventListener("click", closeTemporaryNotePanel);
 
@@ -7910,36 +7851,6 @@ function wireForms() {
     },
   );
 
-  wireAsyncForm(
-    addSpecificProductForm,
-    async () => {
-      const productName = specificProductNameInput.value.trim();
-      const specificAttributes = specificProductAttributesInput.value.trim();
-      const storeIds = getCheckedValues(specificProductStoresContainer);
-
-      if (!quickSpecificProductItemId || !productName) {
-        alert("Please enter a product name.");
-        return;
-      }
-
-      await addDoc(householdCollection("specificProducts"), {
-        itemId: quickSpecificProductItemId,
-        name: productName,
-        specificAttributes,
-        storeIds,
-        active: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      closeSpecificProductQuickAdd();
-    },
-    {
-      errorLabel: "Could not add specific product",
-      errorMessage: "The specific product could not be saved.",
-    },
-  );
-
 
 }
 
@@ -8098,6 +8009,7 @@ function itemStoreIds(item) {
 function closeItemActions() {
   $$(".item-action-menu").forEach(menu => menu.remove());
   $$("[data-item-actions]").forEach(row => row.setAttribute("aria-expanded", "false"));
+  updateBottomContextAction();
 }
 
 function wireItemActions(row, item, entry = null, product = null) {
@@ -8123,10 +8035,13 @@ function wireItemActions(row, item, entry = null, product = null) {
       menu.append(button);
     };
     if (entry) action("Add temporary note", () => openTemporaryNotePanel(item, entry, product));
-    if (!product && !item.oneOff) action("New specific item", () => openSpecificProductQuickAdd(item));
+    if (!product && !item.oneOff) action("New specific item", () => openItemEditor(item, null, {
+      itemId: item.id, name: "", specificAttributes: "", storeIds: [], ifOnSale: false,
+    }, {isNew: true}));
     action("Edit item", () => openItemEditor(item, entry, product));
     row.after(menu);
     row.setAttribute("aria-expanded", "true");
+    updateBottomContextAction();
   };
   addScrollableHoldHandler(row, open);
   row.addEventListener("keydown", event => {
@@ -8151,7 +8066,7 @@ function openItemEditor(item, entry = null, product = null, {isNew = false} = {}
   const container = $("#item-editor-fields");
   container.replaceChildren();
   $("#item-editor-title").textContent = isNew
-    ? (item.oneOff ? "New one-off item" : "New item")
+    ? (product ? "New specific item" : item.oneOff ? "New one-off item" : "New item")
     : `Edit ${combinedItemSpecificProductName(item, product)}`;
   $("#delete-edited-item").hidden = isNew;
   function field(labelText, value = "", options = null, required = false) {
@@ -8163,6 +8078,7 @@ function openItemEditor(item, entry = null, product = null, {isNew = false} = {}
       el.value = option.value; el.textContent = option.text; control.append(el);
     });
     else { control.type = "text"; control.maxLength = 100; }
+    control.setAttribute("aria-label", labelText);
     control.value = value ?? ""; control.required = required;
     label.append(control); container.append(label); return control;
   }
@@ -8210,7 +8126,7 @@ async function saveEditedItem(context, values) {
   const {item, entry, product, isNew} = context;
   if (!values.name) throw new Error("Please enter a name.");
   if (product) {
-    await saveSpecificProduct(values, product);
+    await saveSpecificProduct(values, isNew ? null : product);
   } else if (item.oneOff) {
     if (!values.storeIds.length && !values.storeTypeIds.length) throw new Error("Choose at least one store or store type.");
     const data = {

@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.012";
+const LISTS_APP_RELEASE = "v1.2.013";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -6178,6 +6178,21 @@ function currentNeededRecords() {
   return allNeededEntries().map(neededRecordForEntry).filter(Boolean);
 }
 
+function unaddedStockUpRecords() {
+  const records = [];
+  currentItems.filter((item) => item.active !== false && !item.oneOff).forEach((item) => {
+    if (itemHasStockUpFlag(item) && !genericNeededEntryForItem(item.id)) {
+      records.push({ item, entry: null, specificProduct: null });
+    }
+    specificProductsForItem(item.id).forEach((product) => {
+      if (itemHasStockUpFlag(item, product) && !specificNeededEntryForProduct(product.id)) {
+        records.push({ item, entry: null, specificProduct: product });
+      }
+    });
+  });
+  return records;
+}
+
 function neededRecordMatchesSearch(record, searchText) {
   if (!searchText) {
     return true;
@@ -6193,7 +6208,7 @@ function neededRecordMatchesSearch(record, searchText) {
     productType?.name,
     record.specificProduct?.name,
     specificProductDetailText(record.specificProduct ?? {}),
-    record.entry.temporaryNote,
+    record.entry?.temporaryNote,
     storeTypeIdsForItem(record.item)
       .map((id) => getStoreTypeName(id))
       .join(" "),
@@ -6363,15 +6378,15 @@ function createItemNameDisplay(
     name.textContent = specificProduct ? specificProduct.name : item.name;
   }
 
-  wrapper.append(name);
-  // An optional stock-up offer is shown even before the item has been added.
-  // Once it is needed, the amount gets the discount advice instead.
-  if (itemHasStockUpFlag(item, specificProduct) && !isNeeded) {
+  // Keep stock-up advice inline with the name, exactly where the former
+  // "If On Sale" label appeared. The amount remains in its usual column.
+  if (itemHasStockUpFlag(item, specificProduct)) {
     const sale = document.createElement("span");
     sale.className = "if-on-sale";
-    sale.textContent = STOCK_UP_LABEL;
-    wrapper.append(sale);
+    sale.textContent = isNeeded ? STOCK_UP_QUANTITY_SUFFIX : STOCK_UP_LABEL;
+    name.append(document.createTextNode(" "), sale);
   }
+  wrapper.append(name);
 
   const extra = specificProduct
     ? specificProductDetailText(specificProduct)
@@ -6494,9 +6509,8 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
-  setNeededAmountDisplay(amountDisplay, entry, itemHasStockUpFlag(item));
+  setNeededAmountDisplay(amountDisplay, entry);
   details.append(amountDisplay);
-  if (itemHasStockUpFlag(item)) row.classList.add("stock-up-needed");
 
   const controls = document.createElement("div");
   controls.className = "room-item-controls";
@@ -6565,7 +6579,10 @@ function renderRoomItems() {
     }
 
     if (isRegularRoomSelected()) {
-      return itemIsRegular(item);
+      // Stock-up offers must remain discoverable in Needing even when the
+      // item hasn't been added, or explicitly marked as a regular.
+      return itemIsRegular(item) || itemHasStockUpFlag(item) ||
+        specificProductsForItem(item.id).some((product) => itemHasStockUpFlag(item, product));
     }
 
     if (isAllStuffSelected()) {
@@ -6634,7 +6651,7 @@ function renderRoomItems() {
 
     const amountDisplay = document.createElement("strong");
     amountDisplay.className = "room-current-quantity";
-    setNeededAmountDisplay(amountDisplay, neededEntry, itemHasStockUpFlag(item, specificProduct));
+    setNeededAmountDisplay(amountDisplay, neededEntry);
 
     const increaseButton = createIconButton({
       className: "room-icon-button increase-needed-button",
@@ -6679,7 +6696,6 @@ function renderRoomItems() {
       const row = document.createElement("div");
       row.className = "item-row room-item-row specific-product-offer-row";
       row.classList.add(isNeeded ? "is-needed" : "is-available");
-      if (isNeeded && itemHasStockUpFlag(item, product)) row.classList.add("stock-up-needed");
 
       const details = document.createElement("div");
       details.className = "item-row-details";
@@ -6732,7 +6748,6 @@ function renderRoomItems() {
     const row = document.createElement("div");
     row.className = "item-row room-item-row";
     row.classList.add(isNeeded ? "is-needed" : "is-available");
-    if (isNeeded && itemHasStockUpFlag(item)) row.classList.add("stock-up-needed");
 
     const details = document.createElement("div");
     details.className = "item-row-details";
@@ -6819,7 +6834,6 @@ function appendNeedingHomeSearchResult(item, specificProduct = null) {
   const row = document.createElement("div");
   row.className = "item-row room-item-row needing-home-search-result";
   row.classList.add(isNeeded ? "is-needed" : "is-available");
-  if (isNeeded && itemHasStockUpFlag(item, specificProduct)) row.classList.add("stock-up-needed");
 
   if (specificProduct) {
     row.classList.add("specific-product-offer-row");
@@ -6855,7 +6869,7 @@ function appendNeedingHomeSearchResult(item, specificProduct = null) {
   } else {
     const amountDisplay = document.createElement("strong");
     amountDisplay.className = "room-current-quantity";
-    setNeededAmountDisplay(amountDisplay, neededEntry, itemHasStockUpFlag(item, specificProduct));
+    setNeededAmountDisplay(amountDisplay, neededEntry);
     details.append(amountDisplay);
 
     const increaseButton = createIconButton({
@@ -6964,8 +6978,9 @@ function productTypeForItem(item) {
 function appendFullNeededItemRow(record) {
   const { item, entry, specificProduct } = record;
 
+  const isNeeded = Boolean(entry);
   const row = document.createElement("div");
-  row.className = "item-row full-needed-item-row is-needed";
+  row.className = `item-row full-needed-item-row ${isNeeded ? "is-needed" : "is-available"}`;
 
   if (specificProduct) {
     row.classList.add("specific-product-needed-row");
@@ -6976,49 +6991,51 @@ function appendFullNeededItemRow(record) {
   details.append(
     createItemNameDisplay(item, specificProduct, {
       includeParentName: Boolean(specificProduct),
-      temporaryNote: entry.temporaryNote,
-      isNeeded: true,
+      temporaryNote: entry?.temporaryNote,
+      isNeeded,
     }),
   );
-
-  const amountDisplay = document.createElement("strong");
-  amountDisplay.className = "room-current-quantity";
-  setNeededAmountDisplay(amountDisplay, entry, itemHasStockUpFlag(item, specificProduct));
-  details.append(amountDisplay);
-  if (itemHasStockUpFlag(item, specificProduct)) row.classList.add("stock-up-needed");
 
   const controls = document.createElement("div");
   controls.className = "room-item-controls full-needed-controls";
 
-  const increaseButton = createIconButton({
-    className: "room-icon-button increase-needed-button",
-    icon: "+",
-    label: `Increase ${item.name}`,
-    onClick: async () => {
-      await changeNeededAmount(
-        item,
-        entry,
-        item.increment ?? 1,
-        specificProduct,
-      );
-    },
-  });
+  if (!isNeeded) {
+    // Stock-up-only item: visible with its label but no quantity until added.
+    const addButton = createIconButton({
+      className: "room-icon-button room-add-button add-needed-button",
+      icon: "Add",
+      label: `Add ${combinedItemSpecificProductName(item, specificProduct)} to needed list`,
+      onClick: async () => {
+        if (specificProduct) await addSpecificProductToNeededList(item, specificProduct);
+        else await addItemToNeededList(item);
+      },
+    });
+    controls.append(addButton);
+  } else {
+    const amountDisplay = document.createElement("strong");
+    amountDisplay.className = "room-current-quantity";
+    setNeededAmountDisplay(amountDisplay, entry);
+    details.append(amountDisplay);
 
-  const decreaseButton = createIconButton({
-    className: "room-icon-button decrease-needed-button",
-    icon: "−",
-    label: `Decrease ${item.name}`,
-    onClick: async () => {
-      await changeNeededAmount(
-        item,
-        entry,
-        -(item.increment ?? 1),
-        specificProduct,
-      );
-    },
-  });
+    const increaseButton = createIconButton({
+      className: "room-icon-button increase-needed-button",
+      icon: "+",
+      label: `Increase ${item.name}`,
+      onClick: async () => {
+        await changeNeededAmount(item, entry, item.increment ?? 1, specificProduct);
+      },
+    });
+    const decreaseButton = createIconButton({
+      className: "room-icon-button decrease-needed-button",
+      icon: "−",
+      label: `Decrease ${item.name}`,
+      onClick: async () => {
+        await changeNeededAmount(item, entry, -(item.increment ?? 1), specificProduct);
+      },
+    });
+    controls.append(increaseButton, decreaseButton);
+  }
 
-  controls.append(increaseButton, decreaseButton);
   row.append(details, controls);
 
   wireItemActions(row, item, entry, specificProduct);
@@ -7046,9 +7063,10 @@ function renderFullNeededList() {
 
   const searchText = neededListSearch.value.trim().toLowerCase();
 
-  const neededRecords = currentNeededRecords().filter((record) =>
-    neededRecordMatchesSearch(record, searchText),
-  );
+  // Full needed list includes optional stock-up items, even before an amount
+  // is requested. Getting continues to use only actual needed entries.
+  const neededRecords = [...currentNeededRecords(), ...unaddedStockUpRecords()]
+    .filter((record) => neededRecordMatchesSearch(record, searchText));
 
   if (neededRecords.length === 0) {
     fullNeededItems.innerHTML = "<p>No matching needed items.</p>";
@@ -7080,7 +7098,10 @@ function renderFullNeededList() {
       });
 
     storeTypeRecords
-      .filter((record) => record.item.oneOff)
+      .filter((record) => record.item.oneOff || (!record.entry &&
+        !currentProductTypes.some((productType) =>
+          String(productType.id) === String(record.item.productTypeId) &&
+          productTypeBelongsToStoreType(productType, storeType.id))))
       .sort(compareNeededRecords)
       .forEach((record) => {
         appendFullNeededItemRow(record);
@@ -7272,9 +7293,9 @@ function renderGettingItems() {
 
     const amount = document.createElement("span");
     amount.className = "item-amount";
-    setNeededAmountDisplay(amount, entry, itemHasStockUpFlag(item, specificProduct));
+    setNeededAmountDisplay(amount, entry);
     details.append(amount);
-    if (itemHasStockUpFlag(item, specificProduct)) row.classList.add("stock-up-needed");
+  
 
     const collectButton = document.createElement("button");
     collectButton.type = "button";
@@ -7543,21 +7564,10 @@ function neededAmountForDisplay(neededEntry) {
 
 function updateNeededAmountText(element, amount, unitId) {
   element.textContent = formatAmount(amount, unitId);
-  if (element.dataset.stockUpIfDiscounted === "true") {
-    const suffix = document.createElement("span");
-    suffix.className = "stock-up-quantity-suffix";
-    suffix.textContent = ` ${STOCK_UP_QUANTITY_SUFFIX}`;
-    element.append(suffix);
-  }
 }
 
-function setNeededAmountDisplay(element, neededEntry, stockUpIfDiscounted = false) {
+function setNeededAmountDisplay(element, neededEntry) {
   element.dataset.neededEntryId = String(neededEntry.id);
-  if (stockUpIfDiscounted) {
-    element.dataset.stockUpIfDiscounted = "true";
-  } else {
-    delete element.dataset.stockUpIfDiscounted;
-  }
   updateNeededAmountText(element, neededAmountForDisplay(neededEntry), neededEntry.unitId);
 }
 
@@ -8684,13 +8694,6 @@ function renderRecentShops(shops = currentRecentShops) {
       const row = document.createElement("div"); row.className = "item-row";
       const name = createItemNameDisplay({name:item.name, specificAttributes:item.attributes, ifOnSale:item.ifOnSale}, null, {temporaryNote:item.note, isNeeded:true});
       const quantity = document.createElement("span"); quantity.textContent = item.quantity;
-      if (item.ifOnSale === true) {
-        row.classList.add("stock-up-needed");
-        const suffix = document.createElement("span");
-        suffix.className = "stock-up-quantity-suffix";
-        suffix.textContent = ` ${STOCK_UP_QUANTITY_SUFFIX}`;
-        quantity.append(suffix);
-      }
       row.append(name, quantity); section.append(row);
     });
     container.append(section);

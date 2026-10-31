@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.013";
+const LISTS_APP_RELEASE = "v1.2.014";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -6628,15 +6628,8 @@ function renderRoomItems() {
 
   const renderedItemIds = new Set();
 
-  function sortItemsByNeedThenName(a, b) {
-    const needDifference =
-      Number(!itemHasAnyNeededEntry(a.id)) -
-      Number(!itemHasAnyNeededEntry(b.id));
-
-    if (needDifference !== 0) {
-      return needDifference;
-    }
-
+  // Keep items in the same alphabetical position when their needed status changes.
+  function sortItemsByName(a, b) {
     return String(a.name ?? "").localeCompare(String(b.name ?? ""));
   }
 
@@ -6792,7 +6785,7 @@ function renderRoomItems() {
   function appendProductTypeBlock(productType) {
     roomItems
       .filter((item) => String(item.productTypeId) === String(productType.id))
-      .sort(sortItemsByNeedThenName)
+      .sort(sortItemsByName)
       .forEach(appendRoomItemRow);
   }
 
@@ -6800,7 +6793,7 @@ function renderRoomItems() {
 
   roomItems
     .filter((item) => !renderedItemIds.has(item.id))
-    .sort(sortItemsByNeedThenName)
+    .sort(sortItemsByName)
     .forEach(appendRoomItemRow);
 }
 
@@ -6931,16 +6924,7 @@ function renderNeedingHomeSearchResults() {
   const matchingItems = currentItems
     .filter((item) => item.active !== false)
     .filter((item) => itemMatchesNeedingHomeSearch(item, searchText))
-    .sort((a, b) => {
-      const needDifference =
-        Number(!itemHasAnyNeededEntry(a.id)) -
-        Number(!itemHasAnyNeededEntry(b.id));
-
-      return (
-        needDifference ||
-        String(a.name ?? "").localeCompare(String(b.name ?? ""))
-      );
-    });
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
 
   if (matchingItems.length === 0) {
     needingHomeSearchResults.innerHTML = "<p>No matching items.</p>";
@@ -7064,7 +7048,7 @@ function renderFullNeededList() {
   const searchText = neededListSearch.value.trim().toLowerCase();
 
   // Full needed list includes optional stock-up items, even before an amount
-  // is requested. Getting continues to use only actual needed entries.
+  // is requested. Getting also displays optional items without a quantity.
   const neededRecords = [...currentNeededRecords(), ...unaddedStockUpRecords()]
     .filter((record) => neededRecordMatchesSearch(record, searchText));
 
@@ -7248,7 +7232,12 @@ function renderGettingItems() {
     return;
   }
 
-  const matchingRecords = shoppingRecordsForTarget(selectedShoppingTarget);
+  // Include stock-up suggestions even when they have no needed entry. An
+  // optional row has no amount until someone chooses to collect it.
+  const matchingRecords = shoppingRecordsForTarget(
+    selectedShoppingTarget,
+    [...currentNeededRecords(), ...unaddedStockUpRecords()],
+  );
 
   if (matchingRecords.length === 0) {
     gettingItemsList.innerHTML = showAllShopping
@@ -7259,7 +7248,7 @@ function renderGettingItems() {
   }
 
   const collectedRecords = matchingRecords.filter(
-    (record) => record.entry.status === "collected",
+    (record) => record.entry?.status === "collected",
   );
 
   finishShopButton.hidden =
@@ -7268,7 +7257,7 @@ function renderGettingItems() {
 
   function appendGettingRecord(record) {
     const { item, entry, specificProduct } = record;
-    const isCollected = entry.status === "collected";
+    const isCollected = entry?.status === "collected";
 
     const row = document.createElement("div");
     row.className = "item-row getting-item-row";
@@ -7286,16 +7275,17 @@ function renderGettingItems() {
     details.append(
       createItemNameDisplay(item, specificProduct, {
         includeParentName: true,
-        temporaryNote: entry.temporaryNote,
-        isNeeded: true,
+        temporaryNote: entry?.temporaryNote,
+        isNeeded: Boolean(entry),
       }),
     );
 
-    const amount = document.createElement("span");
-    amount.className = "item-amount";
-    setNeededAmountDisplay(amount, entry);
-    details.append(amount);
-  
+    if (entry) {
+      const amount = document.createElement("span");
+      amount.className = "item-amount";
+      setNeededAmountDisplay(amount, entry);
+      details.append(amount);
+    }
 
     const collectButton = document.createElement("button");
     collectButton.type = "button";
@@ -7315,7 +7305,17 @@ function renderGettingItems() {
 
     addLongPressHandler(collectButton, async () => {
       collectButton.disabled = true;
-      await setNeededItemCollected(item, entry, !isCollected);
+      try {
+        if (entry) {
+          await setNeededItemCollected(item, entry, !isCollected);
+        } else {
+          // Buying an optional stock-up item creates an ordinary collected
+          // entry, so Finish shop can archive it just like other purchases.
+          await collectOptionalStockUpItem(item, specificProduct);
+        }
+      } finally {
+        collectButton.disabled = false;
+      }
     });
 
     row.append(details, collectButton);
@@ -7758,6 +7758,46 @@ async function changeNeededAmount(
   }
 }
 
+
+async function collectOptionalStockUpItem(item, specificProduct = null) {
+  if (preventViewOnlyWrite()) return;
+
+  // An optional stock-up suggestion has no entry or quantity until bought.
+  // Creating a collected entry makes it appear in Finish shop and its archive.
+  try {
+    if (!specificProduct) await migrateLegacySpecificEntryBeforeGenericAdd(item);
+    const id = specificProduct
+      ? specificNeededEntryDocumentId(specificProduct.id)
+      : item.id;
+    const existing = currentNeededEntries.get(id);
+    if (existing) {
+      await setNeededItemCollected(item, existing, true);
+      return;
+    }
+
+    const batch = writeBatch(db);
+    batch.set(householdDocument("neededEntries", id), {
+      itemId: item.id,
+      amount: item.defaultAmount,
+      unitId: item.unitId,
+      specificProductId: specificProduct?.id ?? null,
+      status: "collected",
+      addedAt: serverTimestamp(),
+      adjustedAt: serverTimestamp(),
+      statusChangedAt: serverTimestamp(),
+      collectedAt: serverTimestamp(),
+    });
+    batch.set(householdDocument("items", item.id), {
+      addCount: increment(1),
+      lastAddedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    await batch.commit();
+  } catch (error) {
+    console.error("Could not collect optional stock-up item:", error);
+    alert("The stock-up item could not be collected.");
+  }
+}
 
 async function setNeededItemCollected(item, neededEntry, isCollected) {
   if (preventViewOnlyWrite()) {
@@ -8656,9 +8696,11 @@ function shoppingRecordsForTarget(target, records = currentNeededRecords()) {
   const matches = all ? records : records.filter(record =>
     neededRecordBelongsToStoreType(record, typeId) && (!store || neededRecordIsAvailableAtStore(record, store.id)));
   const result = [], seen = new Set();
+  const recordKey = (record) => record.entry?.id ??
+    `stock-up:${record.item.id}:${record.specificProduct?.id ?? "generic"}`;
   function append(rows) {
-    rows.filter(r => !seen.has(r.entry.id)).sort(compareNeededRecords).forEach(r => {
-      result.push(r); seen.add(r.entry.id);
+    rows.filter(r => !seen.has(recordKey(r))).sort(compareNeededRecords).forEach(r => {
+      result.push(r); seen.add(recordKey(r));
     });
   }
   const types = all ? currentStoreTypes.map(s => s.id) : [typeId];

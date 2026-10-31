@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.011";
+const LISTS_APP_RELEASE = "v1.2.012";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -162,6 +162,17 @@ function createItemFormFields({
   });
   container.append(createLabel("Item name", nameInput.id), nameInput);
 
+  const attributesInput = createTextInput({
+    suffix: "specific-attributes",
+    value: values.specificAttributes ?? "",
+    maxLength: 100,
+    placeholder: "e.g. 2 L, gluten-free, fragrance-free",
+  });
+  container.append(
+    createLabel("Specific Attributes (optional)", attributesInput.id),
+    attributesInput,
+  );
+
   const roomSelect = createSelect({
     suffix: "room",
     required: !roomHidden,
@@ -182,17 +193,6 @@ function createItemFormFields({
   container.append(
     createLabel("Product type", productTypeSelect.id),
     productTypeSelect,
-  );
-
-  const attributesInput = createTextInput({
-    suffix: "specific-attributes",
-    value: values.specificAttributes ?? "",
-    maxLength: 100,
-    placeholder: "e.g. 2 L, gluten-free, fragrance-free",
-  });
-  container.append(
-    createLabel("Specific Attributes (optional)", attributesInput.id),
-    attributesInput,
   );
 
   const storeSelect = document.createElement("div");
@@ -8540,6 +8540,8 @@ function openItemEditor(item, entry = null, product = null, {isNew = false} = {}
     label.append(input, document.createTextNode(text)); container.append(label); return input;
   }
   let read;
+  let regularToggle = null;
+  let stockUpInsertBefore = null;
   if (!product && !item.oneOff) {
     const fields = createItemFormFields({container, idPrefix: "edit-item", values: item});
     populateRoomSelect(fields.roomSelect, item.locationId);
@@ -8548,8 +8550,9 @@ function openItemEditor(item, entry = null, product = null, {isNew = false} = {}
     populateUnitSelect(fields.unitSelect, item.unitId);
     populateItemStoreSelect(fields.storeSelect, item.productTypeId, itemStoreIds(item));
     wireItemFormDependencies(fields);
-    const regular = toggle("Regulars", itemIsRegular(item));
-    read = () => ({...readItemFormValues(fields), regularList: regular.checked});
+    regularToggle = toggle("Regulars", itemIsRegular(item));
+    stockUpInsertBefore = fields.roomLabel;
+    read = () => ({...readItemFormValues(fields), regularList: regularToggle.checked});
   } else {
     const parent = product ? field("Parent item", product.itemId, itemOptions(), true) : null;
     const name = field("Name", product?.name ?? item.name, null, true);
@@ -8557,11 +8560,16 @@ function openItemEditor(item, entry = null, product = null, {isNew = false} = {}
     const room = item.oneOff ? field("Room (optional)", item.locationId, [{value:"",text:"No room"}, ...roomOptions()]) : null;
     const types = item.oneOff ? checks("Store types", storeTypeOptions(), item.storeTypeIds) : null;
     const stores = checks("Stores (optional)", storeOptions(), product?.storeIds ?? item.storeIds);
+    stockUpInsertBefore = attributes.parentElement.nextElementSibling;
     read = () => ({name: name.value.trim(), specificAttributes: attributes.value.trim(),
       ...(product ? {itemId: parent.value} : {roomId: room.value || null, storeTypeIds: getCheckedValues(types)}),
       storeIds: getCheckedValues(stores)});
   }
   const sale = toggle(STOCK_UP_LABEL, itemHasStockUpFlag(item, product));
+  // Put the optional stock-up and regular controls immediately after attributes.
+  // Moving the existing labels retains their checkbox state and event handlers.
+  container.insertBefore(sale.parentElement, stockUpInsertBefore);
+  if (regularToggle) container.insertBefore(regularToggle.parentElement, stockUpInsertBefore);
   readEditedItem = () => ({...read(), ifOnSale: sale.checked});
   itemEditor.hidden = false;
   itemEditor.showModal();

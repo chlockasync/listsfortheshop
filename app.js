@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.010";
+const LISTS_APP_RELEASE = "v1.2.011";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -6325,10 +6325,17 @@ function combinedItemSpecificProductName(item, specificProduct) {
   return `${item?.name ?? ""} - ${specificProduct.name ?? ""}`.trim();
 }
 
+const STOCK_UP_LABEL = "Stock up if discounted";
+const STOCK_UP_QUANTITY_SUFFIX = "or more if discounted";
+
+function itemHasStockUpFlag(item, specificProduct = null) {
+  return (specificProduct || item)?.ifOnSale === true;
+}
+
 function createItemNameDisplay(
   item,
   specificProduct = null,
-  { includeParentName = false, temporaryNote = "" } = {},
+  { includeParentName = false, temporaryNote = "", isNeeded = false } = {},
 ) {
   const wrapper = document.createElement("span");
   wrapper.className = "item-name-display";
@@ -6356,13 +6363,15 @@ function createItemNameDisplay(
     name.textContent = specificProduct ? specificProduct.name : item.name;
   }
 
-  if ((specificProduct || item).ifOnSale === true) {
+  wrapper.append(name);
+  // An optional stock-up offer is shown even before the item has been added.
+  // Once it is needed, the amount gets the discount advice instead.
+  if (itemHasStockUpFlag(item, specificProduct) && !isNeeded) {
     const sale = document.createElement("span");
     sale.className = "if-on-sale";
-    sale.textContent = "If On Sale";
-    name.append(document.createTextNode(" "), sale);
+    sale.textContent = STOCK_UP_LABEL;
+    wrapper.append(sale);
   }
-  wrapper.append(name);
 
   const extra = specificProduct
     ? specificProductDetailText(specificProduct)
@@ -6479,13 +6488,15 @@ function appendOneOffNeededRow(record, targetList = roomItemsList) {
   details.append(
     createItemNameDisplay(item, null, {
       temporaryNote: entry.temporaryNote,
+      isNeeded: true,
     }),
   );
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
-  setNeededAmountDisplay(amountDisplay, entry);
+  setNeededAmountDisplay(amountDisplay, entry, itemHasStockUpFlag(item));
   details.append(amountDisplay);
+  if (itemHasStockUpFlag(item)) row.classList.add("stock-up-needed");
 
   const controls = document.createElement("div");
   controls.className = "room-item-controls";
@@ -6623,7 +6634,7 @@ function renderRoomItems() {
 
     const amountDisplay = document.createElement("strong");
     amountDisplay.className = "room-current-quantity";
-    setNeededAmountDisplay(amountDisplay, neededEntry);
+    setNeededAmountDisplay(amountDisplay, neededEntry, itemHasStockUpFlag(item, specificProduct));
 
     const increaseButton = createIconButton({
       className: "room-icon-button increase-needed-button",
@@ -6668,12 +6679,14 @@ function renderRoomItems() {
       const row = document.createElement("div");
       row.className = "item-row room-item-row specific-product-offer-row";
       row.classList.add(isNeeded ? "is-needed" : "is-available");
+      if (isNeeded && itemHasStockUpFlag(item, product)) row.classList.add("stock-up-needed");
 
       const details = document.createElement("div");
       details.className = "item-row-details";
       details.append(
         createItemNameDisplay(item, product, {
           temporaryNote: neededEntry?.temporaryNote,
+          isNeeded,
         }),
       );
 
@@ -6719,12 +6732,14 @@ function renderRoomItems() {
     const row = document.createElement("div");
     row.className = "item-row room-item-row";
     row.classList.add(isNeeded ? "is-needed" : "is-available");
+    if (isNeeded && itemHasStockUpFlag(item)) row.classList.add("stock-up-needed");
 
     const details = document.createElement("div");
     details.className = "item-row-details";
     details.append(
       createItemNameDisplay(item, null, {
         temporaryNote: neededEntry?.temporaryNote,
+        isNeeded,
       }),
     );
 
@@ -6804,6 +6819,7 @@ function appendNeedingHomeSearchResult(item, specificProduct = null) {
   const row = document.createElement("div");
   row.className = "item-row room-item-row needing-home-search-result";
   row.classList.add(isNeeded ? "is-needed" : "is-available");
+  if (isNeeded && itemHasStockUpFlag(item, specificProduct)) row.classList.add("stock-up-needed");
 
   if (specificProduct) {
     row.classList.add("specific-product-offer-row");
@@ -6814,6 +6830,7 @@ function appendNeedingHomeSearchResult(item, specificProduct = null) {
   details.append(
     createItemNameDisplay(item, specificProduct, {
       temporaryNote: neededEntry?.temporaryNote,
+      isNeeded,
     }),
   );
 
@@ -6838,7 +6855,7 @@ function appendNeedingHomeSearchResult(item, specificProduct = null) {
   } else {
     const amountDisplay = document.createElement("strong");
     amountDisplay.className = "room-current-quantity";
-    setNeededAmountDisplay(amountDisplay, neededEntry);
+    setNeededAmountDisplay(amountDisplay, neededEntry, itemHasStockUpFlag(item, specificProduct));
     details.append(amountDisplay);
 
     const increaseButton = createIconButton({
@@ -6960,13 +6977,15 @@ function appendFullNeededItemRow(record) {
     createItemNameDisplay(item, specificProduct, {
       includeParentName: Boolean(specificProduct),
       temporaryNote: entry.temporaryNote,
+      isNeeded: true,
     }),
   );
 
   const amountDisplay = document.createElement("strong");
   amountDisplay.className = "room-current-quantity";
-  setNeededAmountDisplay(amountDisplay, entry);
+  setNeededAmountDisplay(amountDisplay, entry, itemHasStockUpFlag(item, specificProduct));
   details.append(amountDisplay);
+  if (itemHasStockUpFlag(item, specificProduct)) row.classList.add("stock-up-needed");
 
   const controls = document.createElement("div");
   controls.className = "room-item-controls full-needed-controls";
@@ -7247,13 +7266,15 @@ function renderGettingItems() {
       createItemNameDisplay(item, specificProduct, {
         includeParentName: true,
         temporaryNote: entry.temporaryNote,
+        isNeeded: true,
       }),
     );
 
     const amount = document.createElement("span");
     amount.className = "item-amount";
-    setNeededAmountDisplay(amount, entry);
+    setNeededAmountDisplay(amount, entry, itemHasStockUpFlag(item, specificProduct));
     details.append(amount);
+    if (itemHasStockUpFlag(item, specificProduct)) row.classList.add("stock-up-needed");
 
     const collectButton = document.createElement("button");
     collectButton.type = "button";
@@ -7520,18 +7541,30 @@ function neededAmountForDisplay(neededEntry) {
     : neededEntry.amount;
 }
 
-function setNeededAmountDisplay(element, neededEntry) {
+function updateNeededAmountText(element, amount, unitId) {
+  element.textContent = formatAmount(amount, unitId);
+  if (element.dataset.stockUpIfDiscounted === "true") {
+    const suffix = document.createElement("span");
+    suffix.className = "stock-up-quantity-suffix";
+    suffix.textContent = ` ${STOCK_UP_QUANTITY_SUFFIX}`;
+    element.append(suffix);
+  }
+}
+
+function setNeededAmountDisplay(element, neededEntry, stockUpIfDiscounted = false) {
   element.dataset.neededEntryId = String(neededEntry.id);
-  element.textContent = formatAmount(
-    neededAmountForDisplay(neededEntry),
-    neededEntry.unitId,
-  );
+  if (stockUpIfDiscounted) {
+    element.dataset.stockUpIfDiscounted = "true";
+  } else {
+    delete element.dataset.stockUpIfDiscounted;
+  }
+  updateNeededAmountText(element, neededAmountForDisplay(neededEntry), neededEntry.unitId);
 }
 
 function refreshNeededAmountDisplays(entryId, amount, unitId) {
   $$("[data-needed-entry-id]").forEach((element) => {
     if (element.dataset.neededEntryId === String(entryId)) {
-      element.textContent = formatAmount(amount, unitId);
+      updateNeededAmountText(element, amount, unitId);
     }
   });
 }
@@ -8528,7 +8561,7 @@ function openItemEditor(item, entry = null, product = null, {isNew = false} = {}
       ...(product ? {itemId: parent.value} : {roomId: room.value || null, storeTypeIds: getCheckedValues(types)}),
       storeIds: getCheckedValues(stores)});
   }
-  const sale = toggle("If On Sale", (product || item).ifOnSale);
+  const sale = toggle(STOCK_UP_LABEL, itemHasStockUpFlag(item, product));
   readEditedItem = () => ({...read(), ifOnSale: sale.checked});
   itemEditor.hidden = false;
   itemEditor.showModal();
@@ -8641,8 +8674,15 @@ function renderRecentShops(shops = currentRecentShops) {
     section.append(heading, detail);
     shop.items.forEach(item => {
       const row = document.createElement("div"); row.className = "item-row";
-      const name = createItemNameDisplay({name:item.name, specificAttributes:item.attributes, ifOnSale:item.ifOnSale}, null, {temporaryNote:item.note});
+      const name = createItemNameDisplay({name:item.name, specificAttributes:item.attributes, ifOnSale:item.ifOnSale}, null, {temporaryNote:item.note, isNeeded:true});
       const quantity = document.createElement("span"); quantity.textContent = item.quantity;
+      if (item.ifOnSale === true) {
+        row.classList.add("stock-up-needed");
+        const suffix = document.createElement("span");
+        suffix.className = "stock-up-quantity-suffix";
+        suffix.textContent = ` ${STOCK_UP_QUANTITY_SUFFIX}`;
+        quantity.append(suffix);
+      }
       row.append(name, quantity); section.append(row);
     });
     container.append(section);

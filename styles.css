@@ -4600,3 +4600,20 @@ body:has(#settings-view:not([hidden])) .bottom-action-bar { border-top-color: #f
   background: #f5f0fb; color: #604980; font: inherit; font-weight: 750; }
 .item-new-type-actions button[type="submit"] { background: #a68ddd; border-color: #a68ddd; color: #fff; }
 .item-new-type-actions button:disabled { opacity: .6; }
+
+
+/* ===== v1.2.015: quieter stock-up suggestions in Getting ===== */
+/* Only stock-up rows are transparent. All other Getting cards stay as-is. */
+#getting-items-list .item-row.getting-stock-up-row,
+#getting-items-list .item-row.getting-stock-up-row.is-collected {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* Keep the existing stock-up label appearance, but position it above the name. */
+#getting-items-list .getting-stock-up-row .item-name-display {
+  gap: .15rem;
+}
+#getting-items-list .getting-stock-up-row .getting-stock-up-label {
+  display: block;
+  line-height: 1.2;
+}

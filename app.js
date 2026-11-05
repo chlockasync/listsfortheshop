@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.014";
+const LISTS_APP_RELEASE = "v1.2.015";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -6350,7 +6350,7 @@ function itemHasStockUpFlag(item, specificProduct = null) {
 function createItemNameDisplay(
   item,
   specificProduct = null,
-  { includeParentName = false, temporaryNote = "", isNeeded = false } = {},
+  { includeParentName = false, temporaryNote = "", isNeeded = false, saleLabelAbove = false } = {},
 ) {
   const wrapper = document.createElement("span");
   wrapper.className = "item-name-display";
@@ -6378,13 +6378,18 @@ function createItemNameDisplay(
     name.textContent = specificProduct ? specificProduct.name : item.name;
   }
 
-  // Keep stock-up advice inline with the name, exactly where the former
-  // "If On Sale" label appeared. The amount remains in its usual column.
+  // Keep the traditional inline stock-up label everywhere except Getting,
+  // where a label above the item name makes optional stock-up rows easier to scan.
   if (itemHasStockUpFlag(item, specificProduct)) {
     const sale = document.createElement("span");
     sale.className = "if-on-sale";
     sale.textContent = isNeeded ? STOCK_UP_QUANTITY_SUFFIX : STOCK_UP_LABEL;
-    name.append(document.createTextNode(" "), sale);
+    if (saleLabelAbove) {
+      sale.classList.add("getting-stock-up-label");
+      wrapper.append(sale);
+    } else {
+      name.append(document.createTextNode(" "), sale);
+    }
   }
   wrapper.append(name);
 
@@ -7261,6 +7266,9 @@ function renderGettingItems() {
 
     const row = document.createElement("div");
     row.className = "item-row getting-item-row";
+    if (itemHasStockUpFlag(item, specificProduct)) {
+      row.classList.add("getting-stock-up-row");
+    }
 
     if (specificProduct) {
       row.classList.add("specific-product-needed-row");
@@ -7277,6 +7285,7 @@ function renderGettingItems() {
         includeParentName: true,
         temporaryNote: entry?.temporaryNote,
         isNeeded: Boolean(entry),
+        saleLabelAbove: true,
       }),
     );
 

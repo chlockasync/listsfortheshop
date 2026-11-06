@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.015";
+const LISTS_APP_RELEASE = "v1.2.016";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -7266,7 +7266,9 @@ function renderGettingItems() {
 
     const row = document.createElement("div");
     row.className = "item-row getting-item-row";
-    if (itemHasStockUpFlag(item, specificProduct)) {
+    // Only unadded stock-up suggestions get the quieter, transparent row.
+    // Items with a needed entry retain the usual filled card.
+    if (!entry && itemHasStockUpFlag(item, specificProduct)) {
       row.classList.add("getting-stock-up-row");
     }
 
@@ -7285,7 +7287,8 @@ function renderGettingItems() {
         includeParentName: true,
         temporaryNote: entry?.temporaryNote,
         isNeeded: Boolean(entry),
-        saleLabelAbove: true,
+        // Keep "or more if discounted" inline for items already added.
+        saleLabelAbove: !entry,
       }),
     );
 

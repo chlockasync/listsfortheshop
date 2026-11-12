@@ -29,7 +29,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.016";
+const LISTS_APP_RELEASE = "v1.2.017";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -2361,6 +2361,7 @@ function showView(viewName, { preserveListState = false } = {}) {
       roomSelectorButton.hidden = true;
       needingHome.hidden = true;
       roomView.hidden = true;
+      renderFullNeededList();
     } else if (selectedRoomId) {
       roomSelectorButton.hidden = false;
       needingHome.hidden = true;
@@ -2377,6 +2378,7 @@ function showView(viewName, { preserveListState = false } = {}) {
 
   if (viewName === "getting") {
     setShoppingLocationPanelOpen(!selectedShoppingTarget);
+    if (selectedShoppingTarget) renderGettingItems();
   }
 
   if (viewName === "settings") {
@@ -5354,8 +5356,8 @@ function renderProductTypes(productTypes) {
     settingsProductTypesList.innerHTML =
       "<p>No product types have been created yet.</p>";
 
-    renderRoomItems();
-      renderGettingItems();
+    if (!views.needing.hidden && !roomView.hidden) renderRoomItems();
+    if (!views.getting.hidden && !gettingItemsList.hidden) renderGettingItems();
     return;
   }
 
@@ -5389,8 +5391,8 @@ function renderProductTypes(productTypes) {
     });
   }
 
-  renderRoomItems();
-  renderGettingItems();
+  if (!views.needing.hidden && !roomView.hidden) renderRoomItems();
+  if (!views.getting.hidden && !gettingItemsList.hidden) renderGettingItems();
 }
 
 function getRoomName(roomId) {
@@ -7354,9 +7356,32 @@ const viewRefreshers = {
   gettingItems: renderGettingItems,
 };
 
+// Firestore restores each collection from IndexedDB, then sends server updates.
+// Batch the resulting repaint requests into a single animation frame instead
+// of repeatedly rebuilding the same shopping lists during startup.
+const pendingViewRefreshes = new Set();
+let viewRefreshScheduled = false;
+
 function refreshViews(...viewNames) {
-  new Set(viewNames).forEach((viewName) => {
-    viewRefreshers[viewName]?.();
+  viewNames.forEach((name) => pendingViewRefreshes.add(name));
+  if (viewRefreshScheduled) return;
+  viewRefreshScheduled = true;
+  requestAnimationFrame(() => {
+    viewRefreshScheduled = false;
+    const viewsToRefresh = [...pendingViewRefreshes];
+    const pendingStoreTypeRender = pendingViewRefreshes.has("storeTypes");
+    pendingViewRefreshes.clear();
+    viewsToRefresh.forEach((name) => {
+      // Store-type changes already redraw their dependent store and product-
+      // type settings. Don't do that same work twice in the same frame.
+      if (pendingStoreTypeRender && (name === "stores" || name === "productTypes")) return;
+      // These large views are rendered on entry; avoid building them when
+      // they're hidden, which can dominate a cold start with many items.
+      if (name === "roomItems" && (views.needing.hidden || roomView.hidden)) return;
+      if (name === "fullNeededList" && (views.needing.hidden || fullNeededView.hidden)) return;
+      if (name === "gettingItems" && (views.getting.hidden || gettingItemsList.hidden)) return;
+      viewRefreshers[name]?.();
+    });
   });
 }
 
@@ -7508,7 +7533,6 @@ function startCollectionListener(definition) {
 
   const unsubscribe = onSnapshot(
     householdCollection(definition.collectionName),
-    { includeMetadataChanges: true },
     (snapshot) => {
       definition.applySnapshot(snapshot);
 

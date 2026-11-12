@@ -1,141 +1,124 @@
-/* ListsForTheShop v1.2.016: prefer current app files online, retain them offline. */
-const CACHE_NAME = "listsfortheshop-v1.2.016-202611061248";
+/* ListsForTheShop v1.2.017: instant cached launches, background version checks. */
+const APP_REVISION = "202611121843";
+const CACHE_NAME = `listsfortheshop-v1.2.017-${APP_REVISION}`;
 
-const PRECACHE_URLS = [
-  "./",
-  "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./firebase.js",
-  "./manifest.webmanifest",
-  "./favicon.svg",
-  "./icon-192.png",
-  "./icon-512.png",
+// Only the files needed to launch are required for a new release to activate.
+// External modules are reused from the previous release's cache and cached on
+// first use; a slow CDN must not hold up a service-worker upgrade.
+const CORE_ASSETS = ["./index.html", "./app.js", "./styles.css", "./firebase.js"];
+const OPTIONAL_ASSETS = [
+  "./manifest.webmanifest", "./favicon.svg", "./icon-192.png", "./icon-512.png",
+];
+const EXTERNAL_MODULES = new Set([
   "https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/modular/sortable.core.esm.js",
   "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js",
   "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js",
   "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js",
-];
+]);
+const STATIC_PATHS = new Set([
+  "", "index.html", "app.js", "styles.css", "firebase.js",
+  "manifest.webmanifest", "favicon.svg", "icon-192.png", "icon-512.png",
+]);
+const CORE_PATHS = new Set(["", "index.html", "app.js", "styles.css", "firebase.js"]);
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      // Carry forward last-known-good assets before deleting the old release.
-      // This also preserves CDN modules if a release installs on a poor connection.
-      await Promise.allSettled(
-        PRECACHE_URLS.map(async (url) => {
-          const request = new Request(url, { cache: "reload" });
-          const matchOptions = new URL(request.url).origin === self.location.origin
-            ? { ignoreSearch: true }
-            : undefined;
-          const previous = await caches.match(request, matchOptions);
-          if (previous) await cache.put(request, previous.clone());
+const assetURL = (path) => new URL(path, self.registration.scope).href;
 
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 5000);
-          try {
-            const response = await fetch(request, { signal: controller.signal });
-            if (response.ok || response.type === "opaque") {
-              await cache.put(request, response.clone());
-            }
-          } catch (_error) {
-            // The cached copy will remain available offline.
-          } finally {
-            clearTimeout(timeout);
-          }
-        }),
-      );
-      await self.skipWaiting();
-    })(),
-  );
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const names = await caches.keys();
-      await Promise.all(
-        names
-          .filter((name) => name.startsWith("listsfortheshop-") && name !== CACHE_NAME)
-          .map((name) => caches.delete(name)),
-      );
-      // Existing pages listen for controllerchange and reload once. Do not
-      // additionally navigate clients here: two competing reloads can occur.
-      await self.clients.claim();
-    })(),
-  );
-});
-
-const APP_SHELL_PATHS = new Set(["", "index.html", "styles.css", "app.js", "firebase.js"]);
-
-function isSameOrigin(request) {
-  return new URL(request.url).origin === self.location.origin;
-}
-
-function isAppShellRequest(request) {
-  if (!isSameOrigin(request)) return false;
-  if (request.mode === "navigate") return true;
-
-  const url = new URL(request.url);
-  const scope = new URL(self.registration.scope);
-  if (!url.pathname.startsWith(scope.pathname)) return false;
-  const localPath = url.pathname.slice(scope.pathname.length);
-  return APP_SHELL_PATHS.has(localPath);
-}
-
-async function fetchAndStore(cache, request, fresh) {
+async function fetchAndCache(cache, request, { bypassHTTP = false } = {}) {
   try {
-    // Bypass the browser HTTP cache for the HTML, CSS and JavaScript shell.
-    // GitHub Pages and installed PWAs can otherwise keep reusing old files.
-    const response = await fetch(request, fresh ? { cache: "no-store" } : undefined);
-    if (response.ok || response.type === "opaque") {
-      await cache.put(request, response.clone());
-      return response;
-    }
-    // Retain a usable cached copy if a deployment temporarily returns 404/5xx.
-    return null;
+    const response = await fetch(request, bypassHTTP ? { cache: "no-store" } : undefined);
+    if (!response.ok && response.type !== "opaque") return null;
+    await cache.put(request, response.clone());
+    return response;
   } catch (_error) {
     return null;
   }
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+
+    // Do not replace a functioning old release with a partially downloaded
+    // one. Users can keep working offline until the new shell is available.
+    await Promise.all(CORE_ASSETS.map(async (path) => {
+      const request = new Request(assetURL(path), { cache: "reload" });
+      const response = await fetchAndCache(cache, request, { bypassHTTP: true });
+      if (!response) throw new Error(`Required update file unavailable: ${path}`);
+    }));
+
+    // These are small and can be carried from the last release when offline.
+    await Promise.all(OPTIONAL_ASSETS.map(async (path) => {
+      const request = new Request(assetURL(path));
+      const old = await caches.match(request, { ignoreSearch: true });
+      if (old) await cache.put(request, old.clone());
+    }));
+    await Promise.all([...EXTERNAL_MODULES].map(async (url) => {
+      const request = new Request(url);
+      const old = await caches.match(request);
+      if (old) await cache.put(request, old.clone());
+    }));
+
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
+    const oldNames = await caches.keys();
+    await Promise.all(oldNames
+      .filter((name) => name.startsWith("listsfortheshop-") && name !== CACHE_NAME)
+      .map((name) => caches.delete(name)));
+    await self.clients.claim();
+  })());
+});
+
+function localStaticPath(request) {
+  const url = new URL(request.url);
+  const scope = new URL(self.registration.scope);
+  if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return null;
+  const path = url.pathname.slice(scope.pathname.length);
+  if (request.mode === "navigate") return "";
+  return STATIC_PATHS.has(path) ? path : null;
 }
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
 
-  event.respondWith(
-    (async () => {
-      // Always read only THIS release's cache, not older release caches.
-      const cache = await caches.open(CACHE_NAME);
-      const matchOptions = isSameOrigin(request) ? { ignoreSearch: true } : undefined;
-      const cached = await cache.match(request, matchOptions);
+  const path = localStaticPath(request);
+  const external = EXTERNAL_MODULES.has(request.url);
+  // Crucial: never route Firestore/Auth API calls through the asset cache.
+  if (path === null && !external) return;
 
-      if (isAppShellRequest(request)) {
-        // Network-first keeps the UI coherent on every online open/refresh;
-        // cached copies provide a fully functional offline fallback.
-        const fresh = await fetchAndStore(cache, request, true);
-        if (fresh) return fresh;
-        if (cached) return cached;
-      } else {
-        // External libraries, icons and manifests stay fast and offline-ready.
-        if (cached) {
-          event.waitUntil(fetchAndStore(cache, request, false));
-          return cached;
-        }
-        const fresh = await fetchAndStore(cache, request, false);
-        if (fresh) return fresh;
-      }
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const requestURL = new URL(request.url);
+    const revision = requestURL.searchParams.get("v");
 
-      if (request.mode === "navigate") {
-        const fallback = await cache.match("./index.html", { ignoreSearch: true });
-        if (fallback) return fallback;
-      }
-      return new Response("Offline", {
-        status: 503,
-        statusText: "Offline",
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
-    })(),
-  );
+    // A new HTML page controlled by an older worker can request newer assets.
+    // Don't accidentally serve old code when the URL specifies a new revision.
+    const differentRevision = path !== null && CORE_PATHS.has(path) &&
+      revision && revision !== APP_REVISION &&
+      !(path === "firebase.js" && revision === "202609021347");
+
+    if (!differentRevision) {
+      const cached = await cache.match(request) ||
+        (path !== null && await cache.match(assetURL(path || "./index.html")));
+      if (cached) return cached;
+    }
+
+    // Only a missing asset (or explicitly new revision) needs the network.
+    const fresh = await fetchAndCache(cache, request, { bypassHTTP: differentRevision });
+    if (fresh) return fresh;
+
+    // Offline navigation uses the saved app shell, even for a deep link.
+    if (request.mode === "navigate" || path === "" || path === "index.html") {
+      const fallback = await cache.match(assetURL("./index.html"));
+      if (fallback) return fallback;
+    }
+    return new Response("Offline", {
+      status: 503, statusText: "Offline",
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  })());
 });

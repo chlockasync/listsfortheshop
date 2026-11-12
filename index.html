@@ -10,21 +10,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <link rel="manifest" href="manifest.webmanifest?v=202611121843" />
-    <link rel="icon" href="favicon.svg?v=202611121843" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon-192.png?v=202611121843" />
+    <link rel="manifest" href="manifest.webmanifest?v=202611121909" />
+    <link rel="icon" href="favicon.svg?v=202611121909" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-192.png?v=202611121909" />
 
-    <link rel="stylesheet" href="styles.css?v=202611121843" />
-    <script type="module" src="app.js?v=202611121843"></script>
+    <link rel="stylesheet" href="styles.css?v=202611121909" />
+    <script type="module" src="app.js?v=202611121909"></script>
     <script>
       if ("serviceWorker" in navigator) {
-        let reloadingForServiceWorkerUpdate = false;
-        // Listen before registering, so we cannot miss a rapid activation.
-        navigator.serviceWorker.addEventListener("controllerchange", () => {
-          if (reloadingForServiceWorkerUpdate) return;
-          reloadingForServiceWorkerUpdate = true;
-          window.location.reload();
-        });
+        // Installing an updated service worker must not interrupt an active
+        // shopping session. A forced reload here restarts Firebase authentication
+        // and briefly puts the loading gate back over an already visible list.
+        // The newly activated worker serves the updated app on the next normal
+        // navigation; users can keep using the current page without disruption.
 
         window.addEventListener("load", async () => {
           try {
@@ -32,8 +30,9 @@
               "./service-worker.js",
               { updateViaCache: "none" },
             );
-            registration.update().catch(() => {});
-
+            // register() checks for updates on navigation. Do not immediately
+            // issue a second update check during startup; check again when the
+            // app returns from the background.
             const checkForUpdates = () => registration.update().catch(() => {});
             document.addEventListener("visibilitychange", () => {
               if (!document.hidden) checkForUpdates();
@@ -101,7 +100,7 @@
     </section>
     <header class="app-header">
       <div class="app-brand" aria-label="Lists for the Shop">
-        <img class="app-brand-mark" src="favicon.svg?v=202611121843" alt="" width="38" height="38" />
+        <img class="app-brand-mark" src="favicon.svg?v=202611121909" alt="" width="38" height="38" />
         <span>Lists for the Shop</span>
       </div>
       <nav class="main-tabs" aria-label="Main navigation">
@@ -619,7 +618,7 @@
       </button>
 
       <div class="bottom-bar-status">
-        <span id="app-build" title="Build 202611121843">v1.2.017</span>
+        <span id="app-build" title="Build 202611121909">v1.2.018</span>
         <span id="connection-status">Connecting…</span>
       </div>
 

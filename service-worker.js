@@ -1,6 +1,6 @@
-/* ListsForTheShop v1.2.018: instant cached launches, background version checks. */
-const APP_REVISION = "202611121909";
-const CACHE_NAME = `listsfortheshop-v1.2.018-${APP_REVISION}`;
+/* ListsForTheShop v1.2.019: instant cached launches, background version checks. */
+const APP_REVISION = "202611171507";
+const CACHE_NAME = `listsfortheshop-v1.2.019-${APP_REVISION}`;
 
 // Only the files needed to launch are required for a new release to activate.
 // External modules are reused from the previous release's cache and cached on

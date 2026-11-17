@@ -14,6 +14,7 @@ import {
   getDoc,
   getDocFromCache,
   getDocFromServer,
+  getDocsFromServer,
   increment,
   onSnapshot,
   runTransaction as firestoreRunTransaction,
@@ -29,7 +30,7 @@ const $$ = (selector, root = document) =>
 
 const VIEW_ONLY_WRITE_ERROR_CODE = "lists-for-the-shop/view-only";
 
-const LISTS_APP_RELEASE = "v1.2.018";
+const LISTS_APP_RELEASE = "v1.2.019";
 
 function viewOnlyWriteError() {
   const error = new Error("View-only access cannot save changes.");
@@ -302,6 +303,7 @@ const bottomContextAction = $("#bottom-context-action");
 
 /* Settings navigation */
 const settingsHome = $("#settings-home");
+const exportItemsCsvButton = $("#export-items-csv");
 const settingsCategoryButton = $("#settings-category-button");
 const settingsCategoryOptions = $$(".settings-category-option");
 const settingsCategoryPanels = $$(".settings-category-panel");
@@ -4751,6 +4753,9 @@ function applySavedSettingsMenuOrder() {
   optionsByKey.forEach((option) => {
     settingsHome.append(option);
   });
+
+  // Export is a fixed action, not part of the sortable settings categories.
+  if (exportItemsCsvButton) settingsHome.append(exportItemsCsvButton);
 }
 
 function saveSettingsMenuOrder() {
@@ -7385,6 +7390,131 @@ function refreshViews(...viewNames) {
   });
 }
 
+/* ===== Catalogue CSV export =====
+ * Download a fresh, readable list for use outside the app. One row represents
+ * each active item, with separate rows for its active specific sub-items.
+ * This is deliberately an items export, not a database/Firestore backup.
+ */
+function buildItemsCsv({ items, specificProducts, productTypes, locations, units, stores, storeTypes }) {
+  const activeItems = items.filter((item) => item.active !== false && !item.oneOff);
+  const activeItemIds = new Set(activeItems.map((item) => String(item.id)));
+  const byId = (records) => new Map(records.map((record) => [String(record.id), record]));
+  const typesById = byId(productTypes);
+  const roomsById = byId(locations);
+  const unitsById = byId(units);
+  const storesById = byId(stores);
+  const storeTypesById = byId(storeTypes);
+  const childrenByItem = new Map();
+  const compareNames = (a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""));
+
+  specificProducts
+    .filter((product) => product.active !== false && activeItemIds.has(String(product.itemId)))
+    .forEach((product) => {
+      const key = String(product.itemId);
+      if (!childrenByItem.has(key)) childrenByItem.set(key, []);
+      childrenByItem.get(key).push(product);
+    });
+
+  const columns = [
+    "Record type", "Item name", "Specific sub-item", "Specific attributes",
+    "Product type", "Room", "Store types", "Stores", "Regular",
+    "Stock up if discounted", "Default quantity", "Unit", "Unit symbol",
+    "Quantity step", "Item ID", "Sub-item ID",
+  ];
+  const rows = [columns];
+  const joinedNames = (ids, records) => (Array.isArray(ids) ? ids : [])
+    .map((id) => records.get(String(id))?.name ?? "")
+    .filter(Boolean).join("; ");
+
+  activeItems.sort(compareNames).forEach((item) => {
+    const type = typesById.get(String(item.productTypeId));
+    const unit = unitsById.get(String(item.unitId));
+    const storeTypeIds = type
+      ? (Array.isArray(type.storeTypeIds) && type.storeTypeIds.length
+          ? type.storeTypeIds : type.storeTypeId ? [type.storeTypeId] : [])
+      : (Array.isArray(item.storeTypeIds) ? item.storeTypeIds : []);
+    const shared = {
+      typeName: type?.name ?? "",
+      roomName: roomsById.get(String(item.locationId))?.name ?? "",
+      storeTypeNames: joinedNames(storeTypeIds, storeTypesById),
+      unitName: unit?.name ?? "",
+      unitSymbol: unit?.symbol ?? "",
+    };
+    const makeRow = (product = null) => [
+      product ? "Specific sub-item" : "Item",
+      item.name ?? "",
+      product?.name ?? "",
+      (product ? product.specificAttributes ?? product.size : item.specificAttributes) ?? "",
+      shared.typeName,
+      shared.roomName,
+      shared.storeTypeNames,
+      joinedNames(product ? product.storeIds : item.storeIds, storesById),
+      item.regularList === true ? "Yes" : "No",
+      (product ?? item).ifOnSale === true ? "Yes" : "No",
+      item.defaultAmount ?? "",
+      shared.unitName,
+      shared.unitSymbol,
+      item.increment ?? "",
+      item.id,
+      product?.id ?? "",
+    ];
+
+    rows.push(makeRow());
+    (childrenByItem.get(String(item.id)) ?? []).sort(compareNames).forEach(
+      (product) => rows.push(makeRow(product)),
+    );
+  });
+
+  // Standard CSV quoting, including commas, embedded quotes and line breaks.
+  const cell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  return { csv: rows.map((row) => row.map(cell).join(",")).join("\r\n") + "\r\n",
+    itemCount: activeItems.length, subItemCount: rows.length - activeItems.length - 1 };
+}
+
+async function exportItemsCsv() {
+  if (!exportItemsCsvButton || !canUseFullInterface()) return;
+  const previousLabel = exportItemsCsvButton.textContent;
+  exportItemsCsvButton.disabled = true;
+  exportItemsCsvButton.textContent = "Preparing CSV…";
+
+  try {
+    const names = ["items", "specificProducts", "productTypes", "locations", "units", "stores", "storeTypes"];
+    // Demand current server data so a cold/partially synced launch cannot
+    // silently produce an incomplete export from cached snapshots.
+    const snapshots = await Promise.all(names.map(
+      (name) => getDocsFromServer(householdCollection(name)),
+    ));
+    const data = Object.fromEntries(names.map((name, index) =>
+      [name, snapshotRecords(snapshots[index])],
+    ));
+    const { csv, itemCount, subItemCount } = buildItemsCsv(data);
+
+    const now = new Date();
+    const dateParts = Object.fromEntries(new Intl.DateTimeFormat("en-NZ", {
+      timeZone: "Pacific/Auckland", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(now).map(({ type, value }) => [type, value]));
+    const timestamp = `${dateParts.year}${dateParts.month}${dateParts.day}-${dateParts.hour}${dateParts.minute}`;
+    const filename = `ListsForTheShop-items-${timestamp}.csv`;
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    showBriefToast(`Exported ${itemCount} items and ${subItemCount} sub-items`);
+  } catch (error) {
+    console.error("Could not export items CSV:", error);
+    alert("Couldn't download the items CSV. Check your internet connection and try again.");
+  } finally {
+    exportItemsCsvButton.disabled = false;
+    exportItemsCsvButton.textContent = previousLabel;
+  }
+}
+
 function snapshotRecords(snapshot) {
   return snapshot.docs.map((documentSnapshot) => ({
     id: documentSnapshot.id,
@@ -8068,6 +8198,8 @@ function wireNavigation() {
       { duration: 450 },
     );
   }
+
+  exportItemsCsvButton?.addEventListener("click", exportItemsCsv);
 
   settingsCategoryOptions.forEach((button) => {
     button.addEventListener("click", () => {

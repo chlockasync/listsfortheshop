@@ -10,12 +10,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <link rel="manifest" href="manifest.webmanifest?v=202611121909" />
-    <link rel="icon" href="favicon.svg?v=202611121909" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon-192.png?v=202611121909" />
+    <link rel="manifest" href="manifest.webmanifest?v=202611171507" />
+    <link rel="icon" href="favicon.svg?v=202611171507" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon-192.png?v=202611171507" />
 
-    <link rel="stylesheet" href="styles.css?v=202611121909" />
-    <script type="module" src="app.js?v=202611121909"></script>
+    <link rel="stylesheet" href="styles.css?v=202611171507" />
+    <script type="module" src="app.js?v=202611171507"></script>
     <script>
       if ("serviceWorker" in navigator) {
         // Installing an updated service worker must not interrupt an active
@@ -100,7 +100,7 @@
     </section>
     <header class="app-header">
       <div class="app-brand" aria-label="Lists for the Shop">
-        <img class="app-brand-mark" src="favicon.svg?v=202611121909" alt="" width="38" height="38" />
+        <img class="app-brand-mark" src="favicon.svg?v=202611171507" alt="" width="38" height="38" />
         <span>Lists for the Shop</span>
       </div>
       <nav class="main-tabs" aria-label="Main navigation">
@@ -249,6 +249,7 @@
           </button>
 
           <button type="button" class="settings-category-option shopping-location-option settings-menu-order-row" data-settings-category="recent-shops"><span class="settings-order-handle" aria-hidden="true">☰</span><span class="settings-menu-option-label">Recent shops</span></button>
+          <button type="button" id="export-items-csv" class="settings-category-option shopping-location-option" title="Download the current items catalogue as a CSV file">Export items CSV</button>
         </div>
 
         <div id="settings-category-panels">
@@ -618,7 +619,7 @@
       </button>
 
       <div class="bottom-bar-status">
-        <span id="app-build" title="Build 202611121909">v1.2.018</span>
+        <span id="app-build" title="Build 202611171507">v1.2.019</span>
         <span id="connection-status">Connecting…</span>
       </div>
 
